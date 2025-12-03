@@ -219,18 +219,29 @@ function getString(value: unknown): string | null {
   return str.length > 0 ? str : null;
 }
 
+// Normalize header for matching (uppercase, no accents, no extra spaces)
+function normalizeForMatching(s: string): string {
+  return s
+    .toUpperCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Priority column name lists - these are tried in order (exact match first)
+// All tokens are normalized (uppercase, no accents)
 const PROJECT_NAME_COLUMNS = [
   "iniciativa",
+  "iniciativas",
   "iniciativa ", // with trailing space
   "nombre de iniciativa",
+  "nombre del proyecto",
+  "nombre proyecto",
   "proyecto",
   "project",
   "project_name",
   "projectname",
   "nombre",
-  "nombre del proyecto",
-  "nombre proyecto",
   "name",
   "title",
   "titulo",
@@ -240,6 +251,7 @@ const PROJECT_NAME_COLUMNS = [
 // Partial matches for project name (if exact match fails)
 const PROJECT_NAME_PARTIAL = [
   "iniciativa",
+  "iniciativas",
   "proyecto",
   "project",
   "nombre",
@@ -426,8 +438,9 @@ function isRowEmpty(row: RawExcelRow): boolean {
 }
 
 // Find the best column for a field based on priority list
+// Uses aggressive normalization to match headers with different formats
 function findPriorityColumn(headers: string[], priorityList: string[], partialList?: string[]): string | null {
-  // First try exact match
+  // First try exact match (case insensitive, trimmed)
   for (const priority of priorityList) {
     for (const header of headers) {
       if (normalizeColumnName(header) === priority) {
@@ -437,12 +450,25 @@ function findPriorityColumn(headers: string[], priorityList: string[], partialLi
     }
   }
   
-  // If exact match fails and partialList provided, try partial matching
+  // Try aggressive normalization match (uppercase, no accents)
+  for (const priority of priorityList) {
+    const normalizedPriority = normalizeForMatching(priority);
+    for (const header of headers) {
+      const normalizedHeader = normalizeForMatching(header);
+      if (normalizedHeader === normalizedPriority) {
+        console.log(`[Excel Parser] Found normalized match column: "${header}" matches "${priority}"`);
+        return header;
+      }
+    }
+  }
+  
+  // Try partial matching with aggressive normalization
   if (partialList) {
     for (const partial of partialList) {
+      const normalizedPartial = normalizeForMatching(partial);
       for (const header of headers) {
-        const normalized = normalizeColumnName(header);
-        if (normalized.includes(partial) || partial.includes(normalized)) {
+        const normalizedHeader = normalizeForMatching(header);
+        if (normalizedHeader.includes(normalizedPartial) || normalizedPartial.includes(normalizedHeader)) {
           console.log(`[Excel Parser] Found partial match column: "${header}" contains "${partial}"`);
           return header;
         }
@@ -643,19 +669,18 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
   console.log(`[Excel Parser] Project name column: ${projectNameColumn || "NOT FOUND"}`);
   console.log(`[Excel Parser] Legacy ID column: ${legacyIdColumn || "NOT FOUND"}`);
   
+  // Forward-fill tracking: keep the last valid project name for merged cell support
+  let lastValidProjectName: string | null = null;
+  let forwardFillCount = 0;
+  
   // Process each row
   for (let i = 0; i < rawData.length; i++) {
     const row = rawData[i];
     const rowNum = headerRow + i + 2; // Actual Excel row number (header row + data row index + 1 for 1-indexing)
     
-    // HARD ERROR: Check if row is completely empty
+    // Check if row is completely empty - silently ignore (no warning, no project)
     if (isRowEmpty(row)) {
-      filasDescartadas++;
-      advertencias.push({
-        fila: rowNum,
-        tipo: "row_empty",
-        mensaje: "Fila totalmente vacía - no crear proyecto"
-      });
+      // Don't increment filasDescartadas, just silently skip empty rows
       continue;
     }
     
@@ -671,6 +696,7 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
       };
       
       let hasSoftError = false;
+      let usedForwardFill = false;
       
       // First, try to get project name from priority column
       let projectName: string | null = null;
@@ -807,20 +833,48 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
       // Set the final project name and legacy ID
       project.legacyId = legacyId;
       
-      // SOFT ERROR: Check if project name is missing
+      // FORWARD-FILL LOGIC: If project name is missing but row has data, try to use last valid name
       if (!projectName) {
-        // Create as draft project with placeholder name
-        project.projectName = `Borrador Incompleto (Fila ${rowNum})`;
-        project.esBorradorIncompleto = true;
-        project.requiereNombre = true;
-        hasSoftError = true;
-        advertencias.push({
-          fila: rowNum,
-          tipo: "missing_project_name",
-          mensaje: "Nombre del proyecto faltante - creado como borrador incompleto"
+        // Check if this row has meaningful data (not just empty values)
+        const hasOtherData = Object.entries(row).some(([key, value]) => {
+          if (key === projectNameColumn) return false;
+          if (key === legacyIdColumn) return false;
+          if (value === null || value === undefined) return false;
+          const strVal = String(value).trim();
+          if (strVal.length === 0) return false;
+          // Ignore numeric columns that are just row numbers
+          if (key.includes("__EMPTY") && /^\d+$/.test(strVal) && parseInt(strVal) < 100) return false;
+          return true;
         });
-      } else {
+        
+        if (hasOtherData && lastValidProjectName) {
+          // Use forward-fill: inherit name from previous row
+          projectName = lastValidProjectName;
+          usedForwardFill = true;
+          forwardFillCount++;
+          console.log(`[Excel Parser] Row ${rowNum}: Forward-fill applied, using "${projectName}" from previous row`);
+        } else if (hasOtherData) {
+          // Row has data but no name to forward-fill - mark as borrador incompleto
+          project.projectName = `Borrador Incompleto (Fila ${rowNum})`;
+          project.esBorradorIncompleto = true;
+          project.requiereNombre = true;
+          hasSoftError = true;
+          advertencias.push({
+            fila: rowNum,
+            tipo: "missing_project_name",
+            mensaje: "Nombre del proyecto faltante (sin nombre anterior para heredar) - creado como borrador incompleto"
+          });
+        } else {
+          // Row appears to be mostly empty - skip silently
+          continue;
+        }
+      }
+      
+      // If we got a valid project name (either directly or via forward-fill)
+      if (projectName) {
         project.projectName = projectName;
+        // Update the last valid project name for future forward-fill
+        lastValidProjectName = projectName;
       }
       
       // Generate legacy ID if not provided
@@ -828,7 +882,7 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
         project.legacyId = `ROW-${rowNum}`;
       }
       
-      // Mark as draft if any soft error occurred
+      // Mark as draft if any soft error occurred (but forward-fill is NOT an error)
       if (hasSoftError) {
         project.esBorradorIncompleto = true;
         proyectosBorradorIncompleto++;
@@ -849,6 +903,14 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
     }
   }
   
+  // Log summary
+  console.log(`[Excel Parser] === PARSING SUMMARY ===`);
+  console.log(`[Excel Parser] Total rows processed: ${totalRows}`);
+  console.log(`[Excel Parser] Projects created (complete): ${proyectosCreados}`);
+  console.log(`[Excel Parser] Projects created (draft/incomplete): ${proyectosBorradorIncompleto}`);
+  console.log(`[Excel Parser] Rows discarded: ${filasDescartadas}`);
+  console.log(`[Excel Parser] Forward-fill applied: ${forwardFillCount} rows`);
+  
   // Important rule: If there's at least one non-empty row, we must have at least 1 processed
   const nonEmptyRows = totalRows - filasDescartadas;
   if (nonEmptyRows > 0 && (proyectosCreados + proyectosBorradorIncompleto) === 0) {
@@ -858,6 +920,12 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
       tipo: "row_unreadable",
       mensaje: "Advertencia: No se pudo procesar ningún proyecto de las filas no vacías"
     });
+  }
+  
+  // Warn if most projects are drafts (indicates possible parsing issue)
+  const totalProjects = proyectosCreados + proyectosBorradorIncompleto;
+  if (totalProjects > 0 && proyectosBorradorIncompleto > proyectosCreados) {
+    console.log(`[Excel Parser] WARNING: More drafts than complete projects. Check if project name column was correctly detected.`);
   }
   
   return { 
