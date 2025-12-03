@@ -105,7 +105,14 @@ export default function Dashboard() {
   const formatDate = (date: string | Date | null | undefined) => {
     if (!date) return "—";
     try {
-      const dateObj = date instanceof Date ? date : new Date(date);
+      let dateObj: Date;
+      if (date instanceof Date) {
+        dateObj = date;
+      } else {
+        // Add T12:00:00 to avoid timezone issues with date-only strings
+        const dateStr = date.includes("T") ? date : `${date}T12:00:00`;
+        dateObj = new Date(dateStr);
+      }
       return format(dateObj, "dd MMM yyyy", { locale: es });
     } catch {
       return typeof date === 'string' ? date : "—";

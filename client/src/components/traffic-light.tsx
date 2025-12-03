@@ -66,7 +66,9 @@ export function calculateTrafficLight(
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  const dueDate = new Date(endDateEstimated);
+  // Add T12:00:00 to avoid timezone issues with date-only strings
+  const dateStr = endDateEstimated.includes("T") ? endDateEstimated : `${endDateEstimated}T12:00:00`;
+  const dueDate = new Date(dateStr);
   dueDate.setHours(0, 0, 0, 0);
 
   const diffTime = dueDate.getTime() - today.getTime();
@@ -92,7 +94,9 @@ export function getDaysUntilDue(endDateEstimated: string | null | undefined): nu
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  const dueDate = new Date(endDateEstimated);
+  // Add T12:00:00 to avoid timezone issues with date-only strings
+  const dateStr = endDateEstimated.includes("T") ? endDateEstimated : `${endDateEstimated}T12:00:00`;
+  const dueDate = new Date(dateStr);
   dueDate.setHours(0, 0, 0, 0);
 
   const diffTime = dueDate.getTime() - today.getTime();

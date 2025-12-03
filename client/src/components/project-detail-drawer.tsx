@@ -53,7 +53,9 @@ export function ProjectDetailDrawer({
   const formatDate = (date: string | null | undefined) => {
     if (!date) return "—";
     try {
-      return format(new Date(date), "dd MMM yyyy", { locale: es });
+      // Add T12:00:00 to avoid timezone issues with date-only strings
+      const dateStr = date.includes("T") ? date : `${date}T12:00:00`;
+      return format(new Date(dateStr), "dd MMM yyyy", { locale: es });
     } catch {
       return date;
     }
