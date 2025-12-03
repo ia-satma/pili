@@ -744,24 +744,34 @@ export async function registerRoutes(
 
   // ===== EXCEL UPLOAD =====
   app.post("/api/excel/upload", isAuthenticated, isEditor, upload.single("file"), async (req, res) => {
+    console.log("[Excel Upload] Request received");
+    console.log("[Excel Upload] File info:", req.file ? { name: req.file.originalname, size: req.file.size } : "No file");
+    
     try {
       if (!req.file) {
+        console.log("[Excel Upload] Error: No file in request");
         return res.status(400).json({ message: "No file uploaded" });
       }
       
+      console.log("[Excel Upload] Starting to process file:", req.file.originalname);
+      
       // Create version record
+      console.log("[Excel Upload] Creating version record...");
       const version = await storage.createExcelVersion({
         fileName: req.file.originalname,
         totalRows: 0,
         status: "processing",
       });
+      console.log("[Excel Upload] Version created:", version.id);
       
       // Get previous version for comparison
       const versions = await storage.getExcelVersions();
       const previousVersion = versions.find(v => v.id !== version.id && v.status === "completed");
       
       // Parse Excel with enhanced error handling
+      console.log("[Excel Upload] Parsing Excel buffer...");
       const parsed = parseExcelBuffer(req.file.buffer, version.id);
+      console.log("[Excel Upload] Parsing complete. Projects found:", parsed.projects.length);
       
       // Get existing projects for comparison
       const existingProjects = await storage.getProjects();
@@ -802,8 +812,8 @@ export async function registerRoutes(
             };
             await storage.updateProject(existing.id, updateData);
             
-            for (const change of changes) {
-              change.projectId = existing.id;
+            for (const change of changes as InsertChangeLog[]) {
+              (change as InsertChangeLog).projectId = existing.id;
             }
             allChanges.push(...changes);
             modifiedCount++;
@@ -909,7 +919,8 @@ export async function registerRoutes(
       });
       
     } catch (error) {
-      console.error("Excel upload error:", error);
+      console.error("[Excel Upload] ERROR:", error);
+      console.error("[Excel Upload] Stack:", error instanceof Error ? error.stack : "No stack trace");
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Error processing file" 
       });
