@@ -348,6 +348,13 @@ export async function registerRoutes(
       const statusCounts: Record<string, number> = {};
       const trafficSummary = { green: 0, yellow: 0, red: 0, gray: 0 };
       
+      // Lists for alerts
+      const overdueList: { id: number; projectName: string; endDateEstimated: string | null; status: string | null; departmentName: string | null; daysOverdue: number }[] = [];
+      const approachingList: { id: number; projectName: string; endDateEstimated: string | null; daysRemaining: number; departmentName: string | null }[] = [];
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
       allProjects.forEach(project => {
         // Status counts
         const status = project.status || "Sin estado";
@@ -370,8 +377,86 @@ export async function registerRoutes(
         
         if (light === "red") {
           overdueProjects++;
+          // Add to overdue list with days calculation
+          if (project.endDateEstimated) {
+            const dueDate = new Date(project.endDateEstimated);
+            dueDate.setHours(0, 0, 0, 0);
+            const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+            overdueList.push({
+              id: project.id,
+              projectName: project.projectName,
+              endDateEstimated: project.endDateEstimated,
+              status: project.status,
+              departmentName: project.departmentName,
+              daysOverdue,
+            });
+          }
+        } else if (light === "yellow") {
+          // Add to approaching deadline list
+          if (project.endDateEstimated) {
+            const dueDate = new Date(project.endDateEstimated);
+            dueDate.setHours(0, 0, 0, 0);
+            const daysRemaining = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            approachingList.push({
+              id: project.id,
+              projectName: project.projectName,
+              endDateEstimated: project.endDateEstimated,
+              daysRemaining,
+              departmentName: project.departmentName,
+            });
+          }
         }
       });
+      
+      // Sort and limit overdue list (most overdue first)
+      const sortedOverdueList = overdueList
+        .sort((a, b) => b.daysOverdue - a.daysOverdue)
+        .slice(0, 10);
+      
+      // Sort and limit approaching list (soonest first)
+      const sortedApproachingList = approachingList
+        .sort((a, b) => a.daysRemaining - b.daysRemaining)
+        .slice(0, 10);
+      
+      // Calculate stale projects (not updated in 30+ days)
+      const projectIds = allProjects.map(p => p.id);
+      const latestUpdateDates = await storage.getLatestUpdateDatesByProjectIds(projectIds);
+      
+      const staleList: { id: number; projectName: string; lastUpdated: string | null; daysSinceUpdate: number; departmentName: string | null }[] = [];
+      
+      allProjects.forEach(project => {
+        // Check if project is not closed/cancelled
+        const lowerStatus = (project.status || "").toLowerCase();
+        if (lowerStatus === "cerrado" || lowerStatus === "closed" || lowerStatus === "completado" || 
+            lowerStatus === "cancelado" || lowerStatus === "cancelled") {
+          return;
+        }
+        
+        // Get the latest update date (from projectUpdates table or fall back to project's updatedAt)
+        const lastUpdateFromTable = latestUpdateDates.get(project.id);
+        const lastUpdate = lastUpdateFromTable || project.updatedAt;
+        
+        if (lastUpdate) {
+          const lastUpdateDate = new Date(lastUpdate);
+          lastUpdateDate.setHours(0, 0, 0, 0);
+          const daysSinceUpdate = Math.floor((today.getTime() - lastUpdateDate.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (daysSinceUpdate >= 30) {
+            staleList.push({
+              id: project.id,
+              projectName: project.projectName,
+              lastUpdated: lastUpdate instanceof Date ? lastUpdate.toISOString() : String(lastUpdate),
+              daysSinceUpdate,
+              departmentName: project.departmentName,
+            });
+          }
+        }
+      });
+      
+      // Sort and limit stale list (most stale first)
+      const sortedStaleList = staleList
+        .sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate)
+        .slice(0, 10);
       
       res.json({
         totalProjects: allProjects.length,
@@ -387,6 +472,9 @@ export async function registerRoutes(
           .sort((a, b) => b.count - a.count),
         recentUpdates: allProjects.slice(0, 5),
         trafficLightSummary: trafficSummary,
+        overdueProjectsList: sortedOverdueList,
+        approachingDeadlineList: sortedApproachingList,
+        staleProjectsList: sortedStaleList,
       });
     } catch (error) {
       console.error("Dashboard error:", error);

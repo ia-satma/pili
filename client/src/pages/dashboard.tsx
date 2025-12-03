@@ -6,13 +6,16 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
-  TrendingUp,
   Activity,
+  CalendarX2,
 } from "lucide-react";
+import { Link } from "wouter";
+import { motion } from "framer-motion";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiCard, KpiCardSkeleton } from "@/components/kpi-card";
 import { TrafficLight, calculateTrafficLight } from "@/components/traffic-light";
 import {
@@ -30,6 +33,31 @@ import {
 } from "recharts";
 import type { Project } from "@shared/schema";
 
+interface OverdueProject {
+  id: number;
+  projectName: string;
+  endDateEstimated: string | null;
+  status: string | null;
+  departmentName: string | null;
+  daysOverdue: number;
+}
+
+interface ApproachingProject {
+  id: number;
+  projectName: string;
+  endDateEstimated: string | null;
+  daysRemaining: number;
+  departmentName: string | null;
+}
+
+interface StaleProject {
+  id: number;
+  projectName: string;
+  lastUpdated: string | null;
+  daysSinceUpdate: number;
+  departmentName: string | null;
+}
+
 interface DashboardData {
   totalProjects: number;
   openProjects: number;
@@ -39,6 +67,9 @@ interface DashboardData {
   projectsByStatus: { name: string; count: number }[];
   recentUpdates: Project[];
   trafficLightSummary: { green: number; yellow: number; red: number; gray: number };
+  overdueProjectsList: OverdueProject[];
+  approachingDeadlineList: ApproachingProject[];
+  staleProjectsList: StaleProject[];
 }
 
 const CHART_COLORS = [
@@ -71,12 +102,13 @@ export default function Dashboard() {
     );
   }
 
-  const formatDate = (date: string | null | undefined) => {
+  const formatDate = (date: string | Date | null | undefined) => {
     if (!date) return "—";
     try {
-      return format(new Date(date), "dd MMM yyyy", { locale: es });
+      const dateObj = date instanceof Date ? date : new Date(date);
+      return format(dateObj, "dd MMM yyyy", { locale: es });
     } catch {
-      return date;
+      return typeof date === 'string' ? date : "—";
     }
   };
 
@@ -331,6 +363,173 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* System Alerts Section */}
+      <Card className="overflow-visible" data-testid="alerts-section">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-traffic-yellow" />
+            Alertas del Sistema
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-64 w-full" />
+          ) : (
+            <Tabs defaultValue="overdue" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="overdue" data-testid="tab-overdue" className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="hidden sm:inline">Proyectos Vencidos</span>
+                  <span className="sm:hidden">Vencidos</span>
+                  {(data?.overdueProjectsList?.length || 0) > 0 && (
+                    <Badge variant="secondary" className="ml-1 bg-traffic-red/20 text-traffic-red">
+                      {data?.overdueProjectsList?.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="approaching" data-testid="tab-approaching" className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  <span className="hidden sm:inline">Por Vencer</span>
+                  <span className="sm:hidden">Por Vencer</span>
+                  {(data?.approachingDeadlineList?.length || 0) > 0 && (
+                    <Badge variant="secondary" className="ml-1 bg-traffic-yellow/20 text-traffic-yellow">
+                      {data?.approachingDeadlineList?.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="stale" data-testid="tab-stale" className="flex items-center gap-2">
+                  <CalendarX2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Sin Actualizar</span>
+                  <span className="sm:hidden">Sin Actualizar</span>
+                  {(data?.staleProjectsList?.length || 0) > 0 && (
+                    <Badge variant="secondary" className="ml-1 bg-traffic-gray/20 text-traffic-gray">
+                      {data?.staleProjectsList?.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+              
+              {/* Overdue Projects Tab */}
+              <TabsContent value="overdue" data-testid="alert-list-overdue" className="mt-4">
+                {(data?.overdueProjectsList?.length || 0) === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground">
+                    No hay alertas en esta categoría
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border rounded-md border">
+                    {data?.overdueProjectsList?.map((project, index) => (
+                      <motion.div
+                        key={project.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        <Link
+                          href={`/projects?id=${project.id}`}
+                          className="flex items-center justify-between gap-4 p-4 hover-elevate cursor-pointer"
+                          data-testid={`alert-overdue-${project.id}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-3 w-3 rounded-full bg-traffic-red flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{project.projectName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {project.departmentName || "Sin departamento"} · Fecha estimada: {formatDate(project.endDateEstimated)}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="secondary" className="bg-traffic-red/10 text-traffic-red border-traffic-red/30 flex-shrink-0">
+                            {project.daysOverdue} {project.daysOverdue === 1 ? "día" : "días"} vencido
+                          </Badge>
+                        </Link>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+              
+              {/* Approaching Deadline Tab */}
+              <TabsContent value="approaching" data-testid="alert-list-approaching" className="mt-4">
+                {(data?.approachingDeadlineList?.length || 0) === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground">
+                    No hay alertas en esta categoría
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border rounded-md border">
+                    {data?.approachingDeadlineList?.map((project, index) => (
+                      <motion.div
+                        key={project.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        <Link
+                          href={`/projects?id=${project.id}`}
+                          className="flex items-center justify-between gap-4 p-4 hover-elevate cursor-pointer"
+                          data-testid={`alert-approaching-${project.id}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-3 w-3 rounded-full bg-traffic-yellow flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{project.projectName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {project.departmentName || "Sin departamento"} · Fecha estimada: {formatDate(project.endDateEstimated)}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="secondary" className="bg-traffic-yellow/10 text-traffic-yellow border-traffic-yellow/30 flex-shrink-0">
+                            {project.daysRemaining} {project.daysRemaining === 1 ? "día" : "días"} restantes
+                          </Badge>
+                        </Link>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+              
+              {/* Stale Projects Tab */}
+              <TabsContent value="stale" data-testid="alert-list-stale" className="mt-4">
+                {(data?.staleProjectsList?.length || 0) === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground">
+                    No hay alertas en esta categoría
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border rounded-md border">
+                    {data?.staleProjectsList?.map((project, index) => (
+                      <motion.div
+                        key={project.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        <Link
+                          href={`/projects?id=${project.id}`}
+                          className="flex items-center justify-between gap-4 p-4 hover-elevate cursor-pointer"
+                          data-testid={`alert-stale-${project.id}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-3 w-3 rounded-full bg-traffic-gray flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{project.projectName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {project.departmentName || "Sin departamento"} · Última actualización: {formatDate(project.lastUpdated)}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="secondary" className="bg-traffic-gray/10 text-traffic-gray border-traffic-gray/30 flex-shrink-0">
+                            {project.daysSinceUpdate} {project.daysSinceUpdate === 1 ? "día" : "días"} sin actualizar
+                          </Badge>
+                        </Link>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

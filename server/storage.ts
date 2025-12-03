@@ -52,6 +52,7 @@ export interface IStorage {
   // Project Updates
   createProjectUpdate(update: InsertProjectUpdate): Promise<ProjectUpdate>;
   getProjectUpdatesByProjectId(projectId: number): Promise<ProjectUpdate[]>;
+  getLatestUpdateDatesByProjectIds(projectIds: number[]): Promise<Map<number, Date>>;
   
   // Change Logs
   createChangeLog(log: InsertChangeLog): Promise<ChangeLog>;
@@ -251,6 +252,28 @@ export class DatabaseStorage implements IStorage {
       .from(projectUpdates)
       .where(eq(projectUpdates.projectId, projectId))
       .orderBy(desc(projectUpdates.updateDate));
+  }
+
+  async getLatestUpdateDatesByProjectIds(projectIds: number[]): Promise<Map<number, Date>> {
+    if (projectIds.length === 0) return new Map();
+    
+    const result = new Map<number, Date>();
+    
+    const updates = await db.select({
+      projectId: projectUpdates.projectId,
+      updateDate: projectUpdates.updateDate,
+    })
+      .from(projectUpdates)
+      .where(inArray(projectUpdates.projectId, projectIds))
+      .orderBy(desc(projectUpdates.updateDate));
+    
+    for (const update of updates) {
+      if (!result.has(update.projectId)) {
+        result.set(update.projectId, update.updateDate);
+      }
+    }
+    
+    return result;
   }
 
   // Change Logs
