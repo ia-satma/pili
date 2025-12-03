@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -12,6 +12,9 @@ import {
   Eye,
   Download,
   Loader2,
+  Save,
+  Trash2,
+  BookmarkCheck,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -33,10 +36,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { TrafficLight, calculateTrafficLight } from "./traffic-light";
 import { ProjectDetailDrawer } from "./project-detail-drawer";
-import type { Project, ProjectUpdate, Milestone, ChangeLog } from "@shared/schema";
+import type { Project, ProjectUpdate, Milestone, ChangeLog, FilterPreset } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface ProjectsResponse {
   projects: Project[];
@@ -48,6 +61,10 @@ interface ProjectDetailResponse {
   updates: ProjectUpdate[];
   milestones: Milestone[];
   changeLogs: ChangeLog[];
+}
+
+interface FilterPresetsResponse {
+  presets: FilterPreset[];
 }
 
 type SortField = "projectName" | "departmentName" | "status" | "endDateEstimated" | "percentComplete";
@@ -62,6 +79,9 @@ export function ProjectsGrid() {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [activePresetId, setActivePresetId] = useState<number | null>(null);
   const pageSize = 20;
   const { toast } = useToast();
 
@@ -72,6 +92,53 @@ export function ProjectsGrid() {
   const { data: projectDetail, isLoading: isLoadingDetail } = useQuery<ProjectDetailResponse>({
     queryKey: ["/api/projects", selectedProjectId],
     enabled: !!selectedProjectId,
+  });
+
+  const { data: presetsData } = useQuery<FilterPresetsResponse>({
+    queryKey: ["/api/filter-presets"],
+  });
+
+  const createPresetMutation = useMutation({
+    mutationFn: async (data: { name: string; filters: { search: string; status: string; department: string } }) => {
+      return apiRequest("POST", "/api/filter-presets", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/filter-presets"] });
+      setSaveDialogOpen(false);
+      setPresetName("");
+      toast({
+        title: "Filtro guardado",
+        description: "El preset de filtro se guardó correctamente",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudo guardar el preset de filtro",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deletePresetMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/filter-presets/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/filter-presets"] });
+      setActivePresetId(null);
+      toast({
+        title: "Filtro eliminado",
+        description: "El preset de filtro se eliminó correctamente",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el preset de filtro",
+        variant: "destructive",
+      });
+    },
   });
 
   // Extract unique statuses and departments for filters
@@ -163,10 +230,46 @@ export function ProjectsGrid() {
     setSearch("");
     setStatusFilter("all");
     setDepartmentFilter("all");
+    setActivePresetId(null);
     setPage(1);
   };
 
   const hasActiveFilters = search || statusFilter !== "all" || departmentFilter !== "all";
+
+  const handleSavePreset = () => {
+    if (!presetName.trim()) return;
+    
+    createPresetMutation.mutate({
+      name: presetName.trim(),
+      filters: {
+        search: search,
+        status: statusFilter,
+        department: departmentFilter,
+      },
+    });
+  };
+
+  const handleApplyPreset = (presetId: string) => {
+    if (presetId === "none") {
+      clearFilters();
+      return;
+    }
+    
+    const preset = presetsData?.presets.find(p => p.id === parseInt(presetId));
+    if (preset && preset.filters) {
+      setSearch(preset.filters.search || "");
+      setStatusFilter(preset.filters.status || "all");
+      setDepartmentFilter(preset.filters.department || "all");
+      setActivePresetId(preset.id);
+      setPage(1);
+    }
+  };
+
+  const handleDeletePreset = (e: React.MouseEvent, presetId: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    deletePresetMutation.mutate(presetId);
+  };
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -303,14 +406,55 @@ export function ProjectsGrid() {
         </Select>
 
         {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={clearFilters}
-            data-testid="button-clear-filters"
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={clearFilters}
+              data-testid="button-clear-filters"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setSaveDialogOpen(true)}
+              data-testid="button-save-filter"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Guardar Filtro
+            </Button>
+          </>
+        )}
+
+        {presetsData?.presets && presetsData.presets.length > 0 && (
+          <Select
+            value={activePresetId?.toString() || "none"}
+            onValueChange={handleApplyPreset}
           >
-            <X className="h-4 w-4" />
-          </Button>
+            <SelectTrigger className="w-full sm:w-48" data-testid="select-filter-presets">
+              <BookmarkCheck className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Filtros guardados" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin preset</SelectItem>
+              {presetsData.presets.map((preset) => (
+                <SelectItem key={preset.id} value={preset.id.toString()}>
+                  <div className="flex items-center justify-between gap-2 w-full">
+                    <span>{preset.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 ml-2"
+                      onClick={(e) => handleDeletePreset(e, preset.id)}
+                      data-testid={`button-delete-preset-${preset.id}`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
 
         <Button
@@ -564,6 +708,60 @@ export function ProjectsGrid() {
         isOpen={!!selectedProjectId}
         onClose={() => setSelectedProjectId(null)}
       />
+
+      {/* Save Filter Preset Dialog */}
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Guardar Filtro</DialogTitle>
+            <DialogDescription>
+              Guarda la configuración actual de filtros para usarla después.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="preset-name">Nombre del filtro</Label>
+              <Input
+                id="preset-name"
+                placeholder="Ej: Proyectos activos IT"
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                data-testid="input-preset-name"
+              />
+            </div>
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p className="font-medium">Filtros actuales:</p>
+              {search && <p>Búsqueda: {search}</p>}
+              {statusFilter !== "all" && <p>Estado: {statusFilter}</p>}
+              {departmentFilter !== "all" && <p>Departamento: {departmentFilter}</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSaveDialogOpen(false);
+                setPresetName("");
+              }}
+              data-testid="button-cancel-save-filter"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSavePreset}
+              disabled={!presetName.trim() || createPresetMutation.isPending}
+              data-testid="button-confirm-save-filter"
+            >
+              {createPresetMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

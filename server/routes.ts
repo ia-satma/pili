@@ -859,5 +859,58 @@ export async function registerRoutes(
     }
   });
 
+  // ===== FILTER PRESETS =====
+  const filterPresetSchema = z.object({
+    name: z.string().min(1, "El nombre es requerido").max(100, "El nombre es demasiado largo"),
+    filters: z.object({
+      search: z.string(),
+      status: z.string(),
+      department: z.string(),
+    }),
+  });
+
+  app.get("/api/filter-presets", async (req, res) => {
+    try {
+      const presets = await storage.getFilterPresets();
+      res.json({ presets });
+    } catch (error) {
+      console.error("Filter presets error:", error);
+      res.status(500).json({ message: "Error loading filter presets" });
+    }
+  });
+
+  app.post("/api/filter-presets", async (req, res) => {
+    try {
+      const parseResult = filterPresetSchema.safeParse(req.body);
+      
+      if (!parseResult.success) {
+        return res.status(400).json({ 
+          message: parseResult.error.errors[0]?.message || "Invalid request" 
+        });
+      }
+      
+      const preset = await storage.createFilterPreset(parseResult.data);
+      res.json({ preset });
+    } catch (error) {
+      console.error("Create filter preset error:", error);
+      res.status(500).json({ message: "Error creating filter preset" });
+    }
+  });
+
+  app.delete("/api/filter-presets/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid preset ID" });
+      }
+      
+      await storage.deleteFilterPreset(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete filter preset error:", error);
+      res.status(500).json({ message: "Error deleting filter preset" });
+    }
+  });
+
   return httpServer;
 }

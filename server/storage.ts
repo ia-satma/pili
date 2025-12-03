@@ -1,7 +1,7 @@
 // Using javascript_database blueprint - PostgreSQL database integration
 import { 
   excelVersions, projects, departments, milestones, projectUpdates, 
-  changeLogs, kpiValues, chatMessages,
+  changeLogs, kpiValues, chatMessages, filterPresets,
   type ExcelVersion, type InsertExcelVersion,
   type Project, type InsertProject,
   type Department, type InsertDepartment,
@@ -10,6 +10,7 @@ import {
   type ChangeLog, type InsertChangeLog,
   type KpiValue, type InsertKpiValue,
   type ChatMessage, type InsertChatMessage,
+  type FilterPreset, type InsertFilterPreset,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
@@ -61,6 +62,11 @@ export interface IStorage {
   createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
   getChatMessages(): Promise<ChatMessage[]>;
   clearChatMessages(): Promise<void>;
+
+  // Filter Presets
+  getFilterPresets(): Promise<FilterPreset[]>;
+  createFilterPreset(preset: InsertFilterPreset): Promise<FilterPreset>;
+  deleteFilterPreset(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -268,6 +274,22 @@ export class DatabaseStorage implements IStorage {
 
   async clearChatMessages(): Promise<void> {
     await db.delete(chatMessages);
+  }
+
+  // Filter Presets
+  async getFilterPresets(): Promise<FilterPreset[]> {
+    return db.select()
+      .from(filterPresets)
+      .orderBy(desc(filterPresets.createdAt));
+  }
+
+  async createFilterPreset(preset: InsertFilterPreset): Promise<FilterPreset> {
+    const [result] = await db.insert(filterPresets).values(preset).returning();
+    return result;
+  }
+
+  async deleteFilterPreset(id: number): Promise<void> {
+    await db.delete(filterPresets).where(eq(filterPresets.id, id));
   }
 }
 

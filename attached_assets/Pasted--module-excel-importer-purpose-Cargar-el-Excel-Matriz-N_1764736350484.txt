@@ -1,0 +1,120 @@
+{
+  "module": "excel_importer",
+  "purpose": "Cargar el Excel 'Matriz NUEVA de proyectos' sin bloquear al usuario. Siempre procesar lo que sea aprovechable y marcar problemas como borradores incompletos en lugar de rechazar todo el archivo.",
+  "behaviour": {
+    "processing_mode": "row_level",
+    "all_or_nothing": false,
+    "minimum_action": "Siempre debe haber filas procesadas si existe al menos una fila con datos válidos."
+  },
+  "mapping": {
+    "sheet_main": "Proyectos por los líderes",
+    "project_name_candidate_columns": [
+      "INICIATIVA",
+      "INICIATIVA ",
+      "Nombre de iniciativa",
+      "Proyecto"
+    ],
+    "legacy_id_columns": [
+      "ID",
+      "Código",
+      "ID Power Steering",
+      "Card ID DevOps"
+    ]
+  },
+  "validation": {
+    "hard_errors": [
+      "row_empty", 
+      "row_unreadable"
+    ],
+    "soft_errors": [
+      "missing_project_name",
+      "invalid_date",
+      "unknown_catalog_value"
+    ],
+    "rules": {
+      "missing_project_name": {
+        "type": "soft",
+        "action": "crear_proyecto_borrador_incompleto",
+        "flags": {
+          "es_borrador_incompleto": true,
+          "requiere_nombre": true
+        },
+        "log_observation": true,
+        "message": "Falta el nombre del proyecto; se creó como borrador incompleto para completar en la interfaz."
+      },
+      "invalid_date": {
+        "type": "soft",
+        "action": "guardar_null_y_flag",
+        "flags": {
+          "fecha_invalida": true
+        },
+        "log_observation": true,
+        "message": "Fecha inválida; se guardó como NULL y se marcó para revisión."
+      },
+      "unknown_catalog_value": {
+        "type": "soft",
+        "action": "guardar_texto_original_sin_fk",
+        "flags": {
+          "catalogo_pendiente_mapeo": true
+        },
+        "log_observation": true,
+        "message": "Valor de catálogo no reconocido; se conserva el texto original y se marca para mapeo posterior."
+      },
+      "row_empty": {
+        "type": "hard",
+        "action": "ignorar_fila",
+        "log_observation": true,
+        "message": "Fila vacía; no se crea proyecto."
+      },
+      "row_unreadable": {
+        "type": "hard",
+        "action": "ignorar_fila",
+        "log_observation": true,
+        "message": "Fila ilegible; no se crea proyecto."
+      }
+    }
+  },
+  "row_to_project_logic": {
+    "steps": [
+      "Leer fila.",
+      "Si la fila está totalmente vacía -> hard_error 'row_empty'.",
+      "Intentar obtener nombre de proyecto desde 'project_name_candidate_columns'.",
+      "Si no se encuentra nombre -> marcar 'missing_project_name' (soft).",
+      "Construir objeto proyecto con todos los campos disponibles.",
+      "Si hay soft_errors -> marcar 'es_borrador_incompleto = true'.",
+      "Guardar proyecto en base de datos.",
+      "Registrar observaciones de importación vinculadas al id_proyecto."
+    ]
+  },
+  "tbd_handling": {
+    "fields": [
+      "Fecha de Término / real o estimada",
+      "Fecha Fin Estimada"
+    ],
+    "rules": {
+      "if_value_equals_TBD": {
+        "fecha_fin_estimada": null,
+        "fin_estimado_tbd": true
+      }
+    }
+  },
+  "import_result_ui": {
+    "counters": [
+      "proyectos_creados_o_actualizados",
+      "proyectos_borrador_incompleto",
+      "filas_descartadas"
+    ],
+    "messages": {
+      "success": "Mostrar conteo de proyectos creados/actualizados.",
+      "warnings": "Listar primeras N advertencias (soft_errors) indicando fila y tipo de problema.",
+      "actions": [
+        "Botón 'Ver proyectos creados'.",
+        "Botón 'Ver borradores incompletos para completar datos'."
+      ]
+    },
+    "forbidden_state": {
+      "description": "No está permitido terminar con 0 procesadas si hay filas con datos.",
+      "rule": "Si existe al menos una fila no vacía, 'proyectos_creados_o_actualizados + proyectos_borrador_incompleto' debe ser >= 1."
+    }
+  }
+}

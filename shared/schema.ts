@@ -139,6 +139,14 @@ export const chatMessages = pgTable("chat_messages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Filter presets for projects grid
+export const filterPresets = pgTable("filter_presets", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").notNull(),
+  filters: jsonb("filters").$type<{ search: string; status: string; department: string }>().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Relations
 export const excelVersionsRelations = relations(excelVersions, ({ many }) => ({
   projects: many(projects),
@@ -221,6 +229,7 @@ export const insertProjectUpdateSchema = createInsertSchema(projectUpdates).omit
 export const insertChangeLogSchema = createInsertSchema(changeLogs).omit({ id: true, changedAt: true });
 export const insertKpiValueSchema = createInsertSchema(kpiValues).omit({ id: true, calculatedAt: true });
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
+export const insertFilterPresetSchema = createInsertSchema(filterPresets).omit({ id: true, createdAt: true });
 
 // Types
 export type ExcelVersion = typeof excelVersions.$inferSelect;
@@ -239,6 +248,8 @@ export type KpiValue = typeof kpiValues.$inferSelect;
 export type InsertKpiValue = z.infer<typeof insertKpiValueSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type FilterPreset = typeof filterPresets.$inferSelect;
+export type InsertFilterPreset = z.infer<typeof insertFilterPresetSchema>;
 
 // Traffic light status enum for frontend
 export type TrafficLightStatus = 'green' | 'yellow' | 'red' | 'gray';
