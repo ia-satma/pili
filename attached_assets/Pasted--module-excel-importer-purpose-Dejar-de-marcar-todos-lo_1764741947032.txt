@@ -1,0 +1,121 @@
+{
+  "module": "excel_importer",
+  "purpose": "Dejar de marcar todos los proyectos como incompletos y trabajar con el Excel tal como está, usando reglas deterministas que aprovechen al máximo la información existente (incluyendo encabezados irregulares y celdas fusionadas/arrastradas).",
+  "sheet_selection": {
+    "preferred_sheets": [
+      "Proyectos por los líderes",
+      "Proyectos por los líderes (2)",
+      "Proyectos PGP",
+      "PGP Projects List"
+    ],
+    "header_row_detection": {
+      "max_rows_to_scan": 10,
+      "tokens_to_match": [
+        "INICIATIVA",
+        "INICIATIVAS",
+        "NOMBRE DEL PROYECTO",
+        "PROYECTO"
+      ],
+      "normalize_header": true,
+      "normalization_rules": {
+        "upper_case": true,
+        "remove_accents": true,
+        "strip_spaces": true
+      }
+    }
+  },
+  "project_name_resolution": {
+    "candidate_header_tokens": [
+      "INICIATIVA",
+      "INICIATIVAS",
+      "NOMBRE DEL PROYECTO",
+      "PROYECTO"
+    ],
+    "normalize_header": true,
+    "normalization_rules": {
+      "upper_case": true,
+      "remove_accents": true,
+      "strip_spaces": true
+    },
+    "algorithm_steps": [
+      "1. Normalizar todos los encabezados (mayúsculas, sin acentos, sin espacios extras).",
+      "2. Seleccionar como columna de nombre aquella cuyo encabezado contenga alguno de los tokens en 'candidate_header_tokens'.",
+      "3. Leer la hoja completa en memoria preservando el orden de las filas.",
+      "4. Para cada fila de datos (después de la fila de encabezado), aplicar la siguiente lógica:"
+    ],
+    "row_level_logic": [
+      "a) Si TODAS las celdas de la fila están vacías -> ignorar fila (no crear proyecto, no marcar como borrador).",
+      "b) Extraer el valor crudo de la columna de nombre (puede estar vacío).",
+      "c) Si el valor crudo NO está vacío -> usarlo como nombre del proyecto (proyecto completo en este punto, sujeto a otras validaciones).",
+      "d) Si el valor crudo está vacío PERO la fila anterior tenía un nombre de proyecto NO vacío y la fila actual tiene otros campos con datos (fechas, responsable, departamento, etc.), entonces hacer forward-fill: reutilizar el último nombre no vacío de la misma columna. Este comportamiento emula las celdas fusionadas o el arrastre visual que hace el humano en Excel. NO se considera esto alucinación porque el valor proviene literalmente de filas anteriores del mismo archivo.",
+      "e) Después del paso d), si el nombre sigue vacío y la fila sigue teniendo otros datos relevantes, entonces marcar el proyecto como 'borrador_incompleto' por falta de nombre. Este caso debe ser minoritario.",
+      "f) Si el nombre está vacío y TODAS las demás celdas relevantes también están vacías -> ignorar fila silenciosamente (es espacio vacío de Excel)."
+    ],
+    "flags": {
+      "field_es_borrador_incompleto": "es_borrador_incompleto",
+      "field_requiere_nombre": "requiere_nombre"
+    }
+  },
+  "validation": {
+    "all_or_nothing": false,
+    "hard_errors": [
+      "row_unreadable"
+    ],
+    "soft_errors": [
+      "missing_project_name_after_forward_fill",
+      "invalid_date",
+      "unknown_catalog_value"
+    ],
+    "rules": {
+      "missing_project_name_after_forward_fill": {
+        "type": "soft",
+        "condition": "Nombre de proyecto vacío DESPUÉS de aplicar forward-fill y la fila contiene otros datos no vacíos.",
+        "action": "crear_proyecto_borrador_incompleto",
+        "set_flags": {
+          "es_borrador_incompleto": true,
+          "requiere_nombre": true
+        },
+        "log_observation": true,
+        "message": "Nombre del proyecto faltante incluso después de forward-fill; creado como borrador incompleto para completar en la interfaz."
+      },
+      "invalid_date": {
+        "type": "soft",
+        "action": "guardar_null_y_flag",
+        "log_observation": true
+      },
+      "unknown_catalog_value": {
+        "type": "soft",
+        "action": "guardar_texto_original_sin_fk",
+        "log_observation": true
+      },
+      "row_unreadable": {
+        "type": "hard",
+        "action": "ignorar_fila",
+        "log_observation": true
+      }
+    }
+  },
+  "tbd_handling": {
+    "fields": [
+      "Fecha de Término / real o estimada",
+      "Fecha Fin Estimada"
+    ],
+    "rules": {
+      "if_value_equals_TBD": {
+        "fecha_fin_estimada": null,
+        "fin_estimado_tbd": true
+      }
+    }
+  },
+  "import_result_ui": {
+    "counters": [
+      "proyectos_creados_o_actualizados",
+      "proyectos_borrador_incompleto",
+      "filas_descartadas"
+    ],
+    "rules": {
+      "forbidden_state": "No está permitido terminar con todos los proyectos como borrador_incompleto por falta de nombre si existen nombres válidos en alguna fila. Si esto ocurre, se debe revisar inmediatamente la detección de encabezados y la lógica de forward-fill.",
+      "expected_state": "La mayoría de las filas con valores de nombre en alguna parte de la columna o en filas superiores deben terminar como proyectos completos, no como borradores incompletos."
+    }
+  }
+}
