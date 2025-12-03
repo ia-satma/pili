@@ -312,6 +312,20 @@ export function ProjectsGrid() {
             <X className="h-4 w-4" />
           </Button>
         )}
+
+        <Button
+          variant="outline"
+          onClick={handleExport}
+          disabled={isExporting || isLoading}
+          data-testid="button-export-excel"
+        >
+          {isExporting ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4 mr-2" />
+          )}
+          Exportar Excel
+        </Button>
       </div>
 
       {/* Results count */}

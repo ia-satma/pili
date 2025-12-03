@@ -6,7 +6,7 @@ import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { parseExcelBuffer } from "./excel-parser";
 import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./openai";
-import type { InsertChangeLog, InsertKpiValue, Project } from "@shared/schema";
+import type { InsertChangeLog, InsertKpiValue, Project, InsertProject } from "@shared/schema";
 
 // Validation schemas
 const sendMessageSchema = z.object({
@@ -64,7 +64,7 @@ function calculateTrafficLight(
 // Compare projects and generate change logs
 function compareProjects(
   oldProject: Project | null,
-  newData: any,
+  newData: InsertProject,
   versionId: number,
   previousVersionId: number | null
 ): InsertChangeLog[] {
@@ -412,53 +412,45 @@ export async function registerRoutes(
         minute: "2-digit",
       });
       
-      // Define columns with Spanish headers
+      // Define columns with Spanish headers matching grid
       const headers = [
-        "ID",
-        "Nombre del Proyecto",
-        "Descripción",
-        "Departamento",
+        "ID Legacy",
+        "Proyecto",
         "Responsable",
-        "Sponsor",
+        "Departamento",
         "Estado",
-        "Prioridad",
-        "Categoría",
-        "Tipo de Proyecto",
         "Fecha Inicio",
         "Fecha Fin Estimada",
         "Fecha Fin Real",
-        "Fecha Registro",
         "% Avance",
-        "Status (S)",
-        "Próximos Pasos (N)",
-        "Beneficios",
-        "Alcance",
-        "Riesgos",
-        "Comentarios",
+        "Última Actualización",
+        "Observaciones",
       ];
+      
+      // Build last update combining S: and N: fields
+      const buildLastUpdate = (p: Project): string => {
+        const parts: string[] = [];
+        if (p.parsedStatus) {
+          parts.push(`S: ${p.parsedStatus}`);
+        }
+        if (p.parsedNextSteps) {
+          parts.push(`N: ${p.parsedNextSteps}`);
+        }
+        return parts.join("\n") || "";
+      };
       
       // Map projects to rows
       const dataRows = filteredProjects.map((p) => [
         p.legacyId || "",
         p.projectName || "",
-        p.description || "",
-        p.departmentName || "",
         p.responsible || "",
-        p.sponsor || "",
+        p.departmentName || "",
         p.status || "",
-        p.priority || "",
-        p.category || "",
-        p.projectType || "",
         formatDate(p.startDate),
         p.endDateEstimatedTbd ? "TBD" : formatDate(p.endDateEstimated),
         formatDate(p.endDateActual),
-        formatDate(p.registrationDate),
         p.percentComplete !== null && p.percentComplete !== undefined ? `${p.percentComplete}%` : "",
-        p.parsedStatus || "",
-        p.parsedNextSteps || "",
-        p.benefits || "",
-        p.scope || "",
-        p.risks || "",
+        buildLastUpdate(p),
         p.comments || "",
       ]);
       
@@ -474,27 +466,17 @@ export async function registerRoutes(
       
       // Set column widths
       ws["!cols"] = [
-        { wch: 10 },  // ID
-        { wch: 40 },  // Nombre
-        { wch: 50 },  // Descripción
-        { wch: 20 },  // Departamento
-        { wch: 20 },  // Responsable
-        { wch: 20 },  // Sponsor
+        { wch: 12 },  // ID Legacy
+        { wch: 45 },  // Proyecto
+        { wch: 25 },  // Responsable
+        { wch: 25 },  // Departamento
         { wch: 15 },  // Estado
-        { wch: 12 },  // Prioridad
-        { wch: 15 },  // Categoría
-        { wch: 15 },  // Tipo
-        { wch: 12 },  // Fecha Inicio
-        { wch: 15 },  // Fecha Fin Est
-        { wch: 15 },  // Fecha Fin Real
-        { wch: 12 },  // Fecha Registro
+        { wch: 14 },  // Fecha Inicio
+        { wch: 18 },  // Fecha Fin Estimada
+        { wch: 14 },  // Fecha Fin Real
         { wch: 10 },  // % Avance
-        { wch: 50 },  // Status
-        { wch: 50 },  // Próximos Pasos
-        { wch: 30 },  // Beneficios
-        { wch: 30 },  // Alcance
-        { wch: 30 },  // Riesgos
-        { wch: 30 },  // Comentarios
+        { wch: 60 },  // Última Actualización
+        { wch: 40 },  // Observaciones
       ];
       
       XLSX.utils.book_append_sheet(wb, ws, "Proyectos");
