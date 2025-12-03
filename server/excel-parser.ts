@@ -496,20 +496,71 @@ function getHeadersFromRow(sheet: XLSX.WorkSheet, rowIndex: number): string[] {
 }
 
 // Function to find the actual header row (may not be row 1)
+// Checks for Excel AutoFilter first, then scans for recognizable headers
 function findHeaderRow(sheet: XLSX.WorkSheet): { headerRow: number; headers: string[] } {
   const range = XLSX.utils.decode_range(sheet["!ref"] || "A1:A1");
-  const maxRowsToCheck = Math.min(10, range.e.r + 1); // Check first 10 rows max
+  const maxRowsToCheck = Math.min(20, range.e.r + 1); // Check first 20 rows max
   
-  console.log(`[Excel Parser] Scanning first ${maxRowsToCheck} rows for header row...`);
+  // Method 1: Check for Excel AutoFilter - if present, that's the header row
+  // The '!autofilter' property contains the filter range
+  const autofilter = (sheet as any)["!autofilter"];
+  if (autofilter && autofilter.ref) {
+    try {
+      const filterRange = XLSX.utils.decode_range(autofilter.ref);
+      const filterRow = filterRange.s.r; // Start row of the filter range
+      const headers = getHeadersFromRow(sheet, filterRow);
+      console.log(`[Excel Parser] Found AutoFilter at row ${filterRow + 1}, using as header row`);
+      logHeaders(headers, filterRow + 1);
+      return { headerRow: filterRow, headers };
+    } catch (e) {
+      console.log(`[Excel Parser] Error parsing AutoFilter: ${e}`);
+    }
+  }
+  
+  console.log(`[Excel Parser] No AutoFilter found, scanning first ${maxRowsToCheck} rows for header row...`);
+  
+  // Method 2: Look for row with most non-empty cells that have text (not numbers)
+  // This often indicates a header row
+  let bestRow = 0;
+  let bestScore = 0;
   
   for (let r = 0; r < maxRowsToCheck; r++) {
     const headers = getHeadersFromRow(sheet, r);
-    console.log(`[Excel Parser] Row ${r + 1}: ${headers.slice(0, 8).join(", ")}...`);
+    const nonEmptyCount = headers.filter(h => h && !h.startsWith("Column") && !h.startsWith("__EMPTY")).length;
+    const textCount = headers.filter(h => {
+      if (!h || h.startsWith("Column") || h.startsWith("__EMPTY")) return false;
+      // Check if it looks like a header (text, not a number or date)
+      const val = String(h).trim();
+      if (/^\d+$/.test(val)) return false; // Pure number
+      if (/^\d{4}-\d{2}-\d{2}/.test(val)) return false; // Date
+      return true;
+    }).length;
     
+    console.log(`[Excel Parser] Row ${r + 1}: ${nonEmptyCount} non-empty, ${textCount} text columns. First 5: ${headers.slice(0, 5).join(" | ")}`);
+    
+    // Score based on text columns and known headers
+    let score = textCount * 2;
     if (isHeaderRow(headers)) {
-      console.log(`[Excel Parser] Found header row at row ${r + 1}`);
+      score += 10; // Bonus for matching known headers
+    }
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestRow = r;
+    }
+    
+    // If we find a row with known headers and good score, use it
+    if (isHeaderRow(headers) && textCount >= 5) {
+      console.log(`[Excel Parser] Found header row at row ${r + 1} with ${textCount} text columns`);
       return { headerRow: r, headers };
     }
+  }
+  
+  // Use the best row we found
+  if (bestScore > 0) {
+    const headers = getHeadersFromRow(sheet, bestRow);
+    console.log(`[Excel Parser] Using best candidate row ${bestRow + 1} with score ${bestScore}`);
+    return { headerRow: bestRow, headers };
   }
   
   // Fallback to first row if no valid header row found
