@@ -1,0 +1,181 @@
+{
+  "project": "PMO Continuous Improvement Dashboard",
+  "description": "Desarrollar una plataforma web que gestione, organice, informe y evalúe proyectos de mejora continua a partir del Excel adjunto. La plataforma NO debe interpretar, inferir ni alucinar. Solo debe reflejar los datos contenidos en el Excel y sus versiones posteriores. Toda lógica debe ser determinista y basada en reglas explícitas.",
+  "source_of_truth": "Archivo Excel adjunto. Ningún agente puede generar información no contenida explícitamente en este archivo o en sus versiones históricas.",
+  "core_objectives": [
+    "Eliminar errores de captura y manejo del Excel.",
+    "Mantener la familiaridad visual (grid estilo Excel + gráficas de Indicadores).",
+    "Garantizar trazabilidad completa entre versiones del Excel.",
+    "Incluir una interfaz conversacional especializada que responda exclusivamente con datos verificados.",
+    "No permitir IA interpretativa ni inferencias probabilísticas.",
+    "Permitir que el PMO consulte cambios, avances y diferencias entre versiones.",
+    "No perder NINGÚN dato que esté presente en el Excel fuente."
+  ],
+  "requirements": {
+    "strict_no_hallucinations": {
+      "rules": [
+        "El sistema NO puede inferir, deducir, predecir ni asumir valores.",
+        "Si algo no existe en el Excel, el agente responderá: 'No existe ese dato en el archivo cargado.'",
+        "Prohibido modificar datos sin un registro explícito en la bitácora.",
+        "Prohibido corregir, autocompletar o reescribir información automáticamente.",
+        "Las respuestas del agente conversacional DEBEN citar explícitamente: hoja, fila y columna cuando sea relevante."
+      ]
+    },
+    "data_integrity": {
+      "rules": [
+        "Mapear TODAS las columnas del Excel a tablas sin descartar ninguna.",
+        "Separar correctamente campos tipo 'S: Status / N: Next Steps' mediante reglas deterministas (regex).",
+        "Manejar 'TBD' únicamente como flag booleano, NO transformar en fechas estimadas.",
+        "Mantener valores originales del Excel (incluyendo texto irregular, mayúsculas, errores, espacios).",
+        "Registrar la versión exacta del archivo Excel que originó cada cambio."
+      ],
+      "tbd_management": {
+        "field": "fin_estimado_tbd",
+        "logic": "Si el valor de la celda es 'TBD', marcar TRUE y mantener fecha_fin_estimada = NULL."
+      }
+    },
+    "excel_version_control": {
+      "behaviour": [
+        "Cada vez que se sube un Excel nuevo, el sistema debe comparar la nueva versión con la anterior.",
+        "Generar una bitácora clara que registre altas, bajas y modificaciones.",
+        "NO actualizar automáticamente los proyectos sin confirmar que pertenecen al mismo ID o combinación de claves.",
+        "Mantener historial completo de versiones."
+      ]
+    },
+    "ui_requirements": {
+      "grid_view": "Crear una vista tipo Excel (React/TS) con edición controlada, filtros y validaciones.",
+      "indicators_tab_replication": "Replicar fielmente los KPIs, gráficas y tablas de la pestaña 'Indicadores' del Excel.",
+      "traffic_light_system": {
+        "rules": [
+          "Semáforo = Determinista.",
+          "Rojo = fecha_fin_estimada < hoy AND estatus != 'Cerrado'.",
+          "Amarillo = fecha_fin_estimada dentro de X días.",
+          "Verde = caso contrario."
+        ]
+      },
+      "project_detail_view": "Vista detallada con descripción, fechas, responsable, departamento, bitácora S/N y hitos.",
+      "update_timeline": "Representación cronológica de actualizaciones provenientes del Excel."
+    },
+    "conversational_agent": {
+      "enable": true,
+      "role": "Asistente especializado exclusivo del PMO.",
+      "context_rules": [
+        "Responder SOLO con datos verificados del Excel o de la base de datos generada a partir de él.",
+        "No generar opinión, hipótesis ni inferencias.",
+        "Para cada respuesta debe identificar la versión del Excel de la cual proviene la información.",
+        "Debe ser capaz de explicar diferencias entre versiones.",
+        "Debe poder citar textual y estructuradamente valores del Excel.",
+        "Debe respetar las reglas de negocio del PMO sin alterarlas.",
+        "Debe rechazar cualquier petición de predicción de resultados o suposición."
+      ],
+      "allowed_operations": [
+        "Consultar el estado exacto de un proyecto.",
+        "Explicar qué cambió entre versión previa y actual.",
+        "Mostrar bitácoras de actualización (S/N).",
+        "Generar resúmenes estructurados.",
+        "Navegar las tablas derivadas del Excel."
+      ],
+      "disallowed_operations": [
+        "Asumir valores faltantes.",
+        "Interpretar textos ambiguos.",
+        "Reescribir estatus.",
+        "Olvidar versiones previas."
+      ]
+    },
+    "agent_architecture": {
+      "validation_agent": {
+        "description": "Valida tipos de datos, catálogos, fechas y reglas sin interpretar.",
+        "rules": [
+          "Rechaza filas con fechas inválidas.",
+          "Rechaza valores mal tipeados en campos determinísticos.",
+          "Nunca corrige, solo valida."
+        ]
+      },
+      "sn_parser_agent": {
+        "description": "Separa texto tipo 'S:' y 'N:' sin usar NLP ni IA.",
+        "logic": "Regex determinista: dividir por patrones 'S:' y 'N:'.",
+        "fallback": "Si no existe patrón, guardar todo en 'status_texto'."
+      },
+      "version_comparison_agent": {
+        "description": "Comparación determinista entre versiones del Excel.",
+        "rules": [
+          "Comparar por legacy_id o combinación (nombre + departamento + fecha_registro).",
+          "Si hay conflicto, marcar para revisión humana.",
+          "Registrar siempre en bitácora qué cambió."
+        ]
+      },
+      "notification_agent": {
+        "description": "Alertas basadas solo en fechas y actualización S/N.",
+        "logic": [
+          "Si proyecto no tiene actualización en > X días → enviar recordatorio.",
+          "Si un hito está vencido → enviar alerta."
+        ],
+        "restriction": "Nunca deducir avance; solo reaccionar a reglas claras."
+      },
+      "reporting_agent": {
+        "description": "Genera KPIs deterministas basados en conteos, fechas y estados.",
+        "rules": [
+          "Reconstruir gráficos de 'Indicadores' tal cual aparecen en el Excel.",
+          "No extrapolar ni modelar."
+        ]
+      }
+    },
+    "mvp_functionality": [
+      "Carga del Excel.",
+      "Normalización determinista (TBD, S/N).",
+      "Visualización tipo Excel.",
+      "Panel de Indicadores replicado.",
+      "Bitácora de cambios por versión.",
+      "Semáforo de fechas.",
+      "Conversación con el PMO Bot."
+    ],
+    "technology_stack": {
+      "frontend": "React + TypeScript",
+      "backend": "FastAPI o NestJS",
+      "database": "PostgreSQL",
+      "queues": "RabbitMQ o Redis Streams",
+      "charts": "Recharts o ECharts",
+      "deployment": "Azure o AWS"
+    }
+  },
+  "data_model": {
+    "tables": [
+      "proyecto",
+      "hito",
+      "proyecto_actualizacion",
+      "usuario",
+      "departamento",
+      "bitacora_cambios",
+      "catalogos",
+      "kpi_valores"
+    ],
+    "rules": [
+      "Ninguna tabla puede descartar columnas del Excel.",
+      "Campos de texto deben conservar contenido original.",
+      "Legacy_id obligatorio para trazabilidad.",
+      "Todas las actualizaciones deben tener timestamp."
+    ]
+  },
+  "frontend_components": {
+    "dashboard": "Tarjetas KPI + gráficas idénticas a 'Indicadores'",
+    "grid": "Vista editable tipo Excel",
+    "project_detail": "Vista de detalles + timeline S/N",
+    "excel_upload": "Componente de carga con validación",
+    "chat_interface": "Chat PMO Bot con contexto estructurado"
+  },
+  "final_constraints": {
+    "must_not": [
+      "interpretar datos",
+      "reemplazar valores del Excel sin bitácora",
+      "usar modelos de lenguaje para inferir estados",
+      "reconstruir información faltante"
+    ],
+    "must": [
+      "ser 100% determinista",
+      "reflejar fielmente los datos del Excel",
+      "registrar todos los cambios",
+      "permitir auditoría completa",
+      "mantener compatibilidad cultural con la forma actual de trabajo del PMO"
+    ]
+  }
+}
