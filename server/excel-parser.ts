@@ -644,59 +644,37 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
   let proyectosBorradorIncompleto = 0;
   let filasDescartadas = 0;
   
-  // DEBUG: Log all sheet names in workbook
-  console.log(`[Excel Parser] === WORKBOOK INFO ===`);
-  console.log(`[Excel Parser] Total sheets found: ${workbook.SheetNames.length}`);
-  workbook.SheetNames.forEach((name, i) => {
-    console.log(`[Excel Parser]   Sheet ${i + 1}: "${name}"`);
+  // Log available sheets (only relevant ones)
+  console.log(`[Excel Parser] Workbook has ${workbook.SheetNames.length} sheets`);
+  const relevantSheets = workbook.SheetNames.filter(name => {
+    const lower = name.toLowerCase();
+    return lower.includes("proyectos pgp") || lower.includes("indicador");
   });
+  console.log(`[Excel Parser] Relevant sheets: ${relevantSheets.join(", ") || "none found"}`);
+
   
-  // Find the main data sheet - STRICT priority for "Proyectos PGP"
+  // STRICT: Only use "Proyectos PGP" sheet - no alternatives
   let sheetName: string | null = null;
   
-  // Priority 1: EXACT match for "Proyectos PGP" (case-insensitive)
   for (const name of workbook.SheetNames) {
     const lowerName = name.toLowerCase().trim();
     if (lowerName === "proyectos pgp") {
       sheetName = name;
-      console.log(`[Excel Parser] ✓ Found EXACT match: "${name}"`);
+      console.log(`[Excel Parser] ✓ Using sheet: "${name}"`);
       break;
     }
   }
   
-  // Priority 2: Only if "Proyectos PGP" not found, try other patterns
+  // If "Proyectos PGP" not found, return error
   if (!sheetName) {
-    console.log(`[Excel Parser] "Proyectos PGP" not found, trying alternatives...`);
-    
-    const priorities = [
-      "proyectos por los líderes",
-      "proyectos por los lideres", 
-      "matriz",
-      "base",
-      "data",
-      "projects",
-    ];
-    
-    for (const priority of priorities) {
-      for (const name of workbook.SheetNames) {
-        const lowerName = name.toLowerCase().trim();
-        if (lowerName.includes(priority)) {
-          sheetName = name;
-          console.log(`[Excel Parser] Found alternative sheet: "${name}" (matched "${priority}")`);
-          break;
-        }
-      }
-      if (sheetName) break;
-    }
+    console.log(`[Excel Parser] ERROR: Sheet "Proyectos PGP" not found in workbook`);
+    advertencias.push({
+      fila: 0,
+      tipo: "row_unreadable",
+      mensaje: "No se encontró la hoja 'Proyectos PGP' en el archivo Excel"
+    });
+    return { projects, advertencias, totalRows: 0, proyectosCreados: 0, proyectosBorradorIncompleto: 0, filasDescartadas: 1 };
   }
-  
-  // Fallback to first sheet if nothing matched
-  if (!sheetName) {
-    sheetName = workbook.SheetNames[0];
-    console.log(`[Excel Parser] No priority sheet found, using first sheet: "${sheetName}"`);
-  }
-  
-  console.log(`[Excel Parser] === SELECTED SHEET: "${sheetName}" ===`);
   
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) {
@@ -1041,4 +1019,92 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
     proyectosBorradorIncompleto,
     filasDescartadas
   };
+}
+
+// ===== INDICADORES SHEET PARSER =====
+export interface ParsedIndicator {
+  name: string;
+  values: { date: string; value: number }[];
+}
+
+export interface ParsedIndicatorsData {
+  indicators: ParsedIndicator[];
+  totalIndicators: number;
+  sheetFound: boolean;
+}
+
+/**
+ * Parse the "Indicadores" (or "Indicadoress") sheet from Excel
+ * Only reads from this specific sheet - ignores all others
+ */
+export function parseIndicatorsSheet(buffer: ArrayBuffer): ParsedIndicatorsData {
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  
+  // Find "Indicadores" or "Indicadoress" sheet (exact match, case-insensitive)
+  let sheetName: string | null = null;
+  for (const name of workbook.SheetNames) {
+    const lower = name.toLowerCase().trim();
+    if (lower === "indicadores" || lower === "indicadoress") {
+      sheetName = name;
+      console.log(`[Indicators Parser] ✓ Using sheet: "${name}"`);
+      break;
+    }
+  }
+  
+  if (!sheetName) {
+    console.log(`[Indicators Parser] Sheet "Indicadores" not found`);
+    return { indicators: [], totalIndicators: 0, sheetFound: false };
+  }
+  
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) {
+    return { indicators: [], totalIndicators: 0, sheetFound: false };
+  }
+  
+  // Parse sheet as array of arrays
+  const data: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+  if (!data || data.length < 4) {
+    return { indicators: [], totalIndicators: 0, sheetFound: true };
+  }
+  
+  // Row 3 (index 2) contains dates, Row 4+ contains indicator data
+  const dateRow = data[2] as (number | string | null)[];
+  const indicators: ParsedIndicator[] = [];
+  
+  // Parse dates from row 3 (Excel serial dates)
+  const dates: string[] = [];
+  for (let col = 1; col < dateRow.length; col++) {
+    const cell = dateRow[col];
+    if (cell && typeof cell === "number") {
+      // Convert Excel serial date to ISO string
+      const date = new Date((cell - 25569) * 86400 * 1000);
+      dates.push(date.toISOString().split("T")[0]);
+    } else if (cell instanceof Date) {
+      dates.push(cell.toISOString().split("T")[0]);
+    }
+  }
+  
+  // Parse each indicator row (starting from row 4, index 3)
+  for (let row = 3; row < data.length; row++) {
+    const rowData = data[row] as (string | number | null)[];
+    if (!rowData || !rowData[0]) continue;
+    
+    const name = String(rowData[0]).trim();
+    if (!name) continue;
+    
+    const values: { date: string; value: number }[] = [];
+    for (let col = 1; col < rowData.length && col <= dates.length; col++) {
+      const val = rowData[col];
+      if (typeof val === "number") {
+        values.push({ date: dates[col - 1], value: val });
+      }
+    }
+    
+    if (values.length > 0) {
+      indicators.push({ name, values });
+    }
+  }
+  
+  console.log(`[Indicators Parser] Parsed ${indicators.length} indicators`);
+  return { indicators, totalIndicators: indicators.length, sheetFound: true };
 }

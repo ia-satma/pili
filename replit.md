@@ -132,13 +132,12 @@ npm run db:push      # Push schema to database
 ```
 
 ## Recent Changes
-- December 3, 2025: Critical Parser Fix - Correct Sheet Selection
-  - **Root cause found**: Parser was selecting "Proyectos por los líderes (2)" (91 projects) instead of "Proyectos PGP" (197 projects)
-  - **Fix applied**: Strict EXACT match for "Proyectos PGP" sheet name (case-insensitive)
-  - **Sheet structure**: Row 4 = headers, "Iniciativa" column = project names, "Card ID DevOps" = legacy ID
-  - **197 projects** now correctly parsed with proper column mappings
-  - **Column mappings fixed**: Added truncated column name variants, "valor / diferenciador" → benefits
-  - **AutoFilter detection**: Parser uses Excel's AutoFilter to find header row automatically
+- December 3, 2025: Strict Two-Sheet Parser
+  - **ONLY TWO SHEETS**: Parser now ONLY reads "Proyectos PGP" and "Indicadores" - all other 32+ sheets ignored
+  - **No fallback**: If "Proyectos PGP" not found, parser returns error (no alternative sheets used)
+  - **Simplified logging**: Only shows relevant sheet names, not all 34 sheets
+  - **Indicators parser**: New `parseIndicatorsSheet()` function for "Indicadores" or "Indicadoress" sheet
+  - **197 projects** correctly parsed from "Proyectos PGP" sheet
 
 - December 3, 2025: Phase 2 Complete
   - Multi-user role management with Replit Auth
