@@ -16,14 +16,15 @@ A Project Management Office (PMO) dashboard for managing continuous improvement 
 
 ### Key Features
 1. **Dashboard** - KPI cards showing project counts, traffic light summary, charts
-2. **Projects Grid** - Excel-like data grid with inline editing, multi-select, bulk updates
-3. **Traffic Light System** - Date-based visual indicators (Green/Yellow/Red/Gray)
-4. **Excel Upload** - Deterministic parsing with row-level soft/hard error handling
-5. **Excel Export** - Export filtered projects to Excel format
-6. **Advanced Filtering** - Filter by status/department with saved presets
-7. **Version Control** - Complete audit trail and change tracking
-8. **PMO Chatbot** - Zero-hallucination AI assistant that only cites database facts
-9. **Role-based Auth** - Admin, Editor, Viewer roles with permission enforcement
+2. **Dashboard Alerts** - Automated notifications for overdue, approaching deadline, and stale projects
+3. **Projects Grid** - Excel-like data grid with inline editing, multi-select, bulk updates
+4. **Traffic Light System** - Date-based visual indicators (Green/Yellow/Red/Gray)
+5. **Excel Upload** - Deterministic parsing with row-level soft/hard error handling
+6. **Excel Export** - Export filtered projects to Excel format
+7. **Advanced Filtering** - Filter by status/department with saved presets
+8. **Version Control** - Complete audit trail and change tracking
+9. **PMO Chatbot** - Zero-hallucination AI assistant that only cites database facts
+10. **Role-based Auth** - Admin, Editor, Viewer roles with permission enforcement
 
 ### User Roles
 - **Admin**: Full access - upload Excel, edit projects, manage users, bulk delete
@@ -139,4 +140,5 @@ npm run db:push      # Push schema to database
   - Excel export with filter support
   - All write endpoints protected with role-based middleware
   - First user automatically becomes Admin
+  - Dashboard alerts for overdue, approaching deadline, and stale projects
 
