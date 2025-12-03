@@ -126,6 +126,20 @@ function parseDate(value: unknown): {
     return { date: null, original: null, isTbd: false, isInvalid: false };
   }
   
+  // Handle JavaScript Date objects (from xlsx with cellDates: true)
+  if (value instanceof Date) {
+    if (!isNaN(value.getTime())) {
+      const dateStr = value.toISOString().split("T")[0];
+      return { 
+        date: dateStr, 
+        original: dateStr,
+        isTbd: false,
+        isInvalid: false
+      };
+    }
+    return { date: null, original: "Invalid Date", isTbd: false, isInvalid: true };
+  }
+  
   const strValue = String(value).trim();
   const original = strValue;
   
@@ -156,9 +170,24 @@ function parseDate(value: unknown): {
     }
   }
   
-  // Try to parse as ISO date string
+  // Try to parse as ISO date string (including full date-time strings)
   if (strValue.match(/^\d{4}-\d{2}-\d{2}/)) {
     return { date: strValue.split("T")[0], original, isTbd: false, isInvalid: false };
+  }
+  
+  // Handle Date.toString() format like "Thu Aug 01 2024 00:00:00 GMT+0000"
+  const dateFromStringMatch = strValue.match(/^\w{3}\s+(\w{3})\s+(\d{2})\s+(\d{4})/);
+  if (dateFromStringMatch) {
+    const months: { [key: string]: string } = {
+      Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+      Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12"
+    };
+    const month = months[dateFromStringMatch[1]];
+    const day = dateFromStringMatch[2];
+    const year = dateFromStringMatch[3];
+    if (month) {
+      return { date: `${year}-${month}-${day}`, original, isTbd: false, isInvalid: false };
+    }
   }
   
   // Try common date formats
@@ -603,27 +632,55 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
   let proyectosBorradorIncompleto = 0;
   let filasDescartadas = 0;
   
-  // Find the main data sheet - prioritize "Proyectos por los líderes"
+  // Find the main data sheet - prioritize specific sheet names
   let sheetName = workbook.SheetNames[0];
-  const prioritySheetNames = [
+  
+  // Priority 1: Exact or partial match for "proyectos por los líderes"
+  // Prefer sheets with "(2)" suffix as the main data sheet
+  const lideresPriority = [
+    "proyectos por los líderes (2)",
+    "proyectos por los lideres (2)",
     "proyectos por los líderes",
-    "proyectos por los lideres", 
-    "proyectos",
-    "projects",
-    "data",
-    "matriz",
-    "base"
+    "proyectos por los lideres",
   ];
   
-  for (const name of workbook.SheetNames) {
-    const lowerName = name.toLowerCase().trim();
-    for (const priority of prioritySheetNames) {
-      if (lowerName === priority || lowerName.includes(priority)) {
+  let foundLideres = false;
+  for (const priority of lideresPriority) {
+    for (const name of workbook.SheetNames) {
+      const lowerName = name.toLowerCase().trim();
+      if (lowerName.includes(priority)) {
         sheetName = name;
+        console.log(`[Excel Parser] Found priority sheet (lideres): "${name}"`);
+        foundLideres = true;
         break;
       }
     }
-    if (sheetName !== workbook.SheetNames[0]) break;
+    if (foundLideres) break;
+  }
+  
+  // Priority 2: If no "lideres" sheet, look for other project sheets (but NOT "PGP" which has too many columns)
+  if (sheetName === workbook.SheetNames[0]) {
+    const secondaryPriority = [
+      "matriz",
+      "base",
+      "data",
+      "projects",
+    ];
+    
+    for (const name of workbook.SheetNames) {
+      const lowerName = name.toLowerCase().trim();
+      // Skip sheets with "pgp" in the name (too many columns, different format)
+      if (lowerName.includes("pgp")) continue;
+      
+      for (const priority of secondaryPriority) {
+        if (lowerName === priority || lowerName.includes(priority)) {
+          sheetName = name;
+          console.log(`[Excel Parser] Found secondary sheet: "${name}"`);
+          break;
+        }
+      }
+      if (sheetName !== workbook.SheetNames[0]) break;
+    }
   }
   
   console.log(`[Excel Parser] Using sheet: "${sheetName}"`);
