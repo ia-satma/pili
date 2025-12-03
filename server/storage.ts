@@ -67,6 +67,10 @@ export interface IStorage {
   getFilterPresets(): Promise<FilterPreset[]>;
   createFilterPreset(preset: InsertFilterPreset): Promise<FilterPreset>;
   deleteFilterPreset(id: number): Promise<void>;
+
+  // Bulk Operations
+  bulkUpdateProjects(ids: number[], field: string, value: string): Promise<number>;
+  bulkDeleteProjects(ids: number[]): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -290,6 +294,92 @@ export class DatabaseStorage implements IStorage {
 
   async deleteFilterPreset(id: number): Promise<void> {
     await db.delete(filterPresets).where(eq(filterPresets.id, id));
+  }
+
+  // Bulk Operations
+  async bulkUpdateProjects(ids: number[], field: string, value: string): Promise<number> {
+    if (ids.length === 0) return 0;
+
+    const projectsToUpdate = await db.select()
+      .from(projects)
+      .where(inArray(projects.id, ids));
+
+    if (projectsToUpdate.length === 0) return 0;
+
+    const fieldMapping: Record<string, keyof typeof projects> = {
+      status: 'status',
+      priority: 'priority',
+      responsible: 'responsible',
+    };
+
+    const dbField = fieldMapping[field];
+    if (!dbField) {
+      throw new Error(`Invalid field: ${field}`);
+    }
+
+    const changeLogsToCreate: InsertChangeLog[] = [];
+    
+    for (const project of projectsToUpdate) {
+      const oldValue = project[field as keyof typeof project];
+      
+      changeLogsToCreate.push({
+        projectId: project.id,
+        versionId: project.sourceVersionId || 1,
+        previousVersionId: null,
+        changeType: "modified",
+        fieldName: field,
+        oldValue: oldValue !== null && oldValue !== undefined ? String(oldValue) : null,
+        newValue: value,
+        legacyId: project.legacyId,
+        projectName: project.projectName,
+      });
+    }
+
+    await db.update(projects)
+      .set({ [dbField]: value, updatedAt: new Date() })
+      .where(inArray(projects.id, ids));
+
+    if (changeLogsToCreate.length > 0) {
+      await db.insert(changeLogs).values(changeLogsToCreate);
+    }
+
+    return projectsToUpdate.length;
+  }
+
+  async bulkDeleteProjects(ids: number[]): Promise<number> {
+    if (ids.length === 0) return 0;
+
+    const projectsToDelete = await db.select()
+      .from(projects)
+      .where(inArray(projects.id, ids));
+
+    if (projectsToDelete.length === 0) return 0;
+
+    const changeLogsToCreate: InsertChangeLog[] = [];
+
+    for (const project of projectsToDelete) {
+      changeLogsToCreate.push({
+        projectId: project.id,
+        versionId: project.sourceVersionId || 1,
+        previousVersionId: null,
+        changeType: "deleted",
+        fieldName: null,
+        oldValue: project.projectName,
+        newValue: null,
+        legacyId: project.legacyId,
+        projectName: project.projectName,
+      });
+    }
+
+    await db.update(projects)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(inArray(projects.id, ids));
+
+    if (changeLogsToCreate.length > 0) {
+      await db.insert(changeLogs).values(changeLogsToCreate);
+    }
+
+    return projectsToDelete.length;
   }
 }
 

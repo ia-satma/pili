@@ -15,6 +15,9 @@ import {
   Save,
   Trash2,
   BookmarkCheck,
+  RefreshCw,
+  AlertTriangle,
+  User,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -44,6 +47,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { TrafficLight, calculateTrafficLight } from "./traffic-light";
 import { ProjectDetailDrawer } from "./project-detail-drawer";
@@ -70,6 +84,11 @@ interface FilterPresetsResponse {
 type SortField = "projectName" | "departmentName" | "status" | "endDateEstimated" | "percentComplete";
 type SortDirection = "asc" | "desc";
 
+const STATUS_OPTIONS = ["Abierto", "En Progreso", "Cerrado", "Cancelado", "En Pausa"];
+const PRIORITY_OPTIONS = ["Alta", "Media", "Baja"];
+
+type BulkField = "status" | "priority" | "responsible";
+
 export function ProjectsGrid() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -82,6 +101,13 @@ export function ProjectsGrid() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [activePresetId, setActivePresetId] = useState<number | null>(null);
+  
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkUpdateDialogOpen, setBulkUpdateDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [bulkUpdateField, setBulkUpdateField] = useState<BulkField | null>(null);
+  const [bulkUpdateValue, setBulkUpdateValue] = useState("");
+  
   const pageSize = 20;
   const { toast } = useToast();
 
@@ -141,21 +167,72 @@ export function ProjectsGrid() {
     },
   });
 
-  // Extract unique statuses and departments for filters
-  const { statuses, departments } = useMemo(() => {
-    if (!data?.projects) return { statuses: [], departments: [] };
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async (data: { ids: number[]; field: string; value: string }) => {
+      return apiRequest("POST", "/api/projects/bulk/update", data);
+    },
+    onSuccess: async (response) => {
+      const result = await response.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setSelectedIds(new Set());
+      setBulkUpdateDialogOpen(false);
+      setBulkUpdateField(null);
+      setBulkUpdateValue("");
+      toast({
+        title: "Actualización masiva completada",
+        description: result.message || `Se actualizaron ${result.updatedCount} proyectos`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudieron actualizar los proyectos",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      return apiRequest("POST", "/api/projects/bulk/delete", { ids });
+    },
+    onSuccess: async (response) => {
+      const result = await response.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setSelectedIds(new Set());
+      setBulkDeleteDialogOpen(false);
+      toast({
+        title: "Eliminación masiva completada",
+        description: result.message || `Se eliminaron ${result.deletedCount} proyectos`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudieron eliminar los proyectos",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Extract unique statuses, departments, and responsibles for filters
+  const { statuses, departments, responsibles } = useMemo(() => {
+    if (!data?.projects) return { statuses: [], departments: [], responsibles: [] };
     
     const statusSet = new Set<string>();
     const deptSet = new Set<string>();
+    const respSet = new Set<string>();
     
     data.projects.forEach((p) => {
       if (p.status) statusSet.add(p.status);
       if (p.departmentName) deptSet.add(p.departmentName);
+      if (p.responsible) respSet.add(p.responsible);
     });
     
     return {
       statuses: Array.from(statusSet).sort(),
       departments: Array.from(deptSet).sort(),
+      responsibles: Array.from(respSet).sort(),
     };
   }, [data?.projects]);
 
@@ -216,6 +293,63 @@ export function ProjectsGrid() {
   }, [filteredProjects, page, pageSize]);
 
   const totalPages = Math.ceil(filteredProjects.length / pageSize);
+
+  // Selection helpers (must be after paginatedProjects)
+  const visibleProjectIds = useMemo(() => {
+    return paginatedProjects.map(p => p.id);
+  }, [paginatedProjects]);
+
+  const allVisibleSelected = useMemo(() => {
+    if (visibleProjectIds.length === 0) return false;
+    return visibleProjectIds.every(id => selectedIds.has(id));
+  }, [visibleProjectIds, selectedIds]);
+
+  const someVisibleSelected = useMemo(() => {
+    if (visibleProjectIds.length === 0) return false;
+    return visibleProjectIds.some(id => selectedIds.has(id)) && !allVisibleSelected;
+  }, [visibleProjectIds, selectedIds, allVisibleSelected]);
+
+  const handleSelectAll = () => {
+    if (allVisibleSelected) {
+      const newSelected = new Set(selectedIds);
+      visibleProjectIds.forEach(id => newSelected.delete(id));
+      setSelectedIds(newSelected);
+    } else {
+      const newSelected = new Set(selectedIds);
+      visibleProjectIds.forEach(id => newSelected.add(id));
+      setSelectedIds(newSelected);
+    }
+  };
+
+  const handleSelectProject = (projectId: number, checked: boolean) => {
+    const newSelected = new Set(selectedIds);
+    if (checked) {
+      newSelected.add(projectId);
+    } else {
+      newSelected.delete(projectId);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleOpenBulkUpdate = (field: BulkField) => {
+    setBulkUpdateField(field);
+    setBulkUpdateValue("");
+    setBulkUpdateDialogOpen(true);
+  };
+
+  const handleBulkUpdate = () => {
+    if (!bulkUpdateField || !bulkUpdateValue || selectedIds.size === 0) return;
+    bulkUpdateMutation.mutate({
+      ids: Array.from(selectedIds),
+      field: bulkUpdateField,
+      value: bulkUpdateValue,
+    });
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    bulkDeleteMutation.mutate(Array.from(selectedIds));
+  };
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -515,6 +649,15 @@ export function ProjectsGrid() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={allVisibleSelected}
+                  onCheckedChange={handleSelectAll}
+                  aria-label="Seleccionar todos"
+                  data-testid="checkbox-select-all"
+                  className={someVisibleSelected ? "data-[state=checked]:bg-primary/50" : ""}
+                />
+              </TableHead>
               <TableHead className="w-10"></TableHead>
               <TableHead>
                 <button
@@ -574,6 +717,7 @@ export function ProjectsGrid() {
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-4 rounded" /></TableCell>
                   <TableCell><Skeleton className="h-3 w-3 rounded-full" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-48" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
@@ -586,7 +730,7 @@ export function ProjectsGrid() {
               ))
             ) : paginatedProjects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                   No se encontraron proyectos
                 </TableCell>
               </TableRow>
@@ -603,11 +747,23 @@ export function ProjectsGrid() {
                     key={project.id}
                     className={cn(
                       "hover-elevate cursor-pointer",
-                      selectedProjectId === project.id && "bg-muted/50"
+                      selectedProjectId === project.id && "bg-muted/50",
+                      selectedIds.has(project.id) && "bg-primary/5"
                     )}
                     onClick={() => setSelectedProjectId(project.id)}
                     data-testid={`project-row-${project.id}`}
                   >
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(project.id)}
+                        onCheckedChange={(checked) => {
+                          handleSelectProject(project.id, checked === true);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Seleccionar ${project.projectName}`}
+                        data-testid={`checkbox-select-project-${project.id}`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <TrafficLight status={trafficLight} size="sm" />
                     </TableCell>
@@ -762,6 +918,167 @@ export function ProjectsGrid() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Floating Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-background border border-border rounded-lg shadow-lg p-4 flex items-center gap-4 z-50">
+          <span className="text-sm font-medium" data-testid="text-selected-count">
+            {selectedIds.size} proyecto{selectedIds.size !== 1 ? "s" : ""} seleccionado{selectedIds.size !== 1 ? "s" : ""}
+          </span>
+          <div className="h-4 w-px bg-border" />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleOpenBulkUpdate("status")}
+              disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
+              data-testid="button-bulk-update-status"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Actualizar Estado
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleOpenBulkUpdate("priority")}
+              disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
+              data-testid="button-bulk-update-priority"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Actualizar Prioridad
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleOpenBulkUpdate("responsible")}
+              disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
+              data-testid="button-bulk-update-responsible"
+            >
+              <User className="h-4 w-4 mr-2" />
+              Actualizar Responsable
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteDialogOpen(true)}
+              disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
+              data-testid="button-bulk-delete"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Eliminar
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* Bulk Update Dialog */}
+      <Dialog open={bulkUpdateDialogOpen} onOpenChange={setBulkUpdateDialogOpen} data-testid="dialog-bulk-update">
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Actualizar {bulkUpdateField === "status" ? "Estado" : bulkUpdateField === "priority" ? "Prioridad" : "Responsable"}
+            </DialogTitle>
+            <DialogDescription>
+              Selecciona el nuevo valor para los {selectedIds.size} proyectos seleccionados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="bulk-update-value">
+                Nuevo {bulkUpdateField === "status" ? "Estado" : bulkUpdateField === "priority" ? "Prioridad" : "Responsable"}
+              </Label>
+              {bulkUpdateField === "responsible" ? (
+                <Select value={bulkUpdateValue} onValueChange={setBulkUpdateValue}>
+                  <SelectTrigger data-testid="select-bulk-update-value">
+                    <SelectValue placeholder="Seleccionar responsable" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {responsibles.map((resp) => (
+                      <SelectItem key={resp} value={resp}>
+                        {resp}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select value={bulkUpdateValue} onValueChange={setBulkUpdateValue}>
+                  <SelectTrigger data-testid="select-bulk-update-value">
+                    <SelectValue placeholder={`Seleccionar ${bulkUpdateField === "status" ? "estado" : "prioridad"}`} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(bulkUpdateField === "status" ? STATUS_OPTIONS : PRIORITY_OPTIONS).map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBulkUpdateDialogOpen(false);
+                setBulkUpdateField(null);
+                setBulkUpdateValue("");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleBulkUpdate}
+              disabled={!bulkUpdateValue || bulkUpdateMutation.isPending}
+            >
+              {bulkUpdateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Actualizar {selectedIds.size} proyecto{selectedIds.size !== 1 ? "s" : ""}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent data-testid="dialog-bulk-delete-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Confirmar eliminación
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar {selectedIds.size} proyecto{selectedIds.size !== 1 ? "s" : ""}? 
+              Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

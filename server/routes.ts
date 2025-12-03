@@ -13,6 +13,43 @@ const sendMessageSchema = z.object({
   content: z.string().min(1, "El mensaje no puede estar vacío").max(2000, "El mensaje es demasiado largo"),
 });
 
+const bulkUpdateSchema = z.object({
+  ids: z.array(z.number()).min(1, "Debe seleccionar al menos un proyecto"),
+  field: z.enum(["status", "priority", "responsible"], {
+    errorMap: () => ({ message: "Campo no válido" }),
+  }),
+  value: z.string().min(1, "El valor no puede estar vacío"),
+});
+
+const bulkDeleteSchema = z.object({
+  ids: z.array(z.number()).min(1, "Debe seleccionar al menos un proyecto"),
+});
+
+// Schema for creating individual projects
+const createProjectSchema = z.object({
+  projectName: z.string().min(1, "Nombre del proyecto es requerido"),
+  description: z.string().optional().nullable(),
+  departmentName: z.string().optional().nullable(),
+  responsible: z.string().optional().nullable(),
+  sponsor: z.string().optional().nullable(),
+  status: z.string().default("Abierto"),
+  priority: z.string().default("Media"),
+  category: z.string().optional().nullable(),
+  projectType: z.string().optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDateEstimated: z.string().optional().nullable(),
+  endDateEstimatedTbd: z.boolean().default(false),
+  endDateActual: z.string().optional().nullable(),
+  percentComplete: z.number().min(0).max(100).default(0),
+  statusText: z.string().optional().nullable(),
+  parsedStatus: z.string().optional().nullable(),
+  parsedNextSteps: z.string().optional().nullable(),
+  benefits: z.string().optional().nullable(),
+  scope: z.string().optional().nullable(),
+  risks: z.string().optional().nullable(),
+  comments: z.string().optional().nullable(),
+});
+
 // Configure multer for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -349,6 +386,83 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Project detail error:", error);
       res.status(500).json({ message: "Error loading project" });
+    }
+  });
+
+  // Create a new project directly
+  app.post("/api/projects", async (req, res) => {
+    try {
+      const validation = createProjectSchema.safeParse(req.body);
+      
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: validation.error.errors[0]?.message || "Datos inválidos" 
+        });
+      }
+      
+      const projectData = {
+        ...validation.data,
+        isActive: true,
+      };
+      
+      const project = await storage.createProject(projectData);
+      res.status(201).json(project);
+    } catch (error) {
+      console.error("Create project error:", error);
+      res.status(500).json({ message: "Error creating project" });
+    }
+  });
+
+  // ===== BULK OPERATIONS =====
+  app.post("/api/projects/bulk/update", async (req, res) => {
+    try {
+      const validation = bulkUpdateSchema.safeParse(req.body);
+      
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: validation.error.errors[0]?.message || "Datos inválidos" 
+        });
+      }
+
+      const { ids, field, value } = validation.data;
+      const updatedCount = await storage.bulkUpdateProjects(ids, field, value);
+      
+      res.json({ 
+        success: true, 
+        updatedCount,
+        message: `Se actualizaron ${updatedCount} proyectos` 
+      });
+    } catch (error) {
+      console.error("Bulk update error:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error al actualizar proyectos" 
+      });
+    }
+  });
+
+  app.post("/api/projects/bulk/delete", async (req, res) => {
+    try {
+      const validation = bulkDeleteSchema.safeParse(req.body);
+      
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: validation.error.errors[0]?.message || "Datos inválidos" 
+        });
+      }
+
+      const { ids } = validation.data;
+      const deletedCount = await storage.bulkDeleteProjects(ids);
+      
+      res.json({ 
+        success: true, 
+        deletedCount,
+        message: `Se eliminaron ${deletedCount} proyectos` 
+      });
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error al eliminar proyectos" 
+      });
     }
   });
 
