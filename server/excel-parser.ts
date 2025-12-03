@@ -343,6 +343,7 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "dept": "departmentName",
   "area": "departmentName",
   "área": "departmentName",
+  "proceso de negocio": "departmentName",
   
   // Responsible
   "responsable": "responsible",
@@ -350,6 +351,9 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "owner": "responsible",
   "lider": "responsible",
   "líder": "responsible",
+  "líder o solicitante": "responsible",
+  "lider o solicitante": "responsible",
+  "dueño del proceso": "sponsor",
   
   // Sponsor
   "sponsor": "sponsor",
@@ -359,6 +363,7 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "estado": "status",
   "status": "status",
   "estatus": "status",
+  "tipo de iniciativa": "status",
   
   // Priority
   "prioridad": "priority",
@@ -393,6 +398,8 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "fecha fin": "endDateEstimated",
   "fecha_fin": "endDateEstimated",
   "fin": "endDateEstimated",
+  "fecha de término / real o estimada": "endDateEstimated",
+  "fecha de termino / real o estimada": "endDateEstimated",
   
   // End date actual
   "fecha fin real": "endDateActual",
