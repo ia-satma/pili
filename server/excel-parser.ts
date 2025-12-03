@@ -219,7 +219,7 @@ function getString(value: unknown): string | null {
   return str.length > 0 ? str : null;
 }
 
-// Priority column name lists - these are tried in order
+// Priority column name lists - these are tried in order (exact match first)
 const PROJECT_NAME_COLUMNS = [
   "iniciativa",
   "iniciativa ", // with trailing space
@@ -231,6 +231,21 @@ const PROJECT_NAME_COLUMNS = [
   "nombre",
   "nombre del proyecto",
   "nombre proyecto",
+  "name",
+  "title",
+  "titulo",
+  "título",
+];
+
+// Partial matches for project name (if exact match fails)
+const PROJECT_NAME_PARTIAL = [
+  "iniciativa",
+  "proyecto",
+  "project",
+  "nombre",
+  "name",
+  "titulo",
+  "title",
 ];
 
 const LEGACY_ID_COLUMNS = [
@@ -244,6 +259,9 @@ const LEGACY_ID_COLUMNS = [
   "no.",
   "no",
   "numero",
+  "folio",
+  "clave",
+  "key",
 ];
 
 // Column name mapping - maps various column headers to our schema fields
@@ -408,15 +426,37 @@ function isRowEmpty(row: RawExcelRow): boolean {
 }
 
 // Find the best column for a field based on priority list
-function findPriorityColumn(headers: string[], priorityList: string[]): string | null {
+function findPriorityColumn(headers: string[], priorityList: string[], partialList?: string[]): string | null {
+  // First try exact match
   for (const priority of priorityList) {
     for (const header of headers) {
       if (normalizeColumnName(header) === priority) {
+        console.log(`[Excel Parser] Found exact match column: "${header}" for priority "${priority}"`);
         return header;
       }
     }
   }
+  
+  // If exact match fails and partialList provided, try partial matching
+  if (partialList) {
+    for (const partial of partialList) {
+      for (const header of headers) {
+        const normalized = normalizeColumnName(header);
+        if (normalized.includes(partial) || partial.includes(normalized)) {
+          console.log(`[Excel Parser] Found partial match column: "${header}" contains "${partial}"`);
+          return header;
+        }
+      }
+    }
+  }
+  
   return null;
+}
+
+// Debug function to log all headers
+function logHeaders(headers: string[]): void {
+  console.log(`[Excel Parser] Found ${headers.length} columns:`);
+  headers.forEach((h, i) => console.log(`  ${i + 1}. "${h}" -> normalized: "${normalizeColumnName(h)}"`));
 }
 
 export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcelData {
@@ -482,9 +522,15 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
     headers.push(cell?.v ? String(cell.v) : `Column${c}`);
   }
   
-  // Find priority columns for project name and legacy ID
-  const projectNameColumn = findPriorityColumn(headers, PROJECT_NAME_COLUMNS);
+  // Log all headers for debugging
+  logHeaders(headers);
+  
+  // Find priority columns for project name and legacy ID (with partial matching fallback)
+  const projectNameColumn = findPriorityColumn(headers, PROJECT_NAME_COLUMNS, PROJECT_NAME_PARTIAL);
   const legacyIdColumn = findPriorityColumn(headers, LEGACY_ID_COLUMNS);
+  
+  console.log(`[Excel Parser] Project name column: ${projectNameColumn || "NOT FOUND"}`);
+  console.log(`[Excel Parser] Legacy ID column: ${legacyIdColumn || "NOT FOUND"}`);
   
   // Process each row
   for (let i = 0; i < rawData.length; i++) {
