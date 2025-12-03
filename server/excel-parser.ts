@@ -1,11 +1,64 @@
 import * as XLSX from "xlsx";
-import type { InsertProject } from "@shared/schema";
+
+export type ErrorType = 
+  | "row_empty" 
+  | "row_unreadable" 
+  | "missing_project_name" 
+  | "invalid_date" 
+  | "unknown_catalog_value";
+
+export interface RowWarning {
+  fila: number;
+  tipo: ErrorType;
+  mensaje: string;
+}
+
+export interface ParsedProject {
+  legacyId?: string | null;
+  projectName: string;
+  description?: string | null;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  responsible?: string | null;
+  sponsor?: string | null;
+  status?: string | null;
+  priority?: string | null;
+  category?: string | null;
+  projectType?: string | null;
+  startDate?: string | null;
+  startDateOriginal?: string | null;
+  endDateEstimated?: string | null;
+  endDateEstimatedOriginal?: string | null;
+  endDateEstimatedTbd?: boolean | null;
+  endDateActual?: string | null;
+  endDateActualOriginal?: string | null;
+  registrationDate?: string | null;
+  registrationDateOriginal?: string | null;
+  percentComplete?: number | null;
+  statusText?: string | null;
+  parsedStatus?: string | null;
+  parsedNextSteps?: string | null;
+  benefits?: string | null;
+  scope?: string | null;
+  risks?: string | null;
+  comments?: string | null;
+  lastUpdateText?: string | null;
+  extraFields?: Record<string, unknown>;
+  esBorradorIncompleto?: boolean | null;
+  requiereNombre?: boolean | null;
+  fechaInvalida?: boolean | null;
+  catalogoPendienteMapeo?: boolean | null;
+  sourceVersionId?: number | null;
+  isActive?: boolean | null;
+}
 
 export interface ParsedExcelData {
-  projects: InsertProject[];
-  errors: string[];
+  projects: ParsedProject[];
+  advertencias: RowWarning[];
   totalRows: number;
-  processedRows: number;
+  proyectosCreados: number;
+  proyectosBorradorIncompleto: number;
+  filasDescartadas: number;
 }
 
 interface RawExcelRow {
@@ -24,8 +77,6 @@ export function parseSNText(text: string | null | undefined): {
 
   const trimmedText = text.trim();
   
-  // Try to find S: and N: patterns
-  // Pattern: "S: <status text> N: <next steps text>" or variations
   const sPattern = /S\s*[:：]\s*/i;
   const nPattern = /N\s*[:：]\s*/i;
   
@@ -40,27 +91,22 @@ export function parseSNText(text: string | null | undefined): {
     const nIndex = trimmedText.search(nPattern);
     
     if (sIndex < nIndex) {
-      // S: comes before N:
       const sStart = sIndex + sMatch[0].length;
       parsedStatus = trimmedText.substring(sStart, nIndex).trim();
       parsedNextSteps = trimmedText.substring(nIndex + nMatch[0].length).trim();
     } else {
-      // N: comes before S:
       const nStart = nIndex + nMatch[0].length;
       parsedNextSteps = trimmedText.substring(nStart, sIndex).trim();
       parsedStatus = trimmedText.substring(sIndex + sMatch[0].length).trim();
     }
   } else if (sMatch) {
-    // Only S: found
     const sIndex = trimmedText.search(sPattern);
     parsedStatus = trimmedText.substring(sIndex + sMatch[0].length).trim();
   } else if (nMatch) {
-    // Only N: found
     const nIndex = trimmedText.search(nPattern);
     parsedNextSteps = trimmedText.substring(nIndex + nMatch[0].length).trim();
   }
   
-  // If no patterns found, store everything in statusText as fallback
   return {
     statusText: trimmedText,
     parsedStatus: parsedStatus || null,
@@ -69,17 +115,27 @@ export function parseSNText(text: string | null | undefined): {
 }
 
 // Parse date - DETERMINISTIC, no interpretation
-function parseDate(value: unknown): { date: string | null; original: string | null; isTbd: boolean } {
+// Returns invalid flag if date cannot be parsed (soft error)
+function parseDate(value: unknown): { 
+  date: string | null; 
+  original: string | null; 
+  isTbd: boolean;
+  isInvalid: boolean;
+} {
   if (value === null || value === undefined) {
-    return { date: null, original: null, isTbd: false };
+    return { date: null, original: null, isTbd: false, isInvalid: false };
   }
   
   const strValue = String(value).trim();
   const original = strValue;
   
+  if (strValue === "") {
+    return { date: null, original: null, isTbd: false, isInvalid: false };
+  }
+  
   // Check for TBD
   if (strValue.toLowerCase() === "tbd" || strValue.toLowerCase() === "por definir") {
-    return { date: null, original, isTbd: true };
+    return { date: null, original, isTbd: true, isInvalid: false };
   }
   
   // Try to parse as Excel serial number
@@ -91,7 +147,8 @@ function parseDate(value: unknown): { date: string | null; original: string | nu
         return { 
           date: date.toISOString().split("T")[0], 
           original,
-          isTbd: false 
+          isTbd: false,
+          isInvalid: false
         };
       }
     } catch {
@@ -101,7 +158,7 @@ function parseDate(value: unknown): { date: string | null; original: string | nu
   
   // Try to parse as ISO date string
   if (strValue.match(/^\d{4}-\d{2}-\d{2}/)) {
-    return { date: strValue.split("T")[0], original, isTbd: false };
+    return { date: strValue.split("T")[0], original, isTbd: false, isInvalid: false };
   }
   
   // Try common date formats
@@ -127,13 +184,14 @@ function parseDate(value: unknown): { date: string | null; original: string | nu
           date: date.toISOString().split("T")[0],
           original,
           isTbd: false,
+          isInvalid: false
         };
       }
     }
   }
   
-  // Can't parse, return null but keep original
-  return { date: null, original, isTbd: false };
+  // Can't parse - this is a soft error (invalid date)
+  return { date: null, original, isTbd: false, isInvalid: true };
 }
 
 // Parse percentage
@@ -141,11 +199,9 @@ function parsePercentage(value: unknown): number {
   if (value === null || value === undefined) return 0;
   
   if (typeof value === "number") {
-    // If between 0-1, treat as decimal percentage
     if (value >= 0 && value <= 1) {
       return Math.round(value * 100);
     }
-    // Otherwise assume it's already a percentage
     return Math.round(Math.min(100, Math.max(0, value)));
   }
   
@@ -163,17 +219,52 @@ function getString(value: unknown): string | null {
   return str.length > 0 ? str : null;
 }
 
+// Priority column name lists - these are tried in order
+const PROJECT_NAME_COLUMNS = [
+  "iniciativa",
+  "iniciativa ", // with trailing space
+  "nombre de iniciativa",
+  "proyecto",
+  "project",
+  "project_name",
+  "projectname",
+  "nombre",
+  "nombre del proyecto",
+  "nombre proyecto",
+];
+
+const LEGACY_ID_COLUMNS = [
+  "id",
+  "código",
+  "codigo",
+  "id power steering",
+  "card id devops",
+  "legacy_id",
+  "legacyid",
+  "no.",
+  "no",
+  "numero",
+];
+
 // Column name mapping - maps various column headers to our schema fields
-const COLUMN_MAPPINGS: Record<string, keyof InsertProject> = {
-  // ID
+type ProjectField = keyof ParsedProject;
+const COLUMN_MAPPINGS: Record<string, ProjectField> = {
+  // ID - handled separately via LEGACY_ID_COLUMNS priority
   "id": "legacyId",
   "legacy_id": "legacyId",
   "legacyid": "legacyId",
   "no.": "legacyId",
   "no": "legacyId",
   "numero": "legacyId",
+  "código": "legacyId",
+  "codigo": "legacyId",
+  "id power steering": "legacyId",
+  "card id devops": "legacyId",
   
-  // Project name
+  // Project name - handled separately via PROJECT_NAME_COLUMNS priority
+  "iniciativa": "projectName",
+  "iniciativa ": "projectName",
+  "nombre de iniciativa": "projectName",
   "proyecto": "projectName",
   "project": "projectName",
   "project_name": "projectName",
@@ -298,32 +389,76 @@ function normalizeColumnName(name: string): string {
   return name.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
-function mapColumnToField(columnName: string): keyof InsertProject | null {
+function mapColumnToField(columnName: string): ProjectField | null {
   const normalized = normalizeColumnName(columnName);
   return COLUMN_MAPPINGS[normalized] || null;
 }
 
+// Check if a row is completely empty
+function isRowEmpty(row: RawExcelRow): boolean {
+  for (const value of Object.values(row)) {
+    if (value !== null && value !== undefined) {
+      const strVal = String(value).trim();
+      if (strVal.length > 0) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// Find the best column for a field based on priority list
+function findPriorityColumn(headers: string[], priorityList: string[]): string | null {
+  for (const priority of priorityList) {
+    for (const header of headers) {
+      if (normalizeColumnName(header) === priority) {
+        return header;
+      }
+    }
+  }
+  return null;
+}
+
 export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcelData {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  const errors: string[] = [];
-  const projects: InsertProject[] = [];
+  const advertencias: RowWarning[] = [];
+  const projects: ParsedProject[] = [];
   let totalRows = 0;
-  let processedRows = 0;
+  let proyectosCreados = 0;
+  let proyectosBorradorIncompleto = 0;
+  let filasDescartadas = 0;
   
-  // Find the main data sheet (usually first or one named "Proyectos", "Data", etc.)
+  // Find the main data sheet - prioritize "Proyectos por los líderes"
   let sheetName = workbook.SheetNames[0];
-  const dataSheetNames = ["proyectos", "projects", "data", "matriz", "base"];
+  const prioritySheetNames = [
+    "proyectos por los líderes",
+    "proyectos por los lideres", 
+    "proyectos",
+    "projects",
+    "data",
+    "matriz",
+    "base"
+  ];
+  
   for (const name of workbook.SheetNames) {
-    if (dataSheetNames.includes(name.toLowerCase())) {
-      sheetName = name;
-      break;
+    const lowerName = name.toLowerCase().trim();
+    for (const priority of prioritySheetNames) {
+      if (lowerName === priority || lowerName.includes(priority)) {
+        sheetName = name;
+        break;
+      }
     }
+    if (sheetName !== workbook.SheetNames[0]) break;
   }
   
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) {
-    errors.push("No se encontró una hoja de datos válida");
-    return { projects, errors, totalRows: 0, processedRows: 0 };
+    advertencias.push({
+      fila: 0,
+      tipo: "row_unreadable",
+      mensaje: "No se encontró una hoja de datos válida"
+    });
+    return { projects, advertencias, totalRows: 0, proyectosCreados: 0, proyectosBorradorIncompleto: 0, filasDescartadas: 1 };
   }
   
   // Convert to JSON with header row
@@ -331,8 +466,12 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
   totalRows = rawData.length;
   
   if (totalRows === 0) {
-    errors.push("La hoja de datos está vacía");
-    return { projects, errors, totalRows: 0, processedRows: 0 };
+    advertencias.push({
+      fila: 0,
+      tipo: "row_empty",
+      mensaje: "La hoja de datos está vacía"
+    });
+    return { projects, advertencias, totalRows: 0, proyectosCreados: 0, proyectosBorradorIncompleto: 0, filasDescartadas: 0 };
   }
   
   // Get column headers from first row
@@ -343,17 +482,50 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
     headers.push(cell?.v ? String(cell.v) : `Column${c}`);
   }
   
+  // Find priority columns for project name and legacy ID
+  const projectNameColumn = findPriorityColumn(headers, PROJECT_NAME_COLUMNS);
+  const legacyIdColumn = findPriorityColumn(headers, LEGACY_ID_COLUMNS);
+  
   // Process each row
   for (let i = 0; i < rawData.length; i++) {
     const row = rawData[i];
     const rowNum = i + 2; // +2 because of header row and 1-indexing
     
+    // HARD ERROR: Check if row is completely empty
+    if (isRowEmpty(row)) {
+      filasDescartadas++;
+      advertencias.push({
+        fila: rowNum,
+        tipo: "row_empty",
+        mensaje: "Fila totalmente vacía - no crear proyecto"
+      });
+      continue;
+    }
+    
     try {
-      const project: Partial<InsertProject> = {
+      const project: Partial<ParsedProject> = {
         sourceVersionId: versionId,
         isActive: true,
         extraFields: {},
+        esBorradorIncompleto: false,
+        requiereNombre: false,
+        fechaInvalida: false,
+        catalogoPendienteMapeo: false,
       };
+      
+      let hasSoftError = false;
+      
+      // First, try to get project name from priority column
+      let projectName: string | null = null;
+      if (projectNameColumn && row[projectNameColumn] !== undefined) {
+        projectName = getString(row[projectNameColumn]);
+      }
+      
+      // Get legacy ID from priority column
+      let legacyId: string | null = null;
+      if (legacyIdColumn && row[legacyIdColumn] !== undefined) {
+        legacyId = getString(row[legacyIdColumn]);
+      }
       
       // Map each column
       for (const [key, value] of Object.entries(row)) {
@@ -362,7 +534,19 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
         if (field) {
           switch (field) {
             case "projectName":
+              // Only use if not already set from priority column
+              if (!projectName) {
+                projectName = getString(value);
+              }
+              break;
+              
             case "legacyId":
+              // Only use if not already set from priority column
+              if (!legacyId) {
+                legacyId = getString(value);
+              }
+              break;
+              
             case "description":
             case "departmentName":
             case "responsible":
@@ -382,6 +566,15 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
               const parsed = parseDate(value);
               project.startDate = parsed.date;
               project.startDateOriginal = parsed.original;
+              if (parsed.isInvalid) {
+                project.fechaInvalida = true;
+                hasSoftError = true;
+                advertencias.push({
+                  fila: rowNum,
+                  tipo: "invalid_date",
+                  mensaje: `Fecha de inicio inválida: "${parsed.original}"`
+                });
+              }
               break;
             }
             
@@ -390,6 +583,15 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
               project.endDateEstimated = parsed.date;
               project.endDateEstimatedOriginal = parsed.original;
               project.endDateEstimatedTbd = parsed.isTbd;
+              if (parsed.isInvalid) {
+                project.fechaInvalida = true;
+                hasSoftError = true;
+                advertencias.push({
+                  fila: rowNum,
+                  tipo: "invalid_date",
+                  mensaje: `Fecha fin estimada inválida: "${parsed.original}"`
+                });
+              }
               break;
             }
             
@@ -397,6 +599,15 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
               const parsed = parseDate(value);
               project.endDateActual = parsed.date;
               project.endDateActualOriginal = parsed.original;
+              if (parsed.isInvalid) {
+                project.fechaInvalida = true;
+                hasSoftError = true;
+                advertencias.push({
+                  fila: rowNum,
+                  tipo: "invalid_date",
+                  mensaje: `Fecha fin real inválida: "${parsed.original}"`
+                });
+              }
               break;
             }
             
@@ -404,6 +615,15 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
               const parsed = parseDate(value);
               project.registrationDate = parsed.date;
               project.registrationDateOriginal = parsed.original;
+              if (parsed.isInvalid) {
+                project.fechaInvalida = true;
+                hasSoftError = true;
+                advertencias.push({
+                  fila: rowNum,
+                  tipo: "invalid_date",
+                  mensaje: `Fecha de registro inválida: "${parsed.original}"`
+                });
+              }
               break;
             }
             
@@ -427,10 +647,23 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
         }
       }
       
-      // Validate required fields
-      if (!project.projectName) {
-        errors.push(`Fila ${rowNum}: Falta el nombre del proyecto`);
-        continue;
+      // Set the final project name and legacy ID
+      project.legacyId = legacyId;
+      
+      // SOFT ERROR: Check if project name is missing
+      if (!projectName) {
+        // Create as draft project with placeholder name
+        project.projectName = `Borrador Incompleto (Fila ${rowNum})`;
+        project.esBorradorIncompleto = true;
+        project.requiereNombre = true;
+        hasSoftError = true;
+        advertencias.push({
+          fila: rowNum,
+          tipo: "missing_project_name",
+          mensaje: "Nombre del proyecto faltante - creado como borrador incompleto"
+        });
+      } else {
+        project.projectName = projectName;
       }
       
       // Generate legacy ID if not provided
@@ -438,13 +671,44 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
         project.legacyId = `ROW-${rowNum}`;
       }
       
-      projects.push(project as InsertProject);
-      processedRows++;
+      // Mark as draft if any soft error occurred
+      if (hasSoftError) {
+        project.esBorradorIncompleto = true;
+        proyectosBorradorIncompleto++;
+      } else {
+        proyectosCreados++;
+      }
+      
+      projects.push(project as ParsedProject);
       
     } catch (error) {
-      errors.push(`Fila ${rowNum}: Error al procesar - ${error instanceof Error ? error.message : "Error desconocido"}`);
+      // HARD ERROR: Row unreadable
+      filasDescartadas++;
+      advertencias.push({
+        fila: rowNum,
+        tipo: "row_unreadable",
+        mensaje: `Fila ilegible - ${error instanceof Error ? error.message : "Error desconocido"}`
+      });
     }
   }
   
-  return { projects, errors, totalRows, processedRows };
+  // Important rule: If there's at least one non-empty row, we must have at least 1 processed
+  const nonEmptyRows = totalRows - filasDescartadas;
+  if (nonEmptyRows > 0 && (proyectosCreados + proyectosBorradorIncompleto) === 0) {
+    // This shouldn't happen, but if it does, we need to ensure at least one project
+    advertencias.push({
+      fila: 0,
+      tipo: "row_unreadable",
+      mensaje: "Advertencia: No se pudo procesar ningún proyecto de las filas no vacías"
+    });
+  }
+  
+  return { 
+    projects, 
+    advertencias, 
+    totalRows, 
+    proyectosCreados, 
+    proyectosBorradorIncompleto,
+    filasDescartadas
+  };
 }

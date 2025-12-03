@@ -1,21 +1,30 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Loader2, AlertTriangle, FileWarning, Eye } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useLocation } from "wouter";
+
+interface RowWarning {
+  fila: number;
+  tipo: string;
+  mensaje: string;
+}
 
 interface UploadResponse {
   success: boolean;
   versionId: number;
   fileName: string;
   totalRows: number;
-  processedRows: number;
-  errors: string[];
+  proyectosCreados: number;
+  proyectosBorradorIncompleto: number;
+  filasDescartadas: number;
+  advertencias: RowWarning[];
   changes: {
     added: number;
     modified: number;
@@ -26,8 +35,10 @@ interface UploadResponse {
 export function ExcelUpload() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [lastUpload, setLastUpload] = useState<UploadResponse | null>(null);
+  const [showAllWarnings, setShowAllWarnings] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -49,15 +60,17 @@ export function ExcelUpload() {
     onSuccess: (data) => {
       setLastUpload(data);
       setUploadProgress(100);
+      setShowAllWarnings(false);
       
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/versions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/kpis"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
 
+      const totalProcessed = data.proyectosCreados + data.proyectosBorradorIncompleto;
       toast({
-        title: "Archivo procesado exitosamente",
-        description: `${data.processedRows} filas procesadas. ${data.changes.added} nuevos, ${data.changes.modified} modificados.`,
+        title: "Archivo procesado",
+        description: `${totalProcessed} proyectos procesados. ${data.proyectosCreados} completos, ${data.proyectosBorradorIncompleto} borradores.`,
       });
     },
     onError: (error: Error) => {
@@ -75,7 +88,6 @@ export function ExcelUpload() {
       const file = acceptedFiles[0];
       if (!file) return;
 
-      // Validate file type
       const validTypes = [
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.ms-excel",
@@ -90,7 +102,6 @@ export function ExcelUpload() {
         return;
       }
 
-      // Simulate progress for UX
       setUploadProgress(0);
       setLastUpload(null);
       
@@ -122,6 +133,18 @@ export function ExcelUpload() {
     maxFiles: 1,
     disabled: uploadMutation.isPending,
   });
+
+  const navigateToProjects = (filter?: string) => {
+    if (filter === "drafts") {
+      setLocation("/projects?filter=borradores");
+    } else {
+      setLocation("/projects");
+    }
+  };
+
+  const warningsToShow = showAllWarnings 
+    ? lastUpload?.advertencias || []
+    : (lastUpload?.advertencias || []).slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -178,7 +201,6 @@ export function ExcelUpload() {
             </div>
           </div>
 
-          {/* Upload Progress */}
           {(uploadMutation.isPending || uploadProgress > 0) && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between text-sm">
@@ -193,7 +215,6 @@ export function ExcelUpload() {
         </CardContent>
       </Card>
 
-      {/* Upload Result */}
       {lastUpload && (
         <Card className="overflow-visible" data-testid="upload-result">
           <CardHeader className="pb-3">
@@ -206,23 +227,47 @@ export function ExcelUpload() {
               Resultado del Procesamiento
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Archivo</p>
-                <p className="text-sm font-medium truncate">{lastUpload.fileName}</p>
+                <p className="text-sm font-medium truncate" data-testid="text-filename">{lastUpload.fileName}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Filas Totales</p>
-                <p className="text-sm font-medium">{lastUpload.totalRows}</p>
+                <p className="text-sm font-medium" data-testid="text-total-rows">{lastUpload.totalRows}</p>
               </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Procesadas</p>
-                <p className="text-sm font-medium">{lastUpload.processedRows}</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-traffic-green/10 border border-traffic-green/20">
+                <CheckCircle2 className="h-8 w-8 text-traffic-green flex-shrink-0" />
+                <div>
+                  <p className="text-2xl font-bold text-traffic-green" data-testid="text-created-count">
+                    {lastUpload.proyectosCreados}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Proyectos Creados</p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Versión ID</p>
-                <p className="text-sm font-medium">{lastUpload.versionId}</p>
+              
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-traffic-yellow/10 border border-traffic-yellow/20">
+                <AlertTriangle className="h-8 w-8 text-traffic-yellow flex-shrink-0" />
+                <div>
+                  <p className="text-2xl font-bold text-traffic-yellow" data-testid="text-draft-count">
+                    {lastUpload.proyectosBorradorIncompleto}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Borradores Incompletos</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+                <FileWarning className="h-8 w-8 text-muted-foreground flex-shrink-0" />
+                <div>
+                  <p className="text-2xl font-bold text-muted-foreground" data-testid="text-discarded-count">
+                    {lastUpload.filasDescartadas}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Filas Descartadas</p>
+                </div>
               </div>
             </div>
 
@@ -238,35 +283,80 @@ export function ExcelUpload() {
               </Badge>
             </div>
 
-            {lastUpload.errors.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-destructive">
-                  Errores de validación:
-                </p>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  {lastUpload.errors.slice(0, 5).map((error, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <XCircle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
-                      {error}
+            {lastUpload.advertencias.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-traffic-yellow" />
+                    Advertencias ({lastUpload.advertencias.length})
+                  </p>
+                  {lastUpload.advertencias.length > 5 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowAllWarnings(!showAllWarnings)}
+                      data-testid="button-toggle-warnings"
+                    >
+                      {showAllWarnings ? "Ver menos" : `Ver todas (${lastUpload.advertencias.length})`}
+                    </Button>
+                  )}
+                </div>
+                <ul className="text-sm text-muted-foreground space-y-2 max-h-60 overflow-y-auto">
+                  {warningsToShow.map((warning, index) => (
+                    <li 
+                      key={index} 
+                      className="flex items-start gap-2 p-2 rounded bg-muted/50"
+                      data-testid={`warning-item-${index}`}
+                    >
+                      <Badge 
+                        variant="outline" 
+                        className={cn(
+                          "flex-shrink-0 text-xs",
+                          warning.tipo === "row_empty" || warning.tipo === "row_unreadable" 
+                            ? "border-muted-foreground/50" 
+                            : "border-traffic-yellow/50 text-traffic-yellow"
+                        )}
+                      >
+                        Fila {warning.fila}
+                      </Badge>
+                      <span className="text-xs">{warning.mensaje}</span>
                     </li>
                   ))}
-                  {lastUpload.errors.length > 5 && (
-                    <li className="text-xs">
-                      Y {lastUpload.errors.length - 5} errores más...
-                    </li>
-                  )}
                 </ul>
               </div>
             )}
 
-            <Button
-              variant="outline"
-              onClick={() => setLastUpload(null)}
-              className="w-full"
-              data-testid="button-clear-result"
-            >
-              Subir otro archivo
-            </Button>
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Button
+                variant="default"
+                onClick={() => navigateToProjects()}
+                className="flex-1 min-w-[140px]"
+                data-testid="button-view-projects"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                Ver proyectos creados
+              </Button>
+              
+              {lastUpload.proyectosBorradorIncompleto > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={() => navigateToProjects("drafts")}
+                  className="flex-1 min-w-[140px] border-traffic-yellow/50 text-traffic-yellow hover:bg-traffic-yellow/10"
+                  data-testid="button-view-drafts"
+                >
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Ver borradores incompletos
+                </Button>
+              )}
+              
+              <Button
+                variant="ghost"
+                onClick={() => setLastUpload(null)}
+                data-testid="button-clear-result"
+              >
+                Subir otro archivo
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

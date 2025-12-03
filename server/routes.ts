@@ -4,7 +4,7 @@ import multer from "multer";
 import { z } from "zod";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
-import { parseExcelBuffer } from "./excel-parser";
+import { parseExcelBuffer, type ParsedProject } from "./excel-parser";
 import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./openai";
 import type { InsertChangeLog, InsertKpiValue, Project, InsertProject } from "@shared/schema";
 
@@ -64,7 +64,7 @@ function calculateTrafficLight(
 // Compare projects and generate change logs
 function compareProjects(
   oldProject: Project | null,
-  newData: InsertProject,
+  newData: ParsedProject,
   versionId: number,
   previousVersionId: number | null
 ): InsertChangeLog[] {
@@ -79,25 +79,25 @@ function compareProjects(
       changeType: "added",
       fieldName: null,
       oldValue: null,
-      newValue: newData.projectName,
-      legacyId: newData.legacyId,
-      projectName: newData.projectName,
+      newValue: newData.projectName || null,
+      legacyId: newData.legacyId || null,
+      projectName: newData.projectName || null,
     });
     return changes;
   }
   
-  // Compare fields
-  const fieldsToCompare: (keyof Project)[] = [
+  // Compare fields - keys that exist in both Project and ParsedProject
+  const fieldsToCompare = [
     "projectName", "description", "departmentName", "responsible",
     "sponsor", "status", "priority", "category", "projectType",
     "startDate", "endDateEstimated", "endDateActual", "registrationDate",
     "percentComplete", "statusText", "parsedStatus", "parsedNextSteps",
     "benefits", "scope", "risks", "comments"
-  ];
+  ] as const;
   
   for (const field of fieldsToCompare) {
-    const oldVal = oldProject[field];
-    const newVal = newData[field];
+    const oldVal = oldProject[field as keyof Project];
+    const newVal = newData[field as keyof ParsedProject];
     
     // Normalize for comparison
     const oldStr = oldVal === null || oldVal === undefined ? "" : String(oldVal);
@@ -514,7 +514,7 @@ export async function registerRoutes(
       const versions = await storage.getExcelVersions();
       const previousVersion = versions.find(v => v.id !== version.id && v.status === "completed");
       
-      // Parse Excel
+      // Parse Excel with enhanced error handling
       const parsed = parseExcelBuffer(req.file.buffer, version.id);
       
       // Get existing projects for comparison
@@ -541,7 +541,7 @@ export async function registerRoutes(
         
         if (existing) {
           // Update existing project
-          const changes = compareProjects(
+          const changes: InsertChangeLog[] = compareProjects(
             existing, 
             projectData, 
             version.id, 
@@ -549,24 +549,28 @@ export async function registerRoutes(
           );
           
           if (changes.length > 0) {
-            // Has changes
-            await storage.updateProject(existing.id, {
-              ...projectData,
+            // Has changes - cast to InsertProject for storage
+            const updateData: InsertProject = {
+              ...projectData as InsertProject,
               sourceVersionId: version.id,
-            });
+            };
+            await storage.updateProject(existing.id, updateData);
             
-            changes.forEach(c => { c.projectId = existing.id; });
+            for (const change of changes) {
+              change.projectId = existing.id;
+            }
             allChanges.push(...changes);
             modifiedCount++;
           }
           
           newProjectIds.push(existing.id);
         } else {
-          // Create new project
-          const newProject = await storage.createProject({
-            ...projectData,
+          // Create new project - cast to InsertProject for storage
+          const insertData: InsertProject = {
+            ...projectData as InsertProject,
             sourceVersionId: version.id,
-          });
+          };
+          const newProject = await storage.createProject(insertData);
           
           newProjectIds.push(newProject.id);
           
@@ -577,9 +581,9 @@ export async function registerRoutes(
             changeType: "added",
             fieldName: null,
             oldValue: null,
-            newValue: projectData.projectName,
-            legacyId: projectData.legacyId,
-            projectName: projectData.projectName,
+            newValue: projectData.projectName || null,
+            legacyId: projectData.legacyId || null,
+            projectName: projectData.projectName || null,
           });
           
           addedCount++;
@@ -588,9 +592,9 @@ export async function registerRoutes(
           if (projectData.parsedStatus || projectData.parsedNextSteps) {
             await storage.createProjectUpdate({
               projectId: newProject.id,
-              statusText: projectData.parsedStatus,
-              nextStepsText: projectData.parsedNextSteps,
-              rawText: projectData.statusText,
+              statusText: projectData.parsedStatus || null,
+              nextStepsText: projectData.parsedNextSteps || null,
+              rawText: projectData.statusText || null,
               sourceVersionId: version.id,
             });
           }
@@ -632,21 +636,25 @@ export async function registerRoutes(
       const kpis = calculateKpis(updatedProjects, version.id);
       await storage.createKpiValues(kpis);
       
-      // Update version status
+      // Update version status with warning messages
+      const errorMessages = parsed.advertencias.map(w => `Fila ${w.fila}: ${w.mensaje}`);
       await storage.updateExcelVersionStatus(
         version.id,
         "completed",
-        parsed.processedRows,
-        parsed.errors
+        parsed.proyectosCreados + parsed.proyectosBorradorIncompleto,
+        errorMessages
       );
       
+      // Return new enhanced response format
       res.json({
         success: true,
         versionId: version.id,
         fileName: req.file.originalname,
         totalRows: parsed.totalRows,
-        processedRows: parsed.processedRows,
-        errors: parsed.errors,
+        proyectosCreados: parsed.proyectosCreados,
+        proyectosBorradorIncompleto: parsed.proyectosBorradorIncompleto,
+        filasDescartadas: parsed.filasDescartadas,
+        advertencias: parsed.advertencias,
         changes: {
           added: addedCount,
           modified: modifiedCount,

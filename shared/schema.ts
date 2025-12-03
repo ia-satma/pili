@@ -70,6 +70,12 @@ export const projects = pgTable("projects", {
   // Extra fields stored as JSON for any unmapped columns
   extraFields: jsonb("extra_fields").$type<Record<string, unknown>>().default({}),
   
+  // Draft project flags for soft errors
+  esBorradorIncompleto: boolean("es_borrador_incompleto").default(false),
+  requiereNombre: boolean("requiere_nombre").default(false),
+  fechaInvalida: boolean("fecha_invalida").default(false),
+  catalogoPendienteMapeo: boolean("catalogo_pendiente_mapeo").default(false),
+  
   // Tracking
   sourceVersionId: integer("source_version_id").references(() => excelVersions.id),
   isActive: boolean("is_active").default(true),
