@@ -454,9 +454,67 @@ function findPriorityColumn(headers: string[], priorityList: string[], partialLi
 }
 
 // Debug function to log all headers
-function logHeaders(headers: string[]): void {
-  console.log(`[Excel Parser] Found ${headers.length} columns:`);
+function logHeaders(headers: string[], rowNum: number): void {
+  console.log(`[Excel Parser] Found ${headers.length} columns at row ${rowNum}:`);
   headers.forEach((h, i) => console.log(`  ${i + 1}. "${h}" -> normalized: "${normalizeColumnName(h)}"`));
+}
+
+// Function to detect if a row looks like a header row (has recognizable column names)
+function isHeaderRow(headers: string[]): boolean {
+  const validHeaders = headers.filter(h => {
+    if (!h || h.startsWith("Column") || h.startsWith("__EMPTY")) return false;
+    const normalized = normalizeColumnName(h);
+    // Check if matches any known column mapping or partial keywords
+    if (COLUMN_MAPPINGS[normalized]) return true;
+    for (const partial of PROJECT_NAME_PARTIAL) {
+      if (normalized.includes(partial)) return true;
+    }
+    for (const priority of LEGACY_ID_COLUMNS) {
+      if (normalized === priority || normalized.includes(priority)) return true;
+    }
+    // Check for other known keywords
+    const keywords = ["fecha", "date", "estatus", "status", "area", "responsable", "descripcion", "avance", "valor", "esfuerzo"];
+    for (const kw of keywords) {
+      if (normalized.includes(kw)) return true;
+    }
+    return false;
+  });
+  
+  // If at least 3 valid headers found, consider it a header row
+  return validHeaders.length >= 3;
+}
+
+// Function to get headers from a specific row
+function getHeadersFromRow(sheet: XLSX.WorkSheet, rowIndex: number): string[] {
+  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1:A1");
+  const headers: string[] = [];
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: rowIndex, c })];
+    headers.push(cell?.v ? String(cell.v) : `Column${c}`);
+  }
+  return headers;
+}
+
+// Function to find the actual header row (may not be row 1)
+function findHeaderRow(sheet: XLSX.WorkSheet): { headerRow: number; headers: string[] } {
+  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1:A1");
+  const maxRowsToCheck = Math.min(10, range.e.r + 1); // Check first 10 rows max
+  
+  console.log(`[Excel Parser] Scanning first ${maxRowsToCheck} rows for header row...`);
+  
+  for (let r = 0; r < maxRowsToCheck; r++) {
+    const headers = getHeadersFromRow(sheet, r);
+    console.log(`[Excel Parser] Row ${r + 1}: ${headers.slice(0, 8).join(", ")}...`);
+    
+    if (isHeaderRow(headers)) {
+      console.log(`[Excel Parser] Found header row at row ${r + 1}`);
+      return { headerRow: r, headers };
+    }
+  }
+  
+  // Fallback to first row if no valid header row found
+  console.log(`[Excel Parser] No valid header row found, defaulting to row 1`);
+  return { headerRow: 0, headers: getHeadersFromRow(sheet, 0) };
 }
 
 export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcelData {
@@ -491,6 +549,8 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
     if (sheetName !== workbook.SheetNames[0]) break;
   }
   
+  console.log(`[Excel Parser] Using sheet: "${sheetName}"`);
+  
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) {
     advertencias.push({
@@ -501,9 +561,20 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
     return { projects, advertencias, totalRows: 0, proyectosCreados: 0, proyectosBorradorIncompleto: 0, filasDescartadas: 1 };
   }
   
-  // Convert to JSON with header row
-  const rawData = XLSX.utils.sheet_to_json<RawExcelRow>(sheet, { defval: null });
+  // Find the actual header row (may not be row 1)
+  const { headerRow, headers } = findHeaderRow(sheet);
+  
+  // Log all headers for debugging
+  logHeaders(headers, headerRow + 1);
+  
+  // Convert to JSON starting from the header row
+  const rawData = XLSX.utils.sheet_to_json<RawExcelRow>(sheet, { 
+    defval: null,
+    range: headerRow // Start from the detected header row
+  });
   totalRows = rawData.length;
+  
+  console.log(`[Excel Parser] Total data rows (after header): ${totalRows}`);
   
   if (totalRows === 0) {
     advertencias.push({
@@ -513,17 +584,6 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
     });
     return { projects, advertencias, totalRows: 0, proyectosCreados: 0, proyectosBorradorIncompleto: 0, filasDescartadas: 0 };
   }
-  
-  // Get column headers from first row
-  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1:A1");
-  const headers: string[] = [];
-  for (let c = range.s.c; c <= range.e.c; c++) {
-    const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c })];
-    headers.push(cell?.v ? String(cell.v) : `Column${c}`);
-  }
-  
-  // Log all headers for debugging
-  logHeaders(headers);
   
   // Find priority columns for project name and legacy ID (with partial matching fallback)
   const projectNameColumn = findPriorityColumn(headers, PROJECT_NAME_COLUMNS, PROJECT_NAME_PARTIAL);
@@ -535,7 +595,7 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
   // Process each row
   for (let i = 0; i < rawData.length; i++) {
     const row = rawData[i];
-    const rowNum = i + 2; // +2 because of header row and 1-indexing
+    const rowNum = headerRow + i + 2; // Actual Excel row number (header row + data row index + 1 for 1-indexing)
     
     // HARD ERROR: Check if row is completely empty
     if (isRowEmpty(row)) {
