@@ -135,7 +135,17 @@ export async function setupAuth(app: Express) {
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  // Debug logging
+  const hasSession = !!req.session;
+  const hasSessionId = !!req.sessionID;
+  const isAuth = req.isAuthenticated();
+  const hasUser = !!req.user;
+  const hasExpires = !!(user?.expires_at);
+  
+  console.log(`[Auth Debug] ${req.method} ${req.path} - session:${hasSession} sessionId:${hasSessionId} isAuth:${isAuth} user:${hasUser} expires:${hasExpires}`);
+
+  if (!req.isAuthenticated() || !user?.expires_at) {
+    console.log(`[Auth Debug] REJECTED - isAuth:${isAuth} expires_at:${user?.expires_at}`);
     return res.status(401).json({ message: "Unauthorized" });
   }
 
