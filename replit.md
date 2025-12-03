@@ -132,6 +132,13 @@ npm run db:push      # Push schema to database
 ```
 
 ## Recent Changes
+- December 3, 2025: Parser and Display Fixes
+  - **Excel Parser**: Now correctly uses "Proyectos PGP" sheet (197 projects) instead of "Proyectos por los líderes"
+  - **Large Sheet Optimization**: Parser detects actual data rows, avoids reading 1M+ empty rows
+  - **Timezone Fix**: Dates display correctly in all timezones (adds T12:00:00 to date-only strings)
+  - **Column Mapping**: "Iniciativa" → projectName, "Proceso de Negocio" → department, "Tipo de Iniciativa" → status
+  - Parser processes 197 projects in ~2 seconds
+
 - December 3, 2025: Phase 2 Complete
   - Multi-user role management with Replit Auth
   - Bulk update/delete capabilities with multi-select
