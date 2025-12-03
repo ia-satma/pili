@@ -98,11 +98,20 @@ export function ExcelUpload() {
     },
     onError: (error: Error) => {
       setUploadProgress(0);
+      
+      // Check if it's an auth error
+      const isAuthError = error.message.includes("Sesión") || error.message.includes("401") || error.message.includes("permisos");
+      
       toast({
-        title: "Error al procesar el archivo",
+        title: isAuthError ? "Problema de autenticación" : "Error al procesar el archivo",
         description: error.message,
         variant: "destructive",
       });
+      
+      // If auth error, suggest re-login
+      if (isAuthError) {
+        console.error("[Upload] Auth error - user should re-login");
+      }
     },
   });
 
@@ -138,19 +147,26 @@ export function ExcelUpload() {
       setUploadProgress(0);
       setLastUpload(null);
       
+      // Show immediate feedback
+      setUploadProgress(10);
+      
       const progressInterval = setInterval(() => {
         setUploadProgress((prev) => {
-          if (prev >= 90) {
+          if (prev >= 85) {
             clearInterval(progressInterval);
-            return prev;
+            return 85; // Stay at 85% while processing
           }
-          return prev + 10;
+          return prev + 5;
         });
-      }, 200);
+      }, 300);
 
       uploadMutation.mutate(file, {
         onSettled: () => {
           clearInterval(progressInterval);
+        },
+        onError: () => {
+          clearInterval(progressInterval);
+          setUploadProgress(0);
         },
       });
     },
