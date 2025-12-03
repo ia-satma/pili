@@ -14,6 +14,7 @@ import Indicators from "@/pages/indicators";
 import History from "@/pages/history";
 import Upload from "@/pages/upload";
 import Chat from "@/pages/chat";
+import AdminUsers from "@/pages/admin-users";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/history" component={History} />
       <Route path="/upload" component={Upload} />
       <Route path="/chat" component={Chat} />
+      <Route path="/admin/users" component={AdminUsers} />
       <Route component={NotFound} />
     </Switch>
   );

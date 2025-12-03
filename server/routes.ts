@@ -7,6 +7,7 @@ import { storage } from "./storage";
 import { parseExcelBuffer, type ParsedProject } from "./excel-parser";
 import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./openai";
 import type { InsertChangeLog, InsertKpiValue, Project, InsertProject } from "@shared/schema";
+import { setupAuth, isAuthenticated, isAdmin, isEditor, isViewer } from "./replitAuth";
 
 // Validation schemas
 const sendMessageSchema = z.object({
@@ -290,6 +291,49 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
+  // ===== AUTH SETUP =====
+  await setupAuth(app);
+
+  // ===== AUTH ROUTES =====
+  app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // ===== ADMIN ROUTES =====
+  app.get("/api/admin/users", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json({ users });
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Error loading users" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/role", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { role } = req.body;
+
+      if (!["admin", "editor", "viewer"].includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+
+      const user = await storage.updateUserRole(id, role);
+      res.json({ user });
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      res.status(500).json({ message: "Error updating user role" });
+    }
+  });
+
   // ===== DASHBOARD =====
   app.get("/api/dashboard", async (req, res) => {
     try {
@@ -389,8 +433,8 @@ export async function registerRoutes(
     }
   });
 
-  // Create a new project directly
-  app.post("/api/projects", async (req, res) => {
+  // Create a new project directly (requires Editor role)
+  app.post("/api/projects", isAuthenticated, isEditor, async (req, res) => {
     try {
       const validation = createProjectSchema.safeParse(req.body);
       
@@ -414,7 +458,7 @@ export async function registerRoutes(
   });
 
   // ===== BULK OPERATIONS =====
-  app.post("/api/projects/bulk/update", async (req, res) => {
+  app.post("/api/projects/bulk/update", isAuthenticated, isEditor, async (req, res) => {
     try {
       const validation = bulkUpdateSchema.safeParse(req.body);
       
@@ -440,7 +484,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/projects/bulk/delete", async (req, res) => {
+  app.post("/api/projects/bulk/delete", isAuthenticated, isAdmin, async (req, res) => {
     try {
       const validation = bulkDeleteSchema.safeParse(req.body);
       
@@ -611,7 +655,7 @@ export async function registerRoutes(
   });
 
   // ===== EXCEL UPLOAD =====
-  app.post("/api/excel/upload", upload.single("file"), async (req, res) => {
+  app.post("/api/excel/upload", isAuthenticated, isEditor, upload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -912,7 +956,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/chat/send", async (req, res) => {
+  app.post("/api/chat/send", isAuthenticated, async (req, res) => {
     try {
       const parseResult = sendMessageSchema.safeParse(req.body);
       
@@ -971,7 +1015,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/chat/clear", async (req, res) => {
+  app.delete("/api/chat/clear", isAuthenticated, isAdmin, async (req, res) => {
     try {
       await storage.clearChatMessages();
       res.json({ success: true });
@@ -1001,7 +1045,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/filter-presets", async (req, res) => {
+  app.post("/api/filter-presets", isAuthenticated, async (req, res) => {
     try {
       const parseResult = filterPresetSchema.safeParse(req.body);
       
@@ -1019,7 +1063,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/filter-presets/:id", async (req, res) => {
+  app.delete("/api/filter-presets/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {

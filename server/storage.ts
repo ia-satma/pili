@@ -1,7 +1,7 @@
 // Using javascript_database blueprint - PostgreSQL database integration
 import { 
   excelVersions, projects, departments, milestones, projectUpdates, 
-  changeLogs, kpiValues, chatMessages, filterPresets,
+  changeLogs, kpiValues, chatMessages, filterPresets, users,
   type ExcelVersion, type InsertExcelVersion,
   type Project, type InsertProject,
   type Department, type InsertDepartment,
@@ -11,11 +11,19 @@ import {
   type KpiValue, type InsertKpiValue,
   type ChatMessage, type InsertChatMessage,
   type FilterPreset, type InsertFilterPreset,
+  type User, type UpsertUser,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, sql, inArray, count } from "drizzle-orm";
 
 export interface IStorage {
+  // User operations - required for Replit Auth
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
+  getUserCount(): Promise<number>;
+  updateUserRole(id: string, role: string): Promise<User>;
+  getAllUsers(): Promise<User[]>;
+  
   // Excel Versions
   createExcelVersion(version: InsertExcelVersion): Promise<ExcelVersion>;
   getExcelVersions(): Promise<ExcelVersion[]>;
@@ -74,6 +82,48 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // User operations - required for Replit Auth
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          profileImageUrl: userData.profileImageUrl,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
+  }
+
+  async getUserCount(): Promise<number> {
+    const [result] = await db.select({ count: count() }).from(users);
+    return result?.count || 0;
+  }
+
+  async updateUserRole(id: string, role: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
   // Excel Versions
   async createExcelVersion(version: InsertExcelVersion): Promise<ExcelVersion> {
     const [result] = await db.insert(excelVersions).values(version).returning();

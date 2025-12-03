@@ -18,8 +18,10 @@ import {
   RefreshCw,
   AlertTriangle,
   User,
+  Lock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -110,6 +112,7 @@ export function ProjectsGrid() {
   
   const pageSize = 20;
   const { toast } = useToast();
+  const { isAdmin, isEditor } = useAuth();
 
   const { data, isLoading, error } = useQuery<ProjectsResponse>({
     queryKey: ["/api/projects"],
@@ -927,46 +930,57 @@ export function ProjectsGrid() {
           </span>
           <div className="h-4 w-px bg-border" />
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleOpenBulkUpdate("status")}
-              disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
-              data-testid="button-bulk-update-status"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Actualizar Estado
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleOpenBulkUpdate("priority")}
-              disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
-              data-testid="button-bulk-update-priority"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Actualizar Prioridad
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleOpenBulkUpdate("responsible")}
-              disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
-              data-testid="button-bulk-update-responsible"
-            >
-              <User className="h-4 w-4 mr-2" />
-              Actualizar Responsable
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setBulkDeleteDialogOpen(true)}
-              disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
-              data-testid="button-bulk-delete"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Eliminar
-            </Button>
+            {isEditor ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenBulkUpdate("status")}
+                  disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
+                  data-testid="button-bulk-update-status"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Actualizar Estado
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenBulkUpdate("priority")}
+                  disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
+                  data-testid="button-bulk-update-priority"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Actualizar Prioridad
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenBulkUpdate("responsible")}
+                  disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
+                  data-testid="button-bulk-update-responsible"
+                >
+                  <User className="h-4 w-4 mr-2" />
+                  Actualizar Responsable
+                </Button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Lock className="h-4 w-4" />
+                <span>Sin permisos de edición</span>
+              </div>
+            )}
+            {isAdmin && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setBulkDeleteDialogOpen(true)}
+                disabled={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
+                data-testid="button-bulk-delete"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar
+              </Button>
+            )}
           </div>
           <Button
             variant="ghost"

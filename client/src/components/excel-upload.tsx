@@ -1,12 +1,13 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Loader2, AlertTriangle, FileWarning, Eye } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Loader2, AlertTriangle, FileWarning, Eye, Lock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 
@@ -39,6 +40,7 @@ export function ExcelUpload() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const { isEditor, isLoading: authLoading } = useAuth();
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -131,8 +133,41 @@ export function ExcelUpload() {
       "application/vnd.ms-excel": [".xls"],
     },
     maxFiles: 1,
-    disabled: uploadMutation.isPending,
+    disabled: uploadMutation.isPending || !isEditor,
   });
+
+  if (!authLoading && !isEditor) {
+    return (
+      <div className="space-y-6">
+        <Card className="overflow-visible">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-muted-foreground" />
+              Acceso Restringido
+            </CardTitle>
+            <CardDescription>
+              No tienes permisos para cargar archivos Excel. Contacta a un administrador si necesitas acceso.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="border-2 border-dashed rounded-lg p-8 text-center border-border opacity-50">
+              <div className="flex flex-col items-center gap-4">
+                <FileSpreadsheet className="h-12 w-12 text-muted-foreground" />
+                <div className="space-y-2">
+                  <p className="text-lg font-medium text-muted-foreground">
+                    Función de carga deshabilitada
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Solo los usuarios con rol de Editor o Admin pueden cargar archivos
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const navigateToProjects = (filter?: string) => {
     if (filter === "drafts") {
