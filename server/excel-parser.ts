@@ -290,11 +290,11 @@ const PROJECT_NAME_PARTIAL = [
 ];
 
 const LEGACY_ID_COLUMNS = [
+  "card id devops",
+  "id power steering",
   "id",
   "código",
   "codigo",
-  "id power steering",
-  "card id devops",
   "legacy_id",
   "legacyid",
   "no.",
@@ -303,6 +303,7 @@ const LEGACY_ID_COLUMNS = [
   "folio",
   "clave",
   "key",
+  "ranking",
 ];
 
 // Column name mapping - maps various column headers to our schema fields
@@ -400,6 +401,8 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "fin": "endDateEstimated",
   "fecha de término / real o estimada": "endDateEstimated",
   "fecha de termino / real o estimada": "endDateEstimated",
+  "fecha de término / real o esti": "endDateEstimated",
+  "fecha de termino / real o esti": "endDateEstimated",
   
   // End date actual
   "fecha fin real": "endDateActual",
@@ -435,6 +438,8 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   // Benefits
   "beneficios": "benefits",
   "benefits": "benefits",
+  "valor / diferenciador": "benefits",
+  "valor/diferenciador": "benefits",
   
   // Scope
   "alcance": "scope",
@@ -646,71 +651,52 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
     console.log(`[Excel Parser]   Sheet ${i + 1}: "${name}"`);
   });
   
-  // Find the main data sheet - prioritize specific sheet names
-  let sheetName = workbook.SheetNames[0];
+  // Find the main data sheet - STRICT priority for "Proyectos PGP"
+  let sheetName: string | null = null;
   
-  // Priority 1: Look for "Proyectos PGP" sheet (main project data sheet)
-  const pgpPriority = [
-    "proyectos pgp",
-  ];
-  
-  let foundPgp = false;
-  for (const priority of pgpPriority) {
-    for (const name of workbook.SheetNames) {
-      const lowerName = name.toLowerCase().trim();
-      if (lowerName === priority || lowerName.startsWith(priority)) {
-        sheetName = name;
-        console.log(`[Excel Parser] Found priority sheet (PGP): "${name}"`);
-        foundPgp = true;
-        break;
-      }
+  // Priority 1: EXACT match for "Proyectos PGP" (case-insensitive)
+  for (const name of workbook.SheetNames) {
+    const lowerName = name.toLowerCase().trim();
+    if (lowerName === "proyectos pgp") {
+      sheetName = name;
+      console.log(`[Excel Parser] ✓ Found EXACT match: "${name}"`);
+      break;
     }
-    if (foundPgp) break;
   }
   
-  // Priority 2: If no PGP sheet, look for "proyectos por los líderes"
-  if (!foundPgp) {
-    const lideresPriority = [
-      "proyectos por los líderes",
-      "proyectos por los lideres",
-    ];
+  // Priority 2: Only if "Proyectos PGP" not found, try other patterns
+  if (!sheetName) {
+    console.log(`[Excel Parser] "Proyectos PGP" not found, trying alternatives...`);
     
-    for (const priority of lideresPriority) {
-      for (const name of workbook.SheetNames) {
-        const lowerName = name.toLowerCase().trim();
-        if (lowerName.includes(priority)) {
-          sheetName = name;
-          console.log(`[Excel Parser] Found secondary sheet (lideres): "${name}"`);
-          break;
-        }
-      }
-      if (sheetName !== workbook.SheetNames[0]) break;
-    }
-  }
-  
-  // Priority 3: Other project sheets
-  if (sheetName === workbook.SheetNames[0]) {
-    const tertiaryPriority = [
+    const priorities = [
+      "proyectos por los líderes",
+      "proyectos por los lideres", 
       "matriz",
       "base",
       "data",
       "projects",
     ];
     
-    for (const name of workbook.SheetNames) {
-      const lowerName = name.toLowerCase().trim();
-      for (const priority of tertiaryPriority) {
-        if (lowerName === priority || lowerName.includes(priority)) {
+    for (const priority of priorities) {
+      for (const name of workbook.SheetNames) {
+        const lowerName = name.toLowerCase().trim();
+        if (lowerName.includes(priority)) {
           sheetName = name;
-          console.log(`[Excel Parser] Found tertiary sheet: "${name}"`);
+          console.log(`[Excel Parser] Found alternative sheet: "${name}" (matched "${priority}")`);
           break;
         }
       }
-      if (sheetName !== workbook.SheetNames[0]) break;
+      if (sheetName) break;
     }
   }
   
-  console.log(`[Excel Parser] Using sheet: "${sheetName}"`);
+  // Fallback to first sheet if nothing matched
+  if (!sheetName) {
+    sheetName = workbook.SheetNames[0];
+    console.log(`[Excel Parser] No priority sheet found, using first sheet: "${sheetName}"`);
+  }
+  
+  console.log(`[Excel Parser] === SELECTED SHEET: "${sheetName}" ===`);
   
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) {

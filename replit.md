@@ -132,12 +132,13 @@ npm run db:push      # Push schema to database
 ```
 
 ## Recent Changes
-- December 3, 2025: Parser and Display Fixes
-  - **Excel Parser**: Now correctly uses "Proyectos PGP" sheet (197 projects) instead of "Proyectos por los líderes"
-  - **Large Sheet Optimization**: Parser detects actual data rows, avoids reading 1M+ empty rows
-  - **Timezone Fix**: Dates display correctly in all timezones (adds T12:00:00 to date-only strings)
-  - **Column Mapping**: "Iniciativa" → projectName, "Proceso de Negocio" → department, "Tipo de Iniciativa" → status
-  - Parser processes 197 projects in ~2 seconds
+- December 3, 2025: Critical Parser Fix - Correct Sheet Selection
+  - **Root cause found**: Parser was selecting "Proyectos por los líderes (2)" (91 projects) instead of "Proyectos PGP" (197 projects)
+  - **Fix applied**: Strict EXACT match for "Proyectos PGP" sheet name (case-insensitive)
+  - **Sheet structure**: Row 4 = headers, "Iniciativa" column = project names, "Card ID DevOps" = legacy ID
+  - **197 projects** now correctly parsed with proper column mappings
+  - **Column mappings fixed**: Added truncated column name variants, "valor / diferenciador" → benefits
+  - **AutoFilter detection**: Parser uses Excel's AutoFilter to find header row automatically
 
 - December 3, 2025: Phase 2 Complete
   - Multi-user role management with Replit Auth
