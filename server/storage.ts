@@ -209,14 +209,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deactivateProjectsNotInVersion(versionId: number, activeIds: number[]): Promise<number> {
+    // Deactivate ALL projects that are NOT in the activeIds list
+    // This ensures only projects from the current upload remain active
     if (activeIds.length === 0) {
-      // Deactivate all projects from this version
+      // Deactivate all active projects (no projects in new version)
       const result = await db.update(projects)
         .set({ isActive: false, updatedAt: new Date() })
-        .where(eq(projects.sourceVersionId, versionId));
+        .where(eq(projects.isActive, true));
       return 0;
     }
     
+    // Deactivate projects not in the current version's active list
     const result = await db.update(projects)
       .set({ isActive: false, updatedAt: new Date() })
       .where(

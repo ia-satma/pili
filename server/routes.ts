@@ -812,14 +812,14 @@ export async function registerRoutes(
             previousVersion?.id || null
           );
           
+          // Always update sourceVersionId to mark project as part of this version
+          const updateData: InsertProject = {
+            ...projectData as InsertProject,
+            sourceVersionId: version.id,
+          };
+          await storage.updateProject(existing.id, updateData);
+          
           if (changes.length > 0) {
-            // Has changes - cast to InsertProject for storage
-            const updateData: InsertProject = {
-              ...projectData as InsertProject,
-              sourceVersionId: version.id,
-            };
-            await storage.updateProject(existing.id, updateData);
-            
             for (const change of changes as InsertChangeLog[]) {
               (change as InsertChangeLog).projectId = existing.id;
             }
@@ -827,6 +827,7 @@ export async function registerRoutes(
             modifiedCount++;
           }
           
+          // Always add to active list (fixed: was only adding when changes existed)
           newProjectIds.push(existing.id);
         } else {
           // Create new project - cast to InsertProject for storage
