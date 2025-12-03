@@ -10,7 +10,10 @@ import {
   X,
   ArrowUpDown,
   Eye,
+  Download,
+  Loader2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -58,7 +61,9 @@ export function ProjectsGrid() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+  const [isExporting, setIsExporting] = useState(false);
   const pageSize = 20;
+  const { toast } = useToast();
 
   const { data, isLoading, error } = useQuery<ProjectsResponse>({
     queryKey: ["/api/projects"],
@@ -162,6 +167,52 @@ export function ProjectsGrid() {
   };
 
   const hasActiveFilters = search || statusFilter !== "all" || departmentFilter !== "all";
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const response = await fetch("/api/projects/export", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          search: search || undefined,
+          status: statusFilter !== "all" ? statusFilter : undefined,
+          department: departmentFilter !== "all" ? departmentFilter : undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Error al exportar");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const today = new Date().toISOString().split("T")[0];
+      a.download = `proyectos_${today}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Exportación completada",
+        description: `Se exportaron ${filteredProjects.length} proyectos`,
+      });
+    } catch (error) {
+      console.error("Export error:", error);
+      toast({
+        title: "Error al exportar",
+        description: "No se pudo generar el archivo Excel. Intente de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const formatDate = (date: string | null | undefined) => {
     if (!date) return "—";

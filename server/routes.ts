@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { z } from "zod";
+import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { parseExcelBuffer } from "./excel-parser";
 import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./openai";
@@ -348,6 +349,168 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Project detail error:", error);
       res.status(500).json({ message: "Error loading project" });
+    }
+  });
+
+  // ===== EXPORT EXCEL =====
+  app.post("/api/projects/export", async (req, res) => {
+    try {
+      const { search, status, department } = req.body || {};
+      
+      let allProjects = await storage.getProjects();
+      
+      // Apply filters
+      let filteredProjects = allProjects.filter((project) => {
+        // Search filter
+        if (search) {
+          const searchLower = search.toLowerCase();
+          const matchesSearch =
+            project.projectName?.toLowerCase().includes(searchLower) ||
+            project.responsible?.toLowerCase().includes(searchLower) ||
+            project.departmentName?.toLowerCase().includes(searchLower) ||
+            project.legacyId?.toLowerCase().includes(searchLower);
+          if (!matchesSearch) return false;
+        }
+        
+        // Status filter
+        if (status && status !== "all" && project.status !== status) {
+          return false;
+        }
+        
+        // Department filter
+        if (department && department !== "all" && project.departmentName !== department) {
+          return false;
+        }
+        
+        return true;
+      });
+      
+      // Format date helper
+      const formatDate = (date: string | null | undefined): string => {
+        if (!date) return "";
+        try {
+          const d = new Date(date);
+          return d.toLocaleDateString("es-MX", { 
+            day: "2-digit", 
+            month: "2-digit", 
+            year: "numeric" 
+          });
+        } catch {
+          return date;
+        }
+      };
+      
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Export date header row
+      const exportDate = new Date().toLocaleDateString("es-MX", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      
+      // Define columns with Spanish headers
+      const headers = [
+        "ID",
+        "Nombre del Proyecto",
+        "Descripción",
+        "Departamento",
+        "Responsable",
+        "Sponsor",
+        "Estado",
+        "Prioridad",
+        "Categoría",
+        "Tipo de Proyecto",
+        "Fecha Inicio",
+        "Fecha Fin Estimada",
+        "Fecha Fin Real",
+        "Fecha Registro",
+        "% Avance",
+        "Status (S)",
+        "Próximos Pasos (N)",
+        "Beneficios",
+        "Alcance",
+        "Riesgos",
+        "Comentarios",
+      ];
+      
+      // Map projects to rows
+      const dataRows = filteredProjects.map((p) => [
+        p.legacyId || "",
+        p.projectName || "",
+        p.description || "",
+        p.departmentName || "",
+        p.responsible || "",
+        p.sponsor || "",
+        p.status || "",
+        p.priority || "",
+        p.category || "",
+        p.projectType || "",
+        formatDate(p.startDate),
+        p.endDateEstimatedTbd ? "TBD" : formatDate(p.endDateEstimated),
+        formatDate(p.endDateActual),
+        formatDate(p.registrationDate),
+        p.percentComplete !== null && p.percentComplete !== undefined ? `${p.percentComplete}%` : "",
+        p.parsedStatus || "",
+        p.parsedNextSteps || "",
+        p.benefits || "",
+        p.scope || "",
+        p.risks || "",
+        p.comments || "",
+      ]);
+      
+      // Create worksheet with export date header
+      const wsData = [
+        [`Fecha de exportación: ${exportDate}`],
+        [],
+        headers,
+        ...dataRows,
+      ];
+      
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      
+      // Set column widths
+      ws["!cols"] = [
+        { wch: 10 },  // ID
+        { wch: 40 },  // Nombre
+        { wch: 50 },  // Descripción
+        { wch: 20 },  // Departamento
+        { wch: 20 },  // Responsable
+        { wch: 20 },  // Sponsor
+        { wch: 15 },  // Estado
+        { wch: 12 },  // Prioridad
+        { wch: 15 },  // Categoría
+        { wch: 15 },  // Tipo
+        { wch: 12 },  // Fecha Inicio
+        { wch: 15 },  // Fecha Fin Est
+        { wch: 15 },  // Fecha Fin Real
+        { wch: 12 },  // Fecha Registro
+        { wch: 10 },  // % Avance
+        { wch: 50 },  // Status
+        { wch: 50 },  // Próximos Pasos
+        { wch: 30 },  // Beneficios
+        { wch: 30 },  // Alcance
+        { wch: 30 },  // Riesgos
+        { wch: 30 },  // Comentarios
+      ];
+      
+      XLSX.utils.book_append_sheet(wb, ws, "Proyectos");
+      
+      // Generate buffer
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      
+      // Set response headers
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", "attachment; filename=proyectos.xlsx");
+      res.setHeader("Content-Length", buffer.length);
+      
+      res.send(buffer);
+    } catch (error) {
+      console.error("Export error:", error);
+      res.status(500).json({ message: "Error al exportar proyectos" });
     }
   });
 
