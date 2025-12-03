@@ -642,32 +642,48 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
   // Find the main data sheet - prioritize specific sheet names
   let sheetName = workbook.SheetNames[0];
   
-  // Priority 1: Exact or partial match for "proyectos por los líderes"
-  // Prefer sheets with "(2)" suffix as the main data sheet
-  const lideresPriority = [
-    "proyectos por los líderes (2)",
-    "proyectos por los lideres (2)",
-    "proyectos por los líderes",
-    "proyectos por los lideres",
+  // Priority 1: Look for "Proyectos PGP" sheet (main project data sheet)
+  const pgpPriority = [
+    "proyectos pgp",
   ];
   
-  let foundLideres = false;
-  for (const priority of lideresPriority) {
+  let foundPgp = false;
+  for (const priority of pgpPriority) {
     for (const name of workbook.SheetNames) {
       const lowerName = name.toLowerCase().trim();
-      if (lowerName.includes(priority)) {
+      if (lowerName === priority || lowerName.startsWith(priority)) {
         sheetName = name;
-        console.log(`[Excel Parser] Found priority sheet (lideres): "${name}"`);
-        foundLideres = true;
+        console.log(`[Excel Parser] Found priority sheet (PGP): "${name}"`);
+        foundPgp = true;
         break;
       }
     }
-    if (foundLideres) break;
+    if (foundPgp) break;
   }
   
-  // Priority 2: If no "lideres" sheet, look for other project sheets (but NOT "PGP" which has too many columns)
+  // Priority 2: If no PGP sheet, look for "proyectos por los líderes"
+  if (!foundPgp) {
+    const lideresPriority = [
+      "proyectos por los líderes",
+      "proyectos por los lideres",
+    ];
+    
+    for (const priority of lideresPriority) {
+      for (const name of workbook.SheetNames) {
+        const lowerName = name.toLowerCase().trim();
+        if (lowerName.includes(priority)) {
+          sheetName = name;
+          console.log(`[Excel Parser] Found secondary sheet (lideres): "${name}"`);
+          break;
+        }
+      }
+      if (sheetName !== workbook.SheetNames[0]) break;
+    }
+  }
+  
+  // Priority 3: Other project sheets
   if (sheetName === workbook.SheetNames[0]) {
-    const secondaryPriority = [
+    const tertiaryPriority = [
       "matriz",
       "base",
       "data",
@@ -676,13 +692,10 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
     
     for (const name of workbook.SheetNames) {
       const lowerName = name.toLowerCase().trim();
-      // Skip sheets with "pgp" in the name (too many columns, different format)
-      if (lowerName.includes("pgp")) continue;
-      
-      for (const priority of secondaryPriority) {
+      for (const priority of tertiaryPriority) {
         if (lowerName === priority || lowerName.includes(priority)) {
           sheetName = name;
-          console.log(`[Excel Parser] Found secondary sheet: "${name}"`);
+          console.log(`[Excel Parser] Found tertiary sheet: "${name}"`);
           break;
         }
       }
@@ -702,13 +715,42 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
     return { projects, advertencias, totalRows: 0, proyectosCreados: 0, proyectosBorradorIncompleto: 0, filasDescartadas: 1 };
   }
   
+  // Detect actual data range (ignore Excel's max row count for sheets with empty trailing rows)
+  const sheetRange = sheet["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]) : null;
+  let actualLastRow = sheetRange ? sheetRange.e.r : 0;
+  
+  // If sheet claims to have >10000 rows, find the actual last row with data
+  if (actualLastRow > 10000) {
+    console.log(`[Excel Parser] Sheet claims ${actualLastRow + 1} rows, scanning for actual data...`);
+    // Scan backwards from a reasonable limit to find actual data
+    actualLastRow = 0;
+    for (let r = 0; r <= Math.min(sheetRange!.e.r, 5000); r++) {
+      let hasData = false;
+      for (let c = 0; c <= Math.min(sheetRange!.e.c, 20); c++) {
+        const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+        if (cell && cell.v !== undefined && cell.v !== null && String(cell.v).trim() !== '') {
+          hasData = true;
+          actualLastRow = r;
+          break;
+        }
+      }
+    }
+    console.log(`[Excel Parser] Actual data ends at row ${actualLastRow + 1}`);
+    
+    // Trim the sheet range
+    if (sheetRange) {
+      sheetRange.e.r = actualLastRow;
+      sheet["!ref"] = XLSX.utils.encode_range(sheetRange);
+    }
+  }
+  
   // Find the actual header row (may not be row 1)
   const { headerRow, headers } = findHeaderRow(sheet);
   
   // Log all headers for debugging
   logHeaders(headers, headerRow + 1);
   
-  // Convert to JSON starting from the header row
+  // Convert to JSON starting from the header row, with trimmed range
   const rawData = XLSX.utils.sheet_to_json<RawExcelRow>(sheet, { 
     defval: null,
     range: headerRow // Start from the detected header row
