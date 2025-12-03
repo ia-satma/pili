@@ -639,6 +639,13 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
   let proyectosBorradorIncompleto = 0;
   let filasDescartadas = 0;
   
+  // DEBUG: Log all sheet names in workbook
+  console.log(`[Excel Parser] === WORKBOOK INFO ===`);
+  console.log(`[Excel Parser] Total sheets found: ${workbook.SheetNames.length}`);
+  workbook.SheetNames.forEach((name, i) => {
+    console.log(`[Excel Parser]   Sheet ${i + 1}: "${name}"`);
+  });
+  
   // Find the main data sheet - prioritize specific sheet names
   let sheetName = workbook.SheetNames[0];
   
@@ -1016,6 +1023,12 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
   console.log(`[Excel Parser] Projects created (draft/incomplete): ${proyectosBorradorIncompleto}`);
   console.log(`[Excel Parser] Rows discarded: ${filasDescartadas}`);
   console.log(`[Excel Parser] Forward-fill applied: ${forwardFillCount} rows`);
+  
+  // DEBUG: Show first 5 project names for verification
+  console.log(`[Excel Parser] === FIRST 5 PROJECT NAMES ===`);
+  projects.slice(0, 5).forEach((p, i) => {
+    console.log(`[Excel Parser]   ${i + 1}. "${p.projectName}" (ID: ${p.legacyId})`);
+  });
   
   // Important rule: If there's at least one non-empty row, we must have at least 1 processed
   const nonEmptyRows = totalRows - filasDescartadas;
