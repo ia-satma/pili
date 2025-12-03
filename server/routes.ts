@@ -743,8 +743,16 @@ export async function registerRoutes(
   });
 
   // ===== EXCEL UPLOAD =====
-  app.post("/api/excel/upload", isAuthenticated, isEditor, upload.single("file"), async (req, res) => {
-    console.log("[Excel Upload] Request received");
+  // Pre-auth logging middleware to debug upload issues
+  app.post("/api/excel/upload", (req, res, next) => {
+    console.log("[Excel Upload] === REQUEST RECEIVED ===");
+    console.log("[Excel Upload] Content-Type:", req.headers["content-type"]);
+    console.log("[Excel Upload] Content-Length:", req.headers["content-length"]);
+    console.log("[Excel Upload] Session:", req.session ? "exists" : "none");
+    console.log("[Excel Upload] User:", req.user ? "authenticated" : "NOT authenticated");
+    next();
+  }, isAuthenticated, isEditor, upload.single("file"), async (req, res) => {
+    console.log("[Excel Upload] Past auth - processing file");
     console.log("[Excel Upload] File info:", req.file ? { name: req.file.originalname, size: req.file.size } : "No file");
     
     try {

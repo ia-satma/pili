@@ -47,17 +47,38 @@ export function ExcelUpload() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/excel/upload", {
-        method: "POST",
-        body: formData,
-      });
+      // Add timeout with AbortController
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Error al subir el archivo");
+      try {
+        const response = await fetch("/api/excel/upload", {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error("Sesión expirada. Por favor inicia sesión nuevamente.");
+          }
+          if (response.status === 403) {
+            throw new Error("No tienes permisos para subir archivos. Contacta a un administrador.");
+          }
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.message || "Error al subir el archivo");
+        }
+
+        return response.json() as Promise<UploadResponse>;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new Error("Tiempo de espera agotado. Intenta con un archivo más pequeño.");
+        }
+        throw err;
       }
-
-      return response.json() as Promise<UploadResponse>;
     },
     onSuccess: (data) => {
       setLastUpload(data);
@@ -89,6 +110,16 @@ export function ExcelUpload() {
     (acceptedFiles: File[]) => {
       const file = acceptedFiles[0];
       if (!file) return;
+
+      // Check authentication first
+      if (!isEditor) {
+        toast({
+          title: "No autenticado",
+          description: "Debes iniciar sesión para subir archivos",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const validTypes = [
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -123,7 +154,7 @@ export function ExcelUpload() {
         },
       });
     },
-    [uploadMutation, toast]
+    [uploadMutation, toast, isEditor]
   );
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
