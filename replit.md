@@ -141,6 +141,20 @@ npm run db:push      # Push schema to database
 ```
 
 ## Recent Changes
+- December 9, 2025: Semantic PMO Field Organization
+  - **Dashboard Cleanup**: Removed redundant "Distribución por Estado" chart that duplicated traffic light information
+  - **7 PMO Categories**: ExtraFields now organized into semantic sections for RAG-ready data structure:
+    - Gobierno y Roles (Black Belt Lead, DTC Lead, Business Process Analyst)
+    - Priorización y Scoring (Ranking, Puntaje Total, Total Valor/Esfuerzo)
+    - Impacto Financiero (Business Impact USD, Beneficios, Soft Savings)
+    - Estado y Fase (Tipo de Iniciativa, Fase DMAIC, Acciones a ejecutar)
+    - Dependencias (IT Local, T. Digital, Digitalización, SSC)
+    - Tiempo y Ciclo (T. de Ciclo en días, períodos mensuales)
+    - Alcance y Región (Área de Productividad, Nacional/Local/NLATAM)
+  - **Collapsible Sections**: Each category expands/collapses with badge showing field counts
+  - **Exact Field Names**: All Excel column names preserved without translation or renaming
+  - **Otros Campos**: Uncategorized fields grouped separately
+
 - December 9, 2025: Complete Field Display & Traffic Light Fix
   - **ESTATUS AL DÍA Priority**: Traffic light now uses estatusAlDia EXCLUSIVELY - empty/null values return gray without date fallback
   - **6 Exact Values**: On time (green), Stand by (yellow), En riesgo ente >1<2 meses (red), En riesgo o vencido > 2 meses (red), No iniciado (gray), Cancelado (gray)
