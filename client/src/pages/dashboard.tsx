@@ -273,47 +273,10 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Status Distribution and Recent Updates */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Status Distribution */}
-        <Card className="lg:col-span-2 overflow-visible">
-          <CardHeader>
-            <CardTitle className="text-base">Distribución por Estado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-48 w-full" />
-            ) : (
-              <div className="space-y-3">
-                {(data?.projectsByStatus || []).map((item, index) => {
-                  const total = data?.totalProjects || 1;
-                  const percentage = Math.round((item.count / total) * 100);
-                  
-                  return (
-                    <div key={item.name} className="space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">{item.name}</span>
-                        <span className="text-muted-foreground">{item.count} ({percentage}%)</span>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full transition-all"
-                          style={{
-                            width: `${percentage}%`,
-                            backgroundColor: CHART_COLORS[index % CHART_COLORS.length],
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
+      {/* Recent Updates - Full Width */}
+      <div className="grid grid-cols-1 gap-6">
         {/* Recent Updates */}
-        <Card className="lg:col-span-3 overflow-visible">
+        <Card className="overflow-visible">
           <CardHeader>
             <CardTitle className="text-base">Actualizaciones Recientes</CardTitle>
           </CardHeader>

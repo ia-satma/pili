@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { X, Calendar, User, Building2, Flag, Clock, FileText, ChevronDown, Hash, Users, Briefcase, MessageSquare, AlertTriangle, Database } from "lucide-react";
+import { X, Calendar, User, Building2, Flag, Clock, FileText, ChevronDown, Hash, Users, Briefcase, MessageSquare, AlertTriangle, Database, Target, DollarSign, GitBranch, Timer, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -15,6 +15,324 @@ import {
 import type { Project, ProjectUpdate, Milestone, ChangeLog } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+
+// PMO Field Categories - Using EXACT Excel column names
+const PMO_FIELD_CATEGORIES: {
+  id: string;
+  title: string;
+  icon: React.ElementType;
+  patterns: string[];
+}[] = [
+  {
+    id: "roles",
+    title: "Gobierno y Roles",
+    icon: Users,
+    patterns: [
+      "Black Belt Lead",
+      "DTC Lead", 
+      "Citizen Developer",
+      "Business Process Analyst",
+      "Grupo Técnico Asignado",
+      "Dueño del Proceso",
+      "Dirección de Negocio",
+      "VP (5)",
+      "Director (4)",
+    ],
+  },
+  {
+    id: "scoring",
+    title: "Priorización y Scoring",
+    icon: Target,
+    patterns: [
+      "Ranking",
+      "Renking General",
+      "Puntaje Total",
+      "Total Valor",
+      "Total Esfuerzo",
+      "Previo",
+      "Alto (1)",
+      "Alto (5)",
+      "Medio (3)",
+      "Bajo (5)",
+      "Bajo (1)",
+      "Ninguna (5)",
+      "> 500 (5)",
+      "Cambio Menor",
+      "Cambio Mayor",
+      "Proyecto Menor",
+      "Proyecto Mediano",
+      "Proyecto Mayor",
+    ],
+  },
+  {
+    id: "financial",
+    title: "Impacto Financiero",
+    icon: DollarSign,
+    patterns: [
+      "Business Impact USD",
+      "Beneficios Real YTD",
+      "Arranque de Beneficios",
+      "Fin de Beneficios",
+      "Soft Savings",
+      "KUSD",
+      "Growth / year",
+      "Costos",
+      "Si < 5 KUSD",
+    ],
+  },
+  {
+    id: "status",
+    title: "Estado y Fase",
+    icon: Flag,
+    patterns: [
+      "Fase:",
+      "Tipo de Iniciativa",
+      "Acciones a ejecutar",
+      "Ingresada en PBOT",
+      "Transformación (5)",
+      "Tranformación (5)",
+      "Mejora completa",
+      "Mejora parcial",
+    ],
+  },
+  {
+    id: "dependencies",
+    title: "Dependencias",
+    icon: GitBranch,
+    patterns: [
+      "Dependencias:",
+      "IT Local",
+      "T. Digital",
+      "Digitalización",
+      "SSC",
+      "Externo",
+    ],
+  },
+  {
+    id: "timeline",
+    title: "Tiempo y Ciclo",
+    icon: Timer,
+    patterns: [
+      "T. de Ciclo",
+      "Tiempo de Ciclo",
+      "Más de 3 meses",
+      "Entre 1 y 3 meses",
+      "Menos de 1 mes",
+      "Jan-", "Feb-", "Mar-", "Apr-", "May-", "Jun-",
+      "Jul-", "Aug-", "Sep-", "Oct-", "Nov-", "Dec-",
+    ],
+  },
+  {
+    id: "scope",
+    title: "Alcance y Región",
+    icon: MapPin,
+    patterns: [
+      "Area de Productividad",
+      "Área de Productividad",
+      "PROCESO DE NEGOCIO",
+      "Impacta a Gases",
+      "Nlatam",
+      "Nacional",
+      "Local",
+      "Valor / Diferenciador",
+      "Si (5)",
+      "Parcialmente (3)",
+    ],
+  },
+];
+
+// Fields to exclude (already shown in main sections)
+const EXCLUDED_PATTERNS = [
+  "ESTATUS AL DÍA",
+  "ESTATUS Y SIGUIENTES PASOS",
+  "__EMPTY",
+];
+
+function categorizeField(fieldName: string): string {
+  const upperName = fieldName.toUpperCase();
+  
+  // Check exclusions first
+  for (const pattern of EXCLUDED_PATTERNS) {
+    if (upperName.includes(pattern.toUpperCase())) {
+      return "excluded";
+    }
+  }
+  
+  // Find matching category
+  for (const category of PMO_FIELD_CATEGORIES) {
+    for (const pattern of category.patterns) {
+      if (fieldName.includes(pattern) || upperName.includes(pattern.toUpperCase())) {
+        return category.id;
+      }
+    }
+  }
+  
+  return "other";
+}
+
+function ExtraFieldsSections({ extraFields }: { extraFields: Record<string, unknown> }) {
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
+    roles: true,
+    scoring: true,
+    financial: false,
+    status: false,
+    dependencies: false,
+    timeline: false,
+    scope: false,
+    other: false,
+  });
+
+  const toggleCategory = (categoryId: string) => {
+    setExpandedCategories(prev => ({ ...prev, [categoryId]: !prev[categoryId] }));
+  };
+
+  // Group fields by category
+  const categorizedFields: Record<string, [string, unknown][]> = {};
+  for (const [key, value] of Object.entries(extraFields)) {
+    const category = categorizeField(key);
+    if (category === "excluded") continue;
+    if (!categorizedFields[category]) {
+      categorizedFields[category] = [];
+    }
+    categorizedFields[category].push([key, value]);
+  }
+
+  // Sort fields within each category alphabetically
+  for (const category of Object.keys(categorizedFields)) {
+    categorizedFields[category].sort(([a], [b]) => a.localeCompare(b));
+  }
+
+  const renderFieldValue = (value: unknown) => {
+    if (value === null || value === undefined || value === "") {
+      return <span className="text-muted-foreground">—</span>;
+    }
+    if (typeof value === "object") {
+      return <span className="font-medium">{JSON.stringify(value)}</span>;
+    }
+    return <span className="font-medium">{String(value)}</span>;
+  };
+
+  const renderCategorySection = (category: typeof PMO_FIELD_CATEGORIES[0], fields: [string, unknown][]) => {
+    if (fields.length === 0) return null;
+
+    const Icon = category.icon;
+    const isExpanded = expandedCategories[category.id];
+    const nonEmptyCount = fields.filter(([_, v]) => v !== null && v !== undefined && v !== "").length;
+
+    return (
+      <Collapsible
+        key={category.id}
+        open={isExpanded}
+        onOpenChange={() => toggleCategory(category.id)}
+        data-testid={`category-${category.id}`}
+      >
+        <CollapsibleTrigger className="flex items-center justify-between w-full py-2 text-sm font-medium hover-elevate rounded-md px-2 -mx-2">
+          <div className="flex items-center gap-2">
+            <Icon className="h-4 w-4 text-muted-foreground" />
+            <span>{category.title}</span>
+            <Badge variant="secondary" className="text-xs">
+              {nonEmptyCount}/{fields.length}
+            </Badge>
+          </div>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 transition-transform",
+              isExpanded && "rotate-180"
+            )}
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="space-y-1 mt-2 pl-6">
+            {fields.map(([key, value]) => (
+              <div 
+                key={key} 
+                className="grid grid-cols-[1fr_1.5fr] gap-2 py-1 border-b border-border/30 last:border-0"
+                data-testid={`field-${key.replace(/\s+/g, "-").toLowerCase()}`}
+              >
+                <span className="text-xs text-muted-foreground" title={key}>
+                  {key}
+                </span>
+                <span className="text-xs break-words">
+                  {renderFieldValue(value)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  };
+
+  // Render "Other" category for uncategorized fields
+  const renderOtherCategory = () => {
+    const otherFields = categorizedFields["other"];
+    if (!otherFields || otherFields.length === 0) return null;
+
+    const isExpanded = expandedCategories["other"];
+    const nonEmptyCount = otherFields.filter(([_, v]) => v !== null && v !== undefined && v !== "").length;
+
+    return (
+      <Collapsible
+        open={isExpanded}
+        onOpenChange={() => toggleCategory("other")}
+        data-testid="category-other"
+      >
+        <CollapsibleTrigger className="flex items-center justify-between w-full py-2 text-sm font-medium hover-elevate rounded-md px-2 -mx-2">
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-muted-foreground" />
+            <span>Otros Campos</span>
+            <Badge variant="secondary" className="text-xs">
+              {nonEmptyCount}/{otherFields.length}
+            </Badge>
+          </div>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 transition-transform",
+              isExpanded && "rotate-180"
+            )}
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="space-y-1 mt-2 pl-6">
+            {otherFields.map(([key, value]) => (
+              <div 
+                key={key} 
+                className="grid grid-cols-[1fr_1.5fr] gap-2 py-1 border-b border-border/30 last:border-0"
+                data-testid={`field-${key.replace(/\s+/g, "-").toLowerCase()}`}
+              >
+                <span className="text-xs text-muted-foreground" title={key}>
+                  {key}
+                </span>
+                <span className="text-xs break-words">
+                  {renderFieldValue(value)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  };
+
+  return (
+    <div className="space-y-2" data-testid="extra-fields-section">
+      <div className="flex items-center gap-2 mb-3">
+        <Database className="h-3 w-3 text-muted-foreground" />
+        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          Campos del Excel
+        </h4>
+      </div>
+      <div className="space-y-1 max-h-[500px] overflow-y-auto pr-2">
+        {PMO_FIELD_CATEGORIES.map(category => {
+          const fields = categorizedFields[category.id];
+          if (!fields || fields.length === 0) return null;
+          return renderCategorySection(category, fields);
+        })}
+        {renderOtherCategory()}
+      </div>
+    </div>
+  );
+}
 
 interface ProjectDetailDrawerProps {
   project: Project | null;
@@ -438,50 +756,11 @@ export function ProjectDetailDrawer({
                 </>
               )}
 
-              {/* Extra Fields from Excel */}
+              {/* Extra Fields from Excel - Organized by PMO Categories */}
               {project.extraFields && Object.keys(project.extraFields).length > 0 && (
                 <>
                   <Separator />
-                  <div className="space-y-3" data-testid="extra-fields-section">
-                    <div className="flex items-center gap-2">
-                      <Database className="h-3 w-3 text-muted-foreground" />
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Datos Adicionales del Excel
-                      </h4>
-                    </div>
-                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                      {Object.entries(project.extraFields as Record<string, unknown>)
-                        .filter(([key]) => 
-                          !key.includes("ESTATUS AL DÍA") && // Already shown above
-                          !key.includes("ESTATUS Y SIGUIENTES PASOS") // Already parsed as S/N
-                        )
-                        .sort(([a], [b]) => a.localeCompare(b))
-                        .map(([key, value]) => {
-                          const displayValue = value === null || value === undefined || value === ""
-                            ? "—"
-                            : typeof value === "object"
-                              ? JSON.stringify(value)
-                              : String(value);
-                          return (
-                            <div 
-                              key={key} 
-                              className="grid grid-cols-[1fr_2fr] gap-2 py-1 border-b border-border/50 last:border-0"
-                              data-testid={`extra-field-${key.replace(/\s+/g, "-").toLowerCase()}`}
-                            >
-                              <span className="text-xs text-muted-foreground truncate" title={key}>
-                                {key}
-                              </span>
-                              <span className={cn(
-                                "text-xs break-words",
-                                displayValue === "—" ? "text-muted-foreground" : "font-medium"
-                              )}>
-                                {displayValue}
-                              </span>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
+                  <ExtraFieldsSections extraFields={project.extraFields as Record<string, unknown>} />
                 </>
               )}
             </TabsContent>
