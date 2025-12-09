@@ -69,7 +69,7 @@ const PMO_FIELD_CATEGORIES: {
     title: "Impacto Financiero",
     icon: DollarSign,
     patterns: [
-      "Business Impact USD",
+      "Business Impact",
       "Beneficios Real YTD",
       "Arranque de Beneficios",
       "Fin de Beneficios",
@@ -78,6 +78,9 @@ const PMO_FIELD_CATEGORIES: {
       "Growth / year",
       "Costos",
       "Si < 5 KUSD",
+      "Time, Control",
+      "Compliance",
+      "Quality of data",
     ],
   },
   {
