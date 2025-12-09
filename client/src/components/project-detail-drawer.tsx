@@ -45,7 +45,8 @@ export function ProjectDetailDrawer({
   const trafficLight = calculateTrafficLight(
     project.endDateEstimated,
     project.endDateEstimatedTbd,
-    project.status
+    project.status,
+    project.estatusAlDia
   );
 
   const daysUntilDue = getDaysUntilDue(project.endDateEstimated);
@@ -108,7 +109,18 @@ export function ProjectDetailDrawer({
                     {project.priority}
                   </Badge>
                 )}
-                {daysUntilDue !== undefined && (
+                {/* Show estatusAlDia if available, otherwise show days */}
+                {project.estatusAlDia ? (
+                  <span className={cn(
+                    "text-xs",
+                    trafficLight === "green" && "text-traffic-green",
+                    trafficLight === "red" && "text-traffic-red",
+                    trafficLight === "yellow" && "text-traffic-yellow",
+                    trafficLight === "gray" && "text-muted-foreground"
+                  )}>
+                    {project.estatusAlDia}
+                  </span>
+                ) : daysUntilDue !== undefined && (
                   <span className="text-xs text-muted-foreground">
                     {daysUntilDue >= 0
                       ? `${daysUntilDue} días restantes`

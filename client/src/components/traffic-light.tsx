@@ -51,15 +51,42 @@ export function calculateTrafficLight(
   endDateEstimated: string | null | undefined,
   endDateEstimatedTbd: boolean | null | undefined,
   status: string | null | undefined,
+  estatusAlDia?: string | null | undefined,
   warningDays: number = 7
 ): TrafficLightStatus {
-  // Gray for TBD or no date
+  // PRIORITY 1: Use "ESTATUS AL DÍA" from Excel if available
+  if (estatusAlDia) {
+    const lower = estatusAlDia.toLowerCase().trim();
+    
+    // GREEN: On time
+    if (lower === "on time" || lower === "a tiempo" || lower === "en tiempo") {
+      return "green";
+    }
+    
+    // RED: Any risk or overdue variant
+    if (lower.includes("riesgo") || lower.includes("vencido") || lower === "delayed" || lower === "retrasado" || lower === "at risk") {
+      return "red";
+    }
+    
+    // GRAY: Not started, cancelled, stand by
+    if (lower === "no iniciado" || lower === "not started" || lower === "pending" || 
+        lower === "cancelado" || lower === "cancelled" || lower === "stand by" || lower === "standby") {
+      return "gray";
+    }
+    
+    // Unknown value = yellow
+    if (lower.length > 0) {
+      return "yellow";
+    }
+  }
+
+  // FALLBACK: Calculate from dates if no estatusAlDia
   if (endDateEstimatedTbd || !endDateEstimated) {
     return "gray";
   }
 
   // Green if closed
-  if (status?.toLowerCase() === "cerrado" || status?.toLowerCase() === "closed") {
+  if (status?.toLowerCase() === "cerrado" || status?.toLowerCase() === "closed" || status?.toLowerCase() === "terminado") {
     return "green";
   }
 

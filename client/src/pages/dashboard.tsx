@@ -334,7 +334,8 @@ export default function Dashboard() {
                   const trafficLight = calculateTrafficLight(
                     project.endDateEstimated,
                     project.endDateEstimatedTbd,
-                    project.status
+                    project.status,
+                    project.estatusAlDia
                   );
                   
                   return (

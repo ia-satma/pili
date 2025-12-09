@@ -81,15 +81,23 @@ function calculateTrafficLight(
   // PRIORITY 1: Use "ESTATUS AL DÍA" from Excel if available
   if (estatusAlDia) {
     const lower = estatusAlDia.toLowerCase().trim();
+    
+    // GREEN: On time, completado
     if (lower === "on time" || lower === "a tiempo" || lower === "en tiempo") {
       return "green";
     }
-    if (lower === "delayed" || lower === "retrasado" || lower === "en riesgo" || lower === "at risk") {
+    
+    // RED: Any risk or overdue variant
+    if (lower.includes("riesgo") || lower.includes("vencido") || lower === "delayed" || lower === "retrasado" || lower === "at risk") {
       return "red";
     }
-    if (lower === "no iniciado" || lower === "not started" || lower === "pending") {
+    
+    // GRAY: Not started, cancelled, stand by
+    if (lower === "no iniciado" || lower === "not started" || lower === "pending" || 
+        lower === "cancelado" || lower === "cancelled" || lower === "stand by" || lower === "standby") {
       return "gray";
     }
+    
     // If estatusAlDia has a value but doesn't match known patterns, treat as yellow
     if (lower.length > 0) {
       return "yellow";
