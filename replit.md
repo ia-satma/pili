@@ -167,6 +167,24 @@ Sistema de priorización de portafolio basado en Matriz Valor/Esfuerzo.
 - Project Drawer: Panel "Análisis de Priorización" con breakdown de dimensiones
 - API: `GET /api/scoring/matrix` retorna proyectos con datos de scoring
 
+### Análisis de Propósito de Negocio de Campos
+
+Cada campo del Excel tiene un propósito específico para el PMO y la metodología Six Sigma. Ver `docs/PMO_FIELD_ANALYSIS.md` para documentación completa.
+
+**Categorías de Campos**:
+| Categoría | Campos Clave | Fase DMAIC | Propósito PMO |
+|-----------|--------------|------------|---------------|
+| Identificación | ID, Nombre, Descripción | Define | Trazabilidad, búsqueda |
+| Gobierno | Líder, Sponsor, Black Belt, DTC | Define/Todas | Accountability, recursos |
+| Clasificación | Departamento, Tipo, Alcance | Define | Agrupación, filtrado |
+| Fechas | Inicio, Término Est/Real | Define/Control | Seguimiento, desviaciones |
+| Estado | Estatus al Día, Fase DMAIC, % Avance | Todas | Monitoreo de salud |
+| Scoring | Valor, Esfuerzo, Puntaje, Ranking | Define | Priorización de portafolio |
+| Impacto | Business Impact, Beneficios | Define/Control | Justificación financiera |
+| Dependencias | IT, Digital, SSC | Improve | Coordinación técnica |
+
+**Tooltips Contextuales**: La UI incluye íconos de ayuda (?) que explican el propósito de cada campo al hacer hover.
+
 ### User Preferences
 - Language: Spanish (ES-MX)
 - Zero hallucination requirement for all data
