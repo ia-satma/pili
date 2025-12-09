@@ -106,17 +106,19 @@ A Project Management Office (PMO) dashboard for managing continuous improvement 
 - `PATCH /api/admin/users/:id/role` - Update user role
 
 ### Traffic Light Rules
-**Priority 1**: Uses "ESTATUS AL DÍA" column from Excel when available:
+**Primary**: Uses "ESTATUS AL DÍA" column from Excel EXCLUSIVELY when the field exists:
 - **Green**: "On time", "A tiempo", "En tiempo"
-- **Red**: Contains "riesgo", "vencido", "delayed", "retrasado", "at risk"
-- **Gray**: "No iniciado", "Cancelado", "Stand by", "Not started"
-- **Yellow**: Any other non-empty value
+- **Red**: "En riesgo ente >1<2 meses", "En riesgo o vencido > 2 meses" (any value containing "riesgo" or "vencido")
+- **Yellow**: "Stand by", "Standby", "En espera"
+- **Gray**: "No iniciado", "Cancelado", empty/null values
 
-**Fallback** (if no estatusAlDia):
+**Fallback** (ONLY if estatusAlDia is completely undefined):
 - **Green**: On track or closed status
 - **Yellow**: Within 7 days of deadline
 - **Red**: Overdue and not closed
 - **Gray**: TBD date or no date specified
+
+**IMPORTANT**: Empty estatusAlDia returns GRAY without date fallback.
 
 ### Excel Parser Features
 - Deterministic S/N parsing (S: status N: next steps)
@@ -139,6 +141,13 @@ npm run db:push      # Push schema to database
 ```
 
 ## Recent Changes
+- December 9, 2025: Complete Field Display & Traffic Light Fix
+  - **ESTATUS AL DÍA Priority**: Traffic light now uses estatusAlDia EXCLUSIVELY - empty/null values return gray without date fallback
+  - **6 Exact Values**: On time (green), Stand by (yellow), En riesgo ente >1<2 meses (red), En riesgo o vencido > 2 meses (red), No iniciado (gray), Cancelado (gray)
+  - **Expanded Project Drawer**: Now shows ALL fields organized in sections: Identificación, Responsables, Fechas, Avance
+  - **Extra Fields Display**: All unmapped Excel columns visible in "Datos Adicionales del Excel" section (even empty ones shown as "—")
+  - **Field Names Match Excel**: Líder/Solicitante, Dueño del Proceso/Sponsor, Proceso de Negocio/Área, Fecha Término Estimada, Estatus al Día
+
 - December 3, 2025: Strict Two-Sheet Parser
   - **ONLY TWO SHEETS**: Parser now ONLY reads "Proyectos PGP" and "Indicadores" - all other 32+ sheets ignored
   - **No fallback**: If "Proyectos PGP" not found, parser returns error (no alternative sheets used)
