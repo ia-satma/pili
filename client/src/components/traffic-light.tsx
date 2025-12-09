@@ -54,7 +54,7 @@ export function calculateTrafficLight(
   estatusAlDia?: string | null | undefined,
   warningDays: number = 7
 ): TrafficLightStatus {
-  // PRIORITY 1: Use "ESTATUS AL DÍA" from Excel if available
+  // PRIORITY 1: Use "ESTATUS AL DÍA" from Excel
   // These are the EXACT values from the Excel filter:
   // - On time (GREEN)
   // - No iniciado (GRAY)
@@ -62,9 +62,17 @@ export function calculateTrafficLight(
   // - Stand by (YELLOW)
   // - En riesgo ente >1<2 meses (RED)
   // - En riesgo o vencido > 2 meses (RED)
-  // - (Vacías) - empty values (GRAY)
-  if (estatusAlDia) {
-    const lower = estatusAlDia.toLowerCase().trim();
+  // - (Vacías) - empty values (GRAY) - NO FALLBACK TO DATES
+  
+  // If estatusAlDia is explicitly provided (even if empty), use it exclusively
+  if (estatusAlDia !== undefined) {
+    const trimmed = (estatusAlDia || "").trim();
+    const lower = trimmed.toLowerCase();
+    
+    // Empty or null estatusAlDia = GRAY (no fallback to dates)
+    if (trimmed === "") {
+      return "gray";
+    }
     
     // GREEN: On time
     if (lower === "on time" || lower === "a tiempo" || lower === "en tiempo") {
@@ -88,12 +96,10 @@ export function calculateTrafficLight(
     }
     
     // Any other non-empty value = yellow (unknown status)
-    if (lower.length > 0) {
-      return "yellow";
-    }
+    return "yellow";
   }
 
-  // FALLBACK: Calculate from dates if no estatusAlDia
+  // FALLBACK: Calculate from dates ONLY if estatusAlDia is completely undefined
   if (endDateEstimatedTbd || !endDateEstimated) {
     return "gray";
   }

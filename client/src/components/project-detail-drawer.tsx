@@ -451,29 +451,35 @@ export function ProjectDetailDrawer({
                     </div>
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
                       {Object.entries(project.extraFields as Record<string, unknown>)
-                        .filter(([key, value]) => 
-                          value !== null && 
-                          value !== undefined && 
-                          value !== "" &&
-                          !key.includes("ESTATUS AL DÍA") // Already shown above
+                        .filter(([key]) => 
+                          !key.includes("ESTATUS AL DÍA") && // Already shown above
+                          !key.includes("ESTATUS Y SIGUIENTES PASOS") // Already parsed as S/N
                         )
                         .sort(([a], [b]) => a.localeCompare(b))
-                        .map(([key, value]) => (
-                          <div 
-                            key={key} 
-                            className="grid grid-cols-[1fr_2fr] gap-2 py-1 border-b border-border/50 last:border-0"
-                            data-testid={`extra-field-${key.replace(/\s+/g, "-").toLowerCase()}`}
-                          >
-                            <span className="text-xs text-muted-foreground truncate" title={key}>
-                              {key}
-                            </span>
-                            <span className="text-xs font-medium break-words">
-                              {typeof value === "object" 
-                                ? JSON.stringify(value) 
-                                : String(value)}
-                            </span>
-                          </div>
-                        ))}
+                        .map(([key, value]) => {
+                          const displayValue = value === null || value === undefined || value === ""
+                            ? "—"
+                            : typeof value === "object"
+                              ? JSON.stringify(value)
+                              : String(value);
+                          return (
+                            <div 
+                              key={key} 
+                              className="grid grid-cols-[1fr_2fr] gap-2 py-1 border-b border-border/50 last:border-0"
+                              data-testid={`extra-field-${key.replace(/\s+/g, "-").toLowerCase()}`}
+                            >
+                              <span className="text-xs text-muted-foreground truncate" title={key}>
+                                {key}
+                              </span>
+                              <span className={cn(
+                                "text-xs break-words",
+                                displayValue === "—" ? "text-muted-foreground" : "font-medium"
+                              )}>
+                                {displayValue}
+                              </span>
+                            </div>
+                          );
+                        })}
                     </div>
                   </div>
                 </>
