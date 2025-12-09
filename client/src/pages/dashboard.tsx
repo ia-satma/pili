@@ -208,10 +208,11 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Traffic Light Summary */}
+        {/* Status Distribution - Project Lifecycle Status (from 'status' field) */}
         <Card className="lg:col-span-2 overflow-visible">
           <CardHeader>
-            <CardTitle className="text-base">Estado de Proyectos</CardTitle>
+            <CardTitle className="text-base">Estado del Proyecto</CardTitle>
+            <p className="text-xs text-muted-foreground">Ciclo de vida: Terminado, On going, Proyecto nuevo</p>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -221,12 +222,11 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie
-                      data={[
-                        { name: "En tiempo", value: data?.trafficLightSummary.green || 0 },
-                        { name: "Próximo a vencer", value: data?.trafficLightSummary.yellow || 0 },
-                        { name: "Vencido", value: data?.trafficLightSummary.red || 0 },
-                        { name: "Sin fecha", value: data?.trafficLightSummary.gray || 0 },
-                      ]}
+                      data={(data?.projectsByStatus || []).map((item, index) => ({
+                        name: item.name,
+                        value: item.count,
+                        fill: CHART_COLORS[index % CHART_COLORS.length],
+                      }))}
                       cx="50%"
                       cy="50%"
                       innerRadius={50}
@@ -234,10 +234,9 @@ export default function Dashboard() {
                       paddingAngle={2}
                       dataKey="value"
                     >
-                      <Cell fill={TRAFFIC_COLORS.green} />
-                      <Cell fill={TRAFFIC_COLORS.yellow} />
-                      <Cell fill={TRAFFIC_COLORS.red} />
-                      <Cell fill={TRAFFIC_COLORS.gray} />
+                      {(data?.projectsByStatus || []).map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
                     </Pie>
                     <Tooltip
                       contentStyle={{
@@ -246,27 +245,13 @@ export default function Dashboard() {
                         borderRadius: "6px",
                       }}
                     />
+                    <Legend 
+                      verticalAlign="bottom" 
+                      height={36}
+                      formatter={(value) => <span className="text-sm">{value}</span>}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
-                
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-traffic-green" />
-                    <span className="text-sm">En tiempo ({data?.trafficLightSummary.green || 0})</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-traffic-yellow" />
-                    <span className="text-sm">Próximo ({data?.trafficLightSummary.yellow || 0})</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-traffic-red" />
-                    <span className="text-sm">Vencido ({data?.trafficLightSummary.red || 0})</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-traffic-gray" />
-                    <span className="text-sm">Sin fecha ({data?.trafficLightSummary.gray || 0})</span>
-                  </div>
-                </div>
               </div>
             )}
           </CardContent>

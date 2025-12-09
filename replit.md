@@ -142,7 +142,10 @@ npm run db:push      # Push schema to database
 
 ## Recent Changes
 - December 9, 2025: Semantic PMO Field Organization
-  - **Dashboard Cleanup**: Removed redundant "Distribución por Estado" chart that duplicated traffic light information
+  - **Dashboard Correction**: Replaced redundant traffic light pie chart ("Estado de Proyectos") with "Distribución por Estado del Proyecto" (Terminado/On going/Proyecto nuevo) - uses `status` field, distinct from `estatusAlDia` traffic light
+  - **Two Independent Dimensions Clarified**:
+    - `status` = Project lifecycle state (Terminado, On going, Proyecto nuevo, Duplicado-Cancelado)
+    - `estatusAlDia` = Risk/timing indicator (used for traffic lights in table rows only)
   - **7 PMO Categories**: ExtraFields now organized into semantic sections for RAG-ready data structure:
     - Gobierno y Roles (Black Belt Lead, DTC Lead, Business Process Analyst)
     - Priorización y Scoring (Ranking, Puntaje Total, Total Valor/Esfuerzo)
