@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { X, Calendar, User, Building2, Flag, Clock, FileText, ChevronDown } from "lucide-react";
+import { X, Calendar, User, Building2, Flag, Clock, FileText, ChevronDown, Hash, Users, Briefcase, MessageSquare, AlertTriangle, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -153,42 +153,143 @@ export function ProjectDetailDrawer({
             </div>
 
             <TabsContent value="overview" className="px-6 py-4 space-y-6">
-              {/* Metadata Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <User className="h-3 w-3" />
-                    <span>Responsable</span>
+              {/* Identificación */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Identificación</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  {project.legacyId && (
+                    <div className="space-y-1" data-testid="field-legacy-id">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Hash className="h-3 w-3" />
+                        <span>ID / Ranking</span>
+                      </div>
+                      <p className="text-sm font-medium">{project.legacyId}</p>
+                    </div>
+                  )}
+                  <div className="space-y-1" data-testid="field-estatus-al-dia">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <AlertTriangle className="h-3 w-3" />
+                      <span>Estatus al Día</span>
+                    </div>
+                    <p className={cn(
+                      "text-sm font-medium",
+                      trafficLight === "green" && "text-traffic-green",
+                      trafficLight === "red" && "text-traffic-red",
+                      trafficLight === "yellow" && "text-traffic-yellow"
+                    )}>
+                      {project.estatusAlDia || "—"}
+                    </p>
                   </div>
-                  <p className="text-sm font-medium">{project.responsible || "—"}</p>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Building2 className="h-3 w-3" />
-                    <span>Departamento</span>
+                  <div className="space-y-1" data-testid="field-status">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <FileText className="h-3 w-3" />
+                      <span>Tipo de Iniciativa / Fase</span>
+                    </div>
+                    <p className="text-sm font-medium">{project.status || "—"}</p>
                   </div>
-                  <p className="text-sm font-medium">{project.departmentName || "—"}</p>
+                  {project.projectType && (
+                    <div className="space-y-1" data-testid="field-project-type">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Briefcase className="h-3 w-3" />
+                        <span>Tipo de Proyecto</span>
+                      </div>
+                      <p className="text-sm font-medium">{project.projectType}</p>
+                    </div>
+                  )}
+                  {project.category && (
+                    <div className="space-y-1" data-testid="field-category">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <FileText className="h-3 w-3" />
+                        <span>Categoría</span>
+                      </div>
+                      <p className="text-sm font-medium">{project.category}</p>
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Calendar className="h-3 w-3" />
-                    <span>Fecha Inicio</span>
+              </div>
+
+              <Separator />
+
+              {/* Responsables */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Responsables</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1" data-testid="field-responsible">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <User className="h-3 w-3" />
+                      <span>Líder / Solicitante</span>
+                    </div>
+                    <p className="text-sm font-medium">{project.responsible || "—"}</p>
                   </div>
-                  <p className="text-sm font-medium">{formatDate(project.startDate)}</p>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Flag className="h-3 w-3" />
-                    <span>Fecha Fin Est.</span>
+                  <div className="space-y-1" data-testid="field-sponsor">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Users className="h-3 w-3" />
+                      <span>Dueño del Proceso / Sponsor</span>
+                    </div>
+                    <p className="text-sm font-medium">{project.sponsor || "—"}</p>
                   </div>
-                  <p className="text-sm font-medium">
-                    {project.endDateEstimatedTbd ? "TBD" : formatDate(project.endDateEstimated)}
-                  </p>
+                  <div className="space-y-1" data-testid="field-department">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Building2 className="h-3 w-3" />
+                      <span>Proceso de Negocio / Área</span>
+                    </div>
+                    <p className="text-sm font-medium">{project.departmentName || "—"}</p>
+                  </div>
                 </div>
-                <div className="space-y-1">
+              </div>
+
+              <Separator />
+
+              {/* Fechas */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Fechas</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  {project.registrationDate && (
+                    <div className="space-y-1" data-testid="field-registration-date">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        <span>Fecha de Registro</span>
+                      </div>
+                      <p className="text-sm font-medium">{formatDate(project.registrationDate)}</p>
+                    </div>
+                  )}
+                  <div className="space-y-1" data-testid="field-start-date">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      <span>Fecha Inicio</span>
+                    </div>
+                    <p className="text-sm font-medium">{formatDate(project.startDate)}</p>
+                  </div>
+                  <div className="space-y-1" data-testid="field-end-date-estimated">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Flag className="h-3 w-3" />
+                      <span>Fecha Término Estimada</span>
+                    </div>
+                    <p className="text-sm font-medium">
+                      {project.endDateEstimatedTbd ? "TBD" : formatDate(project.endDateEstimated)}
+                    </p>
+                  </div>
+                  {project.endDateActual && (
+                    <div className="space-y-1" data-testid="field-end-date-actual">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Flag className="h-3 w-3" />
+                        <span>Fecha Término Real</span>
+                      </div>
+                      <p className="text-sm font-medium">{formatDate(project.endDateActual)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Avance */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Avance</h4>
+                <div className="space-y-1" data-testid="field-progress">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
-                    <span>Avance</span>
+                    <span>% Avance</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
@@ -201,13 +302,6 @@ export function ProjectDetailDrawer({
                       {project.percentComplete || 0}%
                     </span>
                   </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <FileText className="h-3 w-3" />
-                    <span>Categoría</span>
-                  </div>
-                  <p className="text-sm font-medium">{project.category || "—"}</p>
                 </div>
               </div>
 
@@ -307,7 +401,7 @@ export function ProjectDetailDrawer({
                 <>
                   <Separator />
                   <div className="space-y-3">
-                    <h4 className="text-sm font-medium">Última Actualización</h4>
+                    <h4 className="text-sm font-medium">Última Actualización (S/N)</h4>
                     {project.parsedStatus && (
                       <div className="space-y-1">
                         <span className="text-xs font-medium text-primary">S: Status</span>
@@ -324,6 +418,63 @@ export function ProjectDetailDrawer({
                         </p>
                       </div>
                     )}
+                  </div>
+                </>
+              )}
+
+              {/* Comentarios */}
+              {project.comments && (
+                <>
+                  <Separator />
+                  <div className="space-y-2" data-testid="field-comments">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <MessageSquare className="h-3 w-3" />
+                      <span className="font-medium uppercase tracking-wider">Comentarios</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {project.comments}
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* Extra Fields from Excel */}
+              {project.extraFields && Object.keys(project.extraFields).length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-3" data-testid="extra-fields-section">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-3 w-3 text-muted-foreground" />
+                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Datos Adicionales del Excel
+                      </h4>
+                    </div>
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {Object.entries(project.extraFields as Record<string, unknown>)
+                        .filter(([key, value]) => 
+                          value !== null && 
+                          value !== undefined && 
+                          value !== "" &&
+                          !key.includes("ESTATUS AL DÍA") // Already shown above
+                        )
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([key, value]) => (
+                          <div 
+                            key={key} 
+                            className="grid grid-cols-[1fr_2fr] gap-2 py-1 border-b border-border/50 last:border-0"
+                            data-testid={`extra-field-${key.replace(/\s+/g, "-").toLowerCase()}`}
+                          >
+                            <span className="text-xs text-muted-foreground truncate" title={key}>
+                              {key}
+                            </span>
+                            <span className="text-xs font-medium break-words">
+                              {typeof value === "object" 
+                                ? JSON.stringify(value) 
+                                : String(value)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 </>
               )}
