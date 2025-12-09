@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { X, Calendar, User, Building2, Flag, Clock, FileText, ChevronDown, Hash, Users, Briefcase, MessageSquare, AlertTriangle, Database, Target, DollarSign, GitBranch, Timer, MapPin, TrendingUp, Award, Zap, Lightbulb, AlertCircle, BarChart3 } from "lucide-react";
+import { X, Calendar, User, Building2, Flag, Clock, FileText, ChevronDown, Hash, Users, Briefcase, MessageSquare, AlertTriangle, Database, Target, DollarSign, GitBranch, Timer, MapPin, TrendingUp, Award, Zap, Lightbulb, AlertCircle, BarChart3, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -12,9 +12,41 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { Project, ProjectUpdate, Milestone, ChangeLog } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+
+function FieldLabelWithTooltip({ 
+  icon: Icon, 
+  label, 
+  tooltip 
+}: { 
+  icon: React.ElementType; 
+  label: string; 
+  tooltip?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <Icon className="h-3 w-3" />
+      <span>{label}</span>
+      {tooltip && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <HelpCircle className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[280px] text-xs">
+            {tooltip}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </div>
+  );
+}
 
 // PMO Field Categories - Using EXACT Excel column names
 const PMO_FIELD_CATEGORIES: {
@@ -529,6 +561,14 @@ function ScoringBreakdownSection({ project }: { project: Project }) {
           {quadrant.name}
         </Badge>
         <span className="text-xs text-muted-foreground">{quadrant.description}</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <HelpCircle className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[280px] text-xs">
+            Clasificación: Quick Win (ejecutar primero), Big Bet, Fill-In, Money Pit (evitar)
+          </TooltipContent>
+        </Tooltip>
       </div>
       
       {/* Score Summary */}
@@ -539,6 +579,14 @@ function ScoringBreakdownSection({ project }: { project: Project }) {
             <span className="flex items-center gap-1 text-muted-foreground">
               <TrendingUp className="h-3 w-3" />
               Total Valor
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[280px] text-xs">
+                  Suma de 5 dimensiones: sponsor, impacto financiero, alcance, transformación, usuarios
+                </TooltipContent>
+              </Tooltip>
             </span>
             <span className="font-medium tabular-nums">{totalValor ?? "—"}/{maxValor}</span>
           </div>
@@ -556,7 +604,14 @@ function ScoringBreakdownSection({ project }: { project: Project }) {
             <span className="flex items-center gap-1 text-muted-foreground">
               <Target className="h-3 w-3" />
               Total Esfuerzo
-              <span className="text-[10px]">(mayor = menos esfuerzo)</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[280px] text-xs">
+                  Suma de 4 dimensiones (invertido: mayor = menor esfuerzo real)
+                </TooltipContent>
+              </Tooltip>
             </span>
             <span className="font-medium tabular-nums">{totalEsfuerzo ?? "—"}/{maxEsfuerzo}</span>
           </div>
@@ -824,18 +879,20 @@ export function ProjectDetailDrawer({
                 <div className="grid grid-cols-2 gap-4">
                   {project.legacyId && (
                     <div className="space-y-1" data-testid="field-legacy-id">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Hash className="h-3 w-3" />
-                        <span>ID / Ranking</span>
-                      </div>
+                      <FieldLabelWithTooltip 
+                        icon={Hash} 
+                        label="ID / Ranking" 
+                        tooltip="Trazabilidad hacia sistemas anteriores (Power Steering, DevOps)"
+                      />
                       <p className="text-sm font-medium">{project.legacyId}</p>
                     </div>
                   )}
                   <div className="space-y-1" data-testid="field-estatus-al-dia">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <AlertTriangle className="h-3 w-3" />
-                      <span>Estatus al Día</span>
-                    </div>
+                    <FieldLabelWithTooltip 
+                      icon={AlertTriangle} 
+                      label="Estatus al Día" 
+                      tooltip="Indicador visual de riesgo: On time, Stand by, En riesgo"
+                    />
                     <p className={cn(
                       "text-sm font-medium",
                       trafficLight === "green" && "text-traffic-green",
@@ -880,24 +937,27 @@ export function ProjectDetailDrawer({
                 <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Responsables</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1" data-testid="field-responsible">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <User className="h-3 w-3" />
-                      <span>Líder / Solicitante</span>
-                    </div>
+                    <FieldLabelWithTooltip 
+                      icon={User} 
+                      label="Líder / Solicitante" 
+                      tooltip="Persona responsable de la ejecución diaria del proyecto"
+                    />
                     <p className="text-sm font-medium">{project.responsible || "—"}</p>
                   </div>
                   <div className="space-y-1" data-testid="field-sponsor">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Users className="h-3 w-3" />
-                      <span>Dueño del Proceso / Sponsor</span>
-                    </div>
+                    <FieldLabelWithTooltip 
+                      icon={Users} 
+                      label="Dueño del Proceso / Sponsor" 
+                      tooltip="Ejecutivo que patrocina, remueve obstáculos y es dueño del proceso"
+                    />
                     <p className="text-sm font-medium">{project.sponsor || "—"}</p>
                   </div>
                   <div className="space-y-1" data-testid="field-department">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Building2 className="h-3 w-3" />
-                      <span>Proceso de Negocio / Área</span>
-                    </div>
+                    <FieldLabelWithTooltip 
+                      icon={Building2} 
+                      label="Proceso de Negocio / Área" 
+                      tooltip="Área funcional que se beneficia del proyecto"
+                    />
                     <p className="text-sm font-medium">{project.departmentName || "—"}</p>
                   </div>
                 </div>
@@ -919,27 +979,30 @@ export function ProjectDetailDrawer({
                     </div>
                   )}
                   <div className="space-y-1" data-testid="field-start-date">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      <span>Fecha Inicio</span>
-                    </div>
+                    <FieldLabelWithTooltip 
+                      icon={Calendar} 
+                      label="Fecha Inicio" 
+                      tooltip="Inicio oficial del proyecto - base para calcular tiempo de ciclo"
+                    />
                     <p className="text-sm font-medium">{formatDate(project.startDate)}</p>
                   </div>
                   <div className="space-y-1" data-testid="field-end-date-estimated">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Flag className="h-3 w-3" />
-                      <span>Fecha Término Estimada</span>
-                    </div>
+                    <FieldLabelWithTooltip 
+                      icon={Flag} 
+                      label="Fecha Término Estimada" 
+                      tooltip="Compromiso de entrega para planificar beneficios"
+                    />
                     <p className="text-sm font-medium">
                       {project.endDateEstimatedTbd ? "TBD" : formatDate(project.endDateEstimated)}
                     </p>
                   </div>
                   {project.endDateActual && (
                     <div className="space-y-1" data-testid="field-end-date-actual">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Flag className="h-3 w-3" />
-                        <span>Fecha Término Real</span>
-                      </div>
+                      <FieldLabelWithTooltip 
+                        icon={Flag} 
+                        label="Fecha Término Real" 
+                        tooltip="Cierre real para medir precisión de estimaciones"
+                      />
                       <p className="text-sm font-medium">{formatDate(project.endDateActual)}</p>
                     </div>
                   )}
@@ -952,10 +1015,11 @@ export function ProjectDetailDrawer({
               <div className="space-y-3">
                 <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Avance</h4>
                 <div className="space-y-1" data-testid="field-progress">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    <span>% Avance</span>
-                  </div>
+                  <FieldLabelWithTooltip 
+                    icon={Clock} 
+                    label="% Avance" 
+                    tooltip="Porcentaje de completitud para identificar proyectos estancados"
+                  />
                   <div className="flex items-center gap-2">
                     <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                       <div
