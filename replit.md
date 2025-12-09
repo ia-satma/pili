@@ -106,7 +106,14 @@ A Project Management Office (PMO) dashboard for managing continuous improvement 
 - `PATCH /api/admin/users/:id/role` - Update user role
 
 ### Traffic Light Rules
-- **Green**: On track, deadline not approaching
+**Priority 1**: Uses "ESTATUS AL DÍA" column from Excel when available:
+- **Green**: "On time", "A tiempo", "En tiempo"
+- **Red**: Contains "riesgo", "vencido", "delayed", "retrasado", "at risk"
+- **Gray**: "No iniciado", "Cancelado", "Stand by", "Not started"
+- **Yellow**: Any other non-empty value
+
+**Fallback** (if no estatusAlDia):
+- **Green**: On track or closed status
 - **Yellow**: Within 7 days of deadline
 - **Red**: Overdue and not closed
 - **Gray**: TBD date or no date specified
