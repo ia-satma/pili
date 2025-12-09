@@ -55,6 +55,14 @@ export function calculateTrafficLight(
   warningDays: number = 7
 ): TrafficLightStatus {
   // PRIORITY 1: Use "ESTATUS AL DÍA" from Excel if available
+  // These are the EXACT values from the Excel filter:
+  // - On time (GREEN)
+  // - No iniciado (GRAY)
+  // - Cancelado (GRAY)
+  // - Stand by (YELLOW)
+  // - En riesgo ente >1<2 meses (RED)
+  // - En riesgo o vencido > 2 meses (RED)
+  // - (Vacías) - empty values (GRAY)
   if (estatusAlDia) {
     const lower = estatusAlDia.toLowerCase().trim();
     
@@ -63,18 +71,23 @@ export function calculateTrafficLight(
       return "green";
     }
     
-    // RED: Any risk or overdue variant
-    if (lower.includes("riesgo") || lower.includes("vencido") || lower === "delayed" || lower === "retrasado" || lower === "at risk") {
+    // RED: Risk or overdue variants (exact Excel values)
+    // "En riesgo ente >1<2 meses" and "En riesgo o vencido > 2 meses"
+    if (lower.includes("riesgo") || lower.includes("vencido")) {
       return "red";
     }
     
-    // GRAY: Not started, cancelled, stand by
-    if (lower === "no iniciado" || lower === "not started" || lower === "pending" || 
-        lower === "cancelado" || lower === "cancelled" || lower === "stand by" || lower === "standby") {
+    // YELLOW: Stand by
+    if (lower === "stand by" || lower === "standby" || lower === "en espera") {
+      return "yellow";
+    }
+    
+    // GRAY: Not started, cancelled
+    if (lower === "no iniciado" || lower === "cancelado" || lower === "not started" || lower === "cancelled") {
       return "gray";
     }
     
-    // Unknown value = yellow
+    // Any other non-empty value = yellow (unknown status)
     if (lower.length > 0) {
       return "yellow";
     }
