@@ -11,17 +11,20 @@ import {
   FileSpreadsheet,
   Trash2,
   Info,
+  LogIn,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, ExcelVersion } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ChatResponse {
   message: ChatMessage;
@@ -37,6 +40,7 @@ export function PMOChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery<ChatMessagesResponse>({
     queryKey: ["/api/chat/messages"],
@@ -50,7 +54,8 @@ export function PMOChat() {
 
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
-      return apiRequest("POST", "/api/chat/send", { content }) as Promise<ChatResponse>;
+      const response = await apiRequest("POST", "/api/chat/send", { content });
+      return response.json() as Promise<ChatResponse>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/chat/messages"] });
@@ -280,35 +285,59 @@ export function PMOChat() {
       </ScrollArea>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="p-4 border-t border-border">
-        <div className="flex gap-2">
-          <Textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Pregunta al PMO Bot..."
-            className="min-h-[44px] max-h-32 resize-none"
-            disabled={sendMessageMutation.isPending}
-            data-testid="input-chat-message"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={!input.trim() || sendMessageMutation.isPending}
-            data-testid="button-send-message"
-          >
-            {sendMessageMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
+      {!authLoading && !isAuthenticated ? (
+        <div className="p-4 border-t border-border">
+          <Card className="overflow-visible bg-muted/30 border-dashed">
+            <CardContent className="p-4 text-center space-y-3">
+              <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                <Lock className="h-5 w-5" />
+                <span className="font-medium">Iniciar sesión requerido</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Para usar el PMO Bot necesitas iniciar sesión con tu cuenta de Replit.
+              </p>
+              <Button 
+                onClick={() => window.location.href = "/api/login"}
+                className="gap-2"
+                data-testid="button-login-chat"
+              >
+                <LogIn className="h-4 w-4" />
+                Iniciar Sesión
+              </Button>
+            </CardContent>
+          </Card>
         </div>
-        <p className="text-xs text-muted-foreground mt-2 text-center">
-          Las respuestas se basan exclusivamente en los datos del Excel cargado
-        </p>
-      </form>
+      ) : (
+        <form onSubmit={handleSubmit} className="p-4 border-t border-border">
+          <div className="flex gap-2">
+            <Textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Pregunta al PMO Bot..."
+              className="min-h-[44px] max-h-32 resize-none"
+              disabled={sendMessageMutation.isPending}
+              data-testid="input-chat-message"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!input.trim() || sendMessageMutation.isPending}
+              data-testid="button-send-message"
+            >
+              {sendMessageMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2 text-center">
+            Las respuestas se basan exclusivamente en los datos del Excel cargado
+          </p>
+        </form>
+      )}
     </div>
   );
 }

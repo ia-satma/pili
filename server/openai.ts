@@ -3,7 +3,7 @@
 // without requiring your own API key. Charges are billed to your Replit credits.
 import OpenAI from "openai";
 import pLimit from "p-limit";
-import pRetry from "p-retry";
+import pRetry, { AbortError } from "p-retry";
 import type { Project } from "@shared/schema";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
@@ -65,11 +65,16 @@ CAPACIDADES:
 - Mostrar información de campos específicos
 - Responder preguntas sobre fechas, avances, estados
 
-FORMATO DE RESPUESTA:
-- Sé conciso y directo
-- Usa listas cuando sea apropiado
+FORMATO DE RESPUESTA (OBLIGATORIO JSON):
+Debes responder SIEMPRE en formato JSON con esta estructura:
+{
+  "respuesta": "Tu respuesta aquí...",
+  "citas": [{"fila": 1, "columna": "A", "valor": "dato citado"}]
+}
+- Sé conciso y directo en el campo "respuesta"
+- Usa listas cuando sea apropiado dentro del texto
 - Incluye los nombres exactos de los proyectos cuando los menciones
-- Si hay varios resultados, muéstralos en formato estructurado
+- El campo "citas" puede estar vacío [] si no hay citas específicas
 
 DATOS DISPONIBLES POR PROYECTO:
 - projectName: Nombre del proyecto
@@ -165,9 +170,10 @@ ${JSON.stringify(projectsSummary, null, 2)}
         minTimeout: 1000,
         maxTimeout: 10000,
         factor: 2,
-        onFailedAttempt: (error) => {
-          if (!isRateLimitError(error)) {
-            throw new pRetry.AbortError(error);
+        onFailedAttempt: (failedAttempt) => {
+          const originalError = failedAttempt.error || failedAttempt;
+          if (!isRateLimitError(originalError)) {
+            throw new AbortError(String(originalError));
           }
         },
       }
