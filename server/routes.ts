@@ -71,17 +71,38 @@ const upload = multer({
 });
 
 // Calculate traffic light status
+// Priority: estatusAlDia (from Excel) > calculated from dates
 function calculateTrafficLight(
   endDateEstimated: string | null | undefined,
   endDateEstimatedTbd: boolean | null | undefined,
-  status: string | null | undefined
+  status: string | null | undefined,
+  estatusAlDia?: string | null | undefined
 ): "green" | "yellow" | "red" | "gray" {
+  // PRIORITY 1: Use "ESTATUS AL DÍA" from Excel if available
+  if (estatusAlDia) {
+    const lower = estatusAlDia.toLowerCase().trim();
+    if (lower === "on time" || lower === "a tiempo" || lower === "en tiempo") {
+      return "green";
+    }
+    if (lower === "delayed" || lower === "retrasado" || lower === "en riesgo" || lower === "at risk") {
+      return "red";
+    }
+    if (lower === "no iniciado" || lower === "not started" || lower === "pending") {
+      return "gray";
+    }
+    // If estatusAlDia has a value but doesn't match known patterns, treat as yellow
+    if (lower.length > 0) {
+      return "yellow";
+    }
+  }
+  
+  // FALLBACK: Calculate from dates if no estatusAlDia
   if (endDateEstimatedTbd || !endDateEstimated) {
     return "gray";
   }
 
   const lowerStatus = status?.toLowerCase() || "";
-  if (lowerStatus === "cerrado" || lowerStatus === "closed") {
+  if (lowerStatus === "cerrado" || lowerStatus === "closed" || lowerStatus === "terminado") {
     return "green";
   }
 
@@ -206,7 +227,7 @@ function calculateKpis(projects: Project[], versionId: number): InsertKpiValue[]
   let greenCount = 0, yellowCount = 0, redCount = 0, grayCount = 0;
   
   projects.forEach(p => {
-    const light = calculateTrafficLight(p.endDateEstimated, p.endDateEstimatedTbd, p.status);
+    const light = calculateTrafficLight(p.endDateEstimated, p.endDateEstimatedTbd, p.status, p.estatusAlDia);
     if (light === "green") greenCount++;
     else if (light === "yellow") yellowCount++;
     else if (light === "red") redCount++;
@@ -371,8 +392,8 @@ export async function registerRoutes(
         const dept = project.departmentName || "Sin departamento";
         departmentCounts[dept] = (departmentCounts[dept] || 0) + 1;
         
-        // Traffic light
-        const light = calculateTrafficLight(project.endDateEstimated, project.endDateEstimatedTbd, project.status);
+        // Traffic light - uses estatusAlDia from Excel when available
+        const light = calculateTrafficLight(project.endDateEstimated, project.endDateEstimatedTbd, project.status, project.estatusAlDia);
         trafficSummary[light]++;
         
         if (light === "red") {

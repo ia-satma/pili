@@ -22,6 +22,7 @@ export interface ParsedProject {
   responsible?: string | null;
   sponsor?: string | null;
   status?: string | null;
+  estatusAlDia?: string | null; // From "ESTATUS AL DÍA" column - On time, Delayed, etc.
   priority?: string | null;
   category?: string | null;
   projectType?: string | null;
@@ -360,11 +361,17 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "sponsor": "sponsor",
   "patrocinador": "sponsor",
   
-  // Status
+  // Status (Tipo de Iniciativa / Fase)
   "estado": "status",
   "status": "status",
   "estatus": "status",
   "tipo de iniciativa": "status",
+  "fase: nuevo / análisis / desarrollo / pruebas/ implementado / terminado": "status",
+  "fase: nuevo / analisis / desarrollo / pruebas/ implementado / terminado": "status",
+  
+  // ESTATUS AL DÍA - This is the REAL traffic light status from Excel
+  "estatus al dia": "estatusAlDia",
+  "estatus al día": "estatusAlDia",
   
   // Priority
   "prioridad": "priority",

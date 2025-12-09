@@ -63,6 +63,7 @@ export const projects = pgTable("projects", {
   
   // Status fields
   status: text("status"), // Open, Closed, On Hold, etc.
+  estatusAlDia: text("estatus_al_dia"), // From Excel column "ESTATUS AL DÍA" - On time, Delayed, etc.
   priority: text("priority"), // High, Medium, Low
   category: text("category"),
   projectType: text("project_type"),
