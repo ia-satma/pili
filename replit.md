@@ -128,6 +128,45 @@ A Project Management Office (PMO) dashboard for managing continuous improvement 
 - Flexible column mapping for project name and legacy ID
 - Result counters: proyectosCreados, proyectosBorradorIncompleto, filasDescartadas
 
+### PMO Scoring System (Columnas AA-AO del Excel)
+Sistema de priorización de portafolio basado en Matriz Valor/Esfuerzo.
+
+**DIMENSIONES DE VALOR** (suman a "Total Valor"):
+| Dimensión | Escala | Propósito PMO |
+|-----------|--------|---------------|
+| Nivel de Sponsor | VP (5), Director (4), Gerente (3), Supervisor (2), Usuario (1) | Mayor nivel = mayor importancia estratégica |
+| Impacto Financiero | Alto >300 KUSD (5), Medio (3), Bajo (1), Ninguno (0) | Proyectos de alto impacto financiero priorizados |
+| Alcance Geográfico | Nlatam (5), Nacional (3), Local (1), No (0) | Mayor alcance = mayor valor organizacional |
+| Transformación | Transformación (5), Mejora completa (3), Mejora parcial (1), Ninguno (0) | Proyectos transformacionales vs incrementales |
+| Volumen Usuarios | >500 (5), 300-500 (4), 200-300 (3), 100-200 (2), <100 (1) | Más usuarios impactados = mayor valor |
+
+**DIMENSIONES DE ESFUERZO** (suman a "Total Esfuerzo" - INVERTIDO: mayor número = MENOS esfuerzo real):
+| Dimensión | Escala | Propósito PMO |
+|-----------|--------|---------------|
+| Tamaño Proyecto | Cambio Menor ≤40hrs (5), Cambio Mayor (4), Proyecto Menor (3), Mediano (2), Mayor (1) | Proyectos pequeños = fáciles de ejecutar |
+| Dependencias | Ninguna (5), 1 (4), 2-5 (3), >5 (1) | Menos dependencias = menor riesgo de bloqueo |
+| Inversión Requerida | No (5), <5 KUSD (4), 5-20 KUSD (3), 20-100 KUSD (2), >100 KUSD (1) | Menor inversión = menor barrera de entrada |
+| Tiempo Implementación | <1 mes (5), 1-3 meses (3), >3 meses (1) | Menor tiempo = resultados más rápidos |
+
+**CÁLCULOS**:
+- `Total Valor` = Σ dimensiones de valor (rango típico: 200-500)
+- `Total Esfuerzo` = Σ dimensiones de esfuerzo (rango típico: 300-525)
+- `Puntaje Total` = Total Valor + Total Esfuerzo
+- `Ranking` = Orden descendente por Puntaje Total
+
+**MATRIZ DE CUADRANTES** (Visualización en Dashboard):
+| Cuadrante | Criterio | Recomendación PMO |
+|-----------|----------|-------------------|
+| **Quick Wins** (Verde) | Alto Valor + Bajo Esfuerzo | Ejecutar PRIMERO - máximo ROI |
+| **Big Bets** (Azul) | Alto Valor + Alto Esfuerzo | Planificar cuidadosamente, alto impacto estratégico |
+| **Fill-Ins** (Amarillo) | Bajo Valor + Bajo Esfuerzo | Ejecutar cuando haya capacidad disponible |
+| **Money Pit** (Rojo) | Bajo Valor + Alto Esfuerzo | EVITAR o cancelar - peor ROI |
+
+**Uso en la Plataforma**:
+- Dashboard: Gráfico ScatterChart de Matriz Valor/Esfuerzo con cuadrantes
+- Project Drawer: Panel "Análisis de Priorización" con breakdown de dimensiones
+- API: `GET /api/scoring/matrix` retorna proyectos con datos de scoring
+
 ### User Preferences
 - Language: Spanish (ES-MX)
 - Zero hallucination requirement for all data
@@ -141,6 +180,15 @@ npm run db:push      # Push schema to database
 ```
 
 ## Recent Changes
+- December 9, 2025: PMO Scoring System Deep Analysis
+  - **Formula Analysis**: Analyzed Excel columns AA-AO scoring/weighting system (row 3 category descriptors)
+  - **Matriz Valor/Esfuerzo**: ScatterChart visualization with 4 quadrants (Quick Wins, Big Bets, Fill-Ins, Money Pit)
+  - **Scoring Breakdown Panel**: Project drawer shows Total Valor, Total Esfuerzo, Puntaje Total, Ranking with progress bars
+  - **Quadrant Classification**: Each project classified with colored badge indicating priority category
+  - **Dimension Analysis**: 5 value dimensions + 4 effort dimensions identified and documented
+  - **API Endpoint**: `GET /api/scoring/matrix` returns projects with scoring data and quadrant counts
+  - **Data Source Fallback**: Reads from dedicated columns OR extraFields for backward compatibility
+
 - December 9, 2025: Semantic PMO Field Organization
   - **Dashboard Correction**: Replaced redundant traffic light pie chart ("Estado de Proyectos") with "Distribución por Estado del Proyecto" (Terminado/On going/Proyecto nuevo) - uses `status` field, distinct from `estatusAlDia` traffic light
   - **Two Independent Dimensions Clarified**:
