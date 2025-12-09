@@ -1082,6 +1082,78 @@ export async function registerRoutes(
     }
   });
 
+  // ===== SCORING MATRIX =====
+  app.get("/api/scoring/matrix", async (req, res) => {
+    try {
+      const allProjects = await storage.getProjects();
+      
+      // Extract scoring data from dedicated columns OR extraFields (for legacy data)
+      const projectsWithScoring = allProjects
+        .map(p => {
+          // Try dedicated columns first, then extraFields
+          const extra = (p.extraFields || {}) as Record<string, unknown>;
+          const totalValor = p.totalValor ?? (parseFloat(String(extra["Total Valor"] || "")) || null);
+          const totalEsfuerzo = p.totalEsfuerzo ?? (parseFloat(String(extra["Total Esfuerzo"] || "")) || null);
+          const puntajeTotal = p.puntajeTotal ?? (parseFloat(String(extra["Puntaje Total"] || "")) || null);
+          const ranking = p.ranking ?? (parseInt(String(extra["Ranking"] || extra["Renking General"] || ""), 10) || null);
+          
+          return {
+            id: p.id,
+            projectName: p.projectName,
+            departmentName: p.departmentName,
+            totalValor,
+            totalEsfuerzo,
+            puntajeTotal,
+            ranking,
+            status: p.status,
+          };
+        })
+        .filter(p => p.totalValor !== null && p.totalEsfuerzo !== null && p.totalValor > 0 && p.totalEsfuerzo > 0);
+      
+      // Calculate medians for quadrant lines
+      const valors = projectsWithScoring.map(p => p.totalValor!).sort((a, b) => a - b);
+      const esfuerzos = projectsWithScoring.map(p => p.totalEsfuerzo!).sort((a, b) => a - b);
+      
+      const medianValor = valors.length > 0 
+        ? valors[Math.floor(valors.length / 2)] 
+        : 0;
+      const medianEsfuerzo = esfuerzos.length > 0 
+        ? esfuerzos[Math.floor(esfuerzos.length / 2)] 
+        : 0;
+      
+      // Calculate quadrant counts
+      // Note: Higher totalEsfuerzo = LESS effort (inverted in Excel)
+      // So: Quick Wins = High Value + High totalEsfuerzo (less real effort)
+      const quadrants = {
+        quickWins: 0,  // High Value + Low Effort (high totalEsfuerzo)
+        bigBets: 0,    // High Value + High Effort (low totalEsfuerzo)
+        fillIns: 0,    // Low Value + Low Effort (high totalEsfuerzo)
+        moneyPit: 0,   // Low Value + High Effort (low totalEsfuerzo)
+      };
+      
+      projectsWithScoring.forEach(p => {
+        const highValue = p.totalValor! >= medianValor;
+        const lowEffort = p.totalEsfuerzo! >= medianEsfuerzo; // Higher = less effort
+        
+        if (highValue && lowEffort) quadrants.quickWins++;
+        else if (highValue && !lowEffort) quadrants.bigBets++;
+        else if (!highValue && lowEffort) quadrants.fillIns++;
+        else quadrants.moneyPit++;
+      });
+      
+      res.json({
+        projects: projectsWithScoring,
+        medianValor,
+        medianEsfuerzo,
+        quadrants,
+        total: projectsWithScoring.length,
+      });
+    } catch (error) {
+      console.error("Scoring matrix error:", error);
+      res.status(500).json({ message: "Error loading scoring matrix" });
+    }
+  });
+
   // ===== CHAT =====
   app.get("/api/chat/messages", async (req, res) => {
     try {

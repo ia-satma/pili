@@ -51,6 +51,11 @@ export interface ParsedProject {
   catalogoPendienteMapeo?: boolean | null;
   sourceVersionId?: number | null;
   isActive?: boolean | null;
+  // PMO Scoring fields
+  totalValor?: number | null;
+  totalEsfuerzo?: number | null;
+  puntajeTotal?: number | null;
+  ranking?: number | null;
 }
 
 export interface ParsedExcelData {
@@ -461,6 +466,22 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "comments": "comments",
   "notas": "comments",
   "notes": "comments",
+  
+  // PMO Scoring fields (columns AA-AO)
+  "total valor": "totalValor",
+  "totalvalor": "totalValor",
+  "total_valor": "totalValor",
+  "valor total": "totalValor",
+  "total esfuerzo": "totalEsfuerzo",
+  "totalesfuerzo": "totalEsfuerzo",
+  "total_esfuerzo": "totalEsfuerzo",
+  "esfuerzo total": "totalEsfuerzo",
+  "puntaje total": "puntajeTotal",
+  "puntajetotal": "puntajeTotal",
+  "puntaje_total": "puntajeTotal",
+  "total score": "puntajeTotal",
+  "ranking": "ranking",
+  "rank": "ranking",
 };
 
 function normalizeColumnName(name: string): string {
@@ -903,6 +924,17 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
               project.statusText = snParsed.statusText;
               project.parsedStatus = snParsed.parsedStatus;
               project.parsedNextSteps = snParsed.parsedNextSteps;
+              break;
+            }
+            
+            case "totalValor":
+            case "totalEsfuerzo":
+            case "puntajeTotal":
+            case "ranking": {
+              const numVal = typeof value === "number" ? value : parseInt(String(value), 10);
+              if (!isNaN(numVal)) {
+                (project as any)[field] = numVal;
+              }
               break;
             }
           }

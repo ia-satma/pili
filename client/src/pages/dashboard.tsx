@@ -30,6 +30,10 @@ import {
   Pie,
   Cell,
   Legend,
+  ScatterChart,
+  Scatter,
+  ZAxis,
+  ReferenceLine,
 } from "recharts";
 import type { Project } from "@shared/schema";
 
@@ -56,6 +60,30 @@ interface StaleProject {
   lastUpdated: string | null;
   daysSinceUpdate: number;
   departmentName: string | null;
+}
+
+interface ScoringProject {
+  id: number;
+  projectName: string;
+  departmentName: string | null;
+  totalValor: number;
+  totalEsfuerzo: number;
+  puntajeTotal: number | null;
+  ranking: number | null;
+  status: string | null;
+}
+
+interface ScoringMatrixData {
+  projects: ScoringProject[];
+  medianValor: number;
+  medianEsfuerzo: number;
+  quadrants: {
+    quickWins: number;
+    bigBets: number;
+    fillIns: number;
+    moneyPit: number;
+  };
+  total: number;
 }
 
 interface DashboardData {
@@ -87,11 +115,22 @@ const TRAFFIC_COLORS = {
   gray: "hsl(220, 9%, 46%)",
 };
 
+const QUADRANT_COLORS = {
+  quickWins: "hsl(142, 76%, 36%)",  // Green
+  bigBets: "hsl(217, 91%, 48%)",     // Blue
+  fillIns: "hsl(45, 93%, 47%)",      // Yellow
+  moneyPit: "hsl(0, 84%, 60%)",      // Red
+};
+
 export default function Dashboard() {
   useDocumentTitle("Dashboard");
   
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["/api/dashboard"],
+  });
+
+  const { data: scoringData, isLoading: scoringLoading } = useQuery<ScoringMatrixData>({
+    queryKey: ["/api/scoring/matrix"],
   });
 
   if (error) {
@@ -257,6 +296,146 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Value/Effort Matrix - Scatter Plot */}
+      <Card className="overflow-visible" data-testid="value-effort-matrix">
+        <CardHeader>
+          <CardTitle className="text-base">Matriz Valor/Esfuerzo</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Priorización de proyectos: Quick Wins, Big Bets, Fill-Ins, Money Pit
+          </p>
+        </CardHeader>
+        <CardContent>
+          {scoringLoading ? (
+            <Skeleton className="h-80 w-full" />
+          ) : !scoringData || scoringData.projects.length === 0 ? (
+            <div className="h-80 flex flex-col items-center justify-center text-muted-foreground">
+              <p>No hay datos de scoring disponibles</p>
+              <p className="text-xs mt-1">Cargue un archivo Excel con columnas de Total Valor y Total Esfuerzo</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.quickWins }} />
+                  <span>Quick Wins ({scoringData.quadrants.quickWins})</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.bigBets }} />
+                  <span>Big Bets ({scoringData.quadrants.bigBets})</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.fillIns }} />
+                  <span>Fill-Ins ({scoringData.quadrants.fillIns})</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.moneyPit }} />
+                  <span>Money Pit ({scoringData.quadrants.moneyPit})</span>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={320}>
+                <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    type="number" 
+                    dataKey="totalEsfuerzo" 
+                    name="Esfuerzo" 
+                    domain={['dataMin - 10', 'dataMax + 10']}
+                    label={{ value: 'Esfuerzo (mayor = menos esfuerzo real)', position: 'bottom', offset: 20, style: { fontSize: 12 } }}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <YAxis 
+                    type="number" 
+                    dataKey="totalValor" 
+                    name="Valor" 
+                    domain={['dataMin - 10', 'dataMax + 10']}
+                    label={{ value: 'Valor Estratégico', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <ZAxis range={[60, 60]} />
+                  <ReferenceLine 
+                    x={scoringData.medianEsfuerzo} 
+                    stroke="hsl(var(--muted-foreground))" 
+                    strokeDasharray="5 5"
+                    strokeWidth={1}
+                  />
+                  <ReferenceLine 
+                    y={scoringData.medianValor} 
+                    stroke="hsl(var(--muted-foreground))" 
+                    strokeDasharray="5 5"
+                    strokeWidth={1}
+                  />
+                  <Tooltip
+                    cursor={{ strokeDasharray: '3 3' }}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "6px",
+                      padding: "8px 12px",
+                    }}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length > 0) {
+                        const project = payload[0].payload as ScoringProject;
+                        const highValue = project.totalValor >= scoringData.medianValor;
+                        const lowEffort = project.totalEsfuerzo >= scoringData.medianEsfuerzo;
+                        let quadrant = "";
+                        let color = "";
+                        if (highValue && lowEffort) { quadrant = "Quick Win"; color = QUADRANT_COLORS.quickWins; }
+                        else if (highValue && !lowEffort) { quadrant = "Big Bet"; color = QUADRANT_COLORS.bigBets; }
+                        else if (!highValue && lowEffort) { quadrant = "Fill-In"; color = QUADRANT_COLORS.fillIns; }
+                        else { quadrant = "Money Pit"; color = QUADRANT_COLORS.moneyPit; }
+                        
+                        return (
+                          <div className="bg-card border rounded-md p-3 shadow-lg">
+                            <p className="font-medium text-sm mb-1">{project.projectName}</p>
+                            <p className="text-xs text-muted-foreground">{project.departmentName || "Sin departamento"}</p>
+                            <div className="mt-2 space-y-1 text-xs">
+                              <p>Valor: <span className="font-medium">{project.totalValor}</span></p>
+                              <p>Esfuerzo: <span className="font-medium">{project.totalEsfuerzo}</span></p>
+                              {project.ranking && <p>Ranking: <span className="font-medium">#{project.ranking}</span></p>}
+                            </div>
+                            <div className="mt-2 flex items-center gap-1">
+                              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                              <span className="text-xs font-medium" style={{ color }}>{quadrant}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Scatter 
+                    name="Proyectos" 
+                    data={scoringData.projects.map(p => {
+                      const highValue = p.totalValor >= scoringData.medianValor;
+                      const lowEffort = p.totalEsfuerzo >= scoringData.medianEsfuerzo;
+                      let fill = QUADRANT_COLORS.moneyPit;
+                      if (highValue && lowEffort) fill = QUADRANT_COLORS.quickWins;
+                      else if (highValue && !lowEffort) fill = QUADRANT_COLORS.bigBets;
+                      else if (!highValue && lowEffort) fill = QUADRANT_COLORS.fillIns;
+                      return { ...p, fill };
+                    })}
+                    fill="#8884d8"
+                  >
+                    {scoringData.projects.map((entry, index) => {
+                      const highValue = entry.totalValor >= scoringData.medianValor;
+                      const lowEffort = entry.totalEsfuerzo >= scoringData.medianEsfuerzo;
+                      let fill = QUADRANT_COLORS.moneyPit;
+                      if (highValue && lowEffort) fill = QUADRANT_COLORS.quickWins;
+                      else if (highValue && !lowEffort) fill = QUADRANT_COLORS.bigBets;
+                      else if (!highValue && lowEffort) fill = QUADRANT_COLORS.fillIns;
+                      return <Cell key={`cell-${index}`} fill={fill} />;
+                    })}
+                  </Scatter>
+                </ScatterChart>
+              </ResponsiveContainer>
+              <p className="text-xs text-center text-muted-foreground">
+                Cuadrantes definidos por mediana de Valor ({scoringData.medianValor}) y Esfuerzo ({scoringData.medianEsfuerzo})
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Recent Updates - Full Width */}
       <div className="grid grid-cols-1 gap-6">

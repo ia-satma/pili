@@ -97,6 +97,12 @@ export const projects = pgTable("projects", {
   // Extra fields stored as JSON for any unmapped columns
   extraFields: jsonb("extra_fields").$type<Record<string, unknown>>().default({}),
   
+  // PMO Scoring fields (from Excel columns AA-AO)
+  totalValor: integer("total_valor"), // Strategic value score (300-500)
+  totalEsfuerzo: integer("total_esfuerzo"), // Execution ease score (400-510, higher = less effort)
+  puntajeTotal: integer("puntaje_total"), // Total score (totalValor + totalEsfuerzo)
+  ranking: integer("ranking"), // Prioritization order
+  
   // Draft project flags for soft errors
   esBorradorIncompleto: boolean("es_borrador_incompleto").default(false),
   requiereNombre: boolean("requiere_nombre").default(false),

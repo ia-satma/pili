@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { X, Calendar, User, Building2, Flag, Clock, FileText, ChevronDown, Hash, Users, Briefcase, MessageSquare, AlertTriangle, Database, Target, DollarSign, GitBranch, Timer, MapPin } from "lucide-react";
+import { X, Calendar, User, Building2, Flag, Clock, FileText, ChevronDown, Hash, Users, Briefcase, MessageSquare, AlertTriangle, Database, Target, DollarSign, GitBranch, Timer, MapPin, TrendingUp, Award, Zap, Lightbulb, AlertCircle, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -333,6 +333,350 @@ function ExtraFieldsSections({ extraFields }: { extraFields: Record<string, unkn
         })}
         {renderOtherCategory()}
       </div>
+    </div>
+  );
+}
+
+// Scoring dimension definitions for parsing extraFields
+const SCORING_VALUE_DIMENSIONS = [
+  {
+    id: "sponsor",
+    label: "Nivel de Sponsor",
+    patterns: ["VP (5)", "Director (4)", "Gerente (3)", "Supervisor (2)", "Usuario (1)"],
+    maxScore: 5,
+  },
+  {
+    id: "financial",
+    label: "Impacto Financiero",
+    patterns: ["Alto >300 KUSD (5)", "Alto (5)", "Medio (3)", "Bajo (1)", "Ninguno (0)"],
+    maxScore: 5,
+  },
+  {
+    id: "geographic",
+    label: "Alcance Geográfico",
+    patterns: ["Nlatam (5)", "Nacional (3)", "Local (1)", "No (0)"],
+    maxScore: 5,
+  },
+  {
+    id: "transformation",
+    label: "Transformación",
+    patterns: ["Transformación (5)", "Tranformación (5)", "Mejora completa (3)", "Mejora parcial (1)", "Ninguno (0)"],
+    maxScore: 5,
+  },
+  {
+    id: "users",
+    label: "Volumen Usuarios",
+    patterns: ["> 500 (5)", "300-500 (4)", "200-300 (3)", "100-200 (2)", "< 100 (1)"],
+    maxScore: 5,
+  },
+];
+
+const SCORING_EFFORT_DIMENSIONS = [
+  {
+    id: "size",
+    label: "Tamaño Proyecto",
+    patterns: ["Cambio Menor <=40hrs (5)", "Cambio Menor (5)", "Cambio Mayor (4)", "Proyecto Menor (3)", "Proyecto Mediano (2)", "Proyecto Mayor (1)"],
+    maxScore: 5,
+  },
+  {
+    id: "dependencies",
+    label: "Dependencias",
+    patterns: ["Ninguna (5)", "1 (4)", "2-5 (3)", "> 5 (1)"],
+    maxScore: 5,
+  },
+  {
+    id: "investment",
+    label: "Inversión",
+    patterns: ["No (5)", "Si < 5 KUSD (4)", "< 5 KUSD (4)", "5-20 KUSD (3)", "20-100 KUSD (2)", "> 100 KUSD (1)"],
+    maxScore: 5,
+  },
+  {
+    id: "time",
+    label: "Tiempo Implementación",
+    patterns: ["Menos de 1 mes (5)", "< 1 mes (5)", "Entre 1 y 3 meses (3)", "1-3 meses (3)", "Más de 3 meses (1)", "> 3 meses (1)"],
+    maxScore: 5,
+  },
+];
+
+function extractScore(value: string): number | null {
+  const match = value.match(/\((\d+)\)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+function determineQuadrant(totalValor: number, totalEsfuerzo: number): {
+  name: string;
+  color: string;
+  icon: React.ElementType;
+  description: string;
+} {
+  // Thresholds based on actual data ranges (totalValor ~200-500, totalEsfuerzo ~180-525)
+  const valorThreshold = 360; // ~median value from actual data
+  const esfuerzoThreshold = 405; // ~median value from actual data
+  
+  const highValue = totalValor >= valorThreshold;
+  const highEffort = totalEsfuerzo >= esfuerzoThreshold; // High effort score = low real effort
+  
+  if (highValue && highEffort) {
+    return {
+      name: "Quick Win",
+      color: "bg-traffic-green/10 text-traffic-green border-traffic-green",
+      icon: Zap,
+      description: "Alto valor, bajo esfuerzo",
+    };
+  }
+  if (highValue && !highEffort) {
+    return {
+      name: "Big Bet",
+      color: "bg-blue-500/10 text-blue-500 border-blue-500",
+      icon: Target,
+      description: "Alto valor, alto esfuerzo",
+    };
+  }
+  if (!highValue && highEffort) {
+    return {
+      name: "Fill-In",
+      color: "bg-traffic-yellow/10 text-traffic-yellow border-traffic-yellow",
+      icon: Lightbulb,
+      description: "Bajo valor, bajo esfuerzo",
+    };
+  }
+  return {
+    name: "Money Pit",
+    color: "bg-traffic-red/10 text-traffic-red border-traffic-red",
+    icon: AlertCircle,
+    description: "Bajo valor, alto esfuerzo",
+  };
+}
+
+function ScoringBreakdownSection({ project }: { project: Project }) {
+  const [isBreakdownExpanded, setIsBreakdownExpanded] = useState(false);
+  
+  const extraFields = (project.extraFields || {}) as Record<string, unknown>;
+  
+  // Get scores from project columns or extraFields
+  const totalValor = project.totalValor ?? (typeof extraFields["Total Valor"] === "number" ? extraFields["Total Valor"] : null);
+  const totalEsfuerzo = project.totalEsfuerzo ?? (typeof extraFields["Total Esfuerzo"] === "number" ? extraFields["Total Esfuerzo"] : null);
+  const puntajeTotal = project.puntajeTotal ?? (typeof extraFields["Puntaje Total"] === "number" ? extraFields["Puntaje Total"] : null);
+  const ranking = project.ranking ?? (typeof extraFields["Ranking"] === "number" ? extraFields["Ranking"] : null);
+  
+  // If no scoring data available, don't render
+  if (totalValor === null && totalEsfuerzo === null && puntajeTotal === null) {
+    return null;
+  }
+  
+  const quadrant = determineQuadrant(totalValor || 0, totalEsfuerzo || 0);
+  const QuadrantIcon = quadrant.icon;
+  
+  // Parse dimension values from extraFields
+  const parseDimensions = (dimensions: typeof SCORING_VALUE_DIMENSIONS) => {
+    return dimensions.map((dim) => {
+      for (const pattern of dim.patterns) {
+        const fieldValue = extraFields[pattern];
+        if (fieldValue !== undefined && fieldValue !== null && fieldValue !== "") {
+          const score = extractScore(pattern);
+          return {
+            ...dim,
+            selectedValue: String(fieldValue),
+            selectedPattern: pattern,
+            score,
+          };
+        }
+      }
+      // Check if any field key contains the pattern
+      for (const [key, value] of Object.entries(extraFields)) {
+        for (const pattern of dim.patterns) {
+          if (key.includes(pattern) || (typeof value === "string" && value.includes(pattern))) {
+            const score = extractScore(pattern);
+            return {
+              ...dim,
+              selectedValue: String(value),
+              selectedPattern: key,
+              score,
+            };
+          }
+        }
+      }
+      return { ...dim, selectedValue: null, selectedPattern: null, score: null };
+    });
+  };
+  
+  const valueDimensions = parseDimensions(SCORING_VALUE_DIMENSIONS);
+  const effortDimensions = parseDimensions(SCORING_EFFORT_DIMENSIONS);
+  
+  // Based on actual Excel data, values are scaled (not raw 1-5 per dimension)
+  // Total Valor max ~500, Total Esfuerzo max ~525, Puntaje Total max ~1000
+  const maxValor = 500;
+  const maxEsfuerzo = 525;
+  const maxTotal = 1000;
+  
+  return (
+    <div className="space-y-4" data-testid="scoring-breakdown-section">
+      <div className="flex items-center gap-2">
+        <BarChart3 className="h-3 w-3 text-muted-foreground" />
+        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          Análisis de Priorización
+        </h4>
+      </div>
+      
+      {/* Quadrant Badge */}
+      <div className="flex items-center gap-2">
+        <Badge 
+          variant="outline" 
+          className={cn("gap-1 border", quadrant.color)}
+          data-testid="quadrant-badge"
+        >
+          <QuadrantIcon className="h-3 w-3" />
+          {quadrant.name}
+        </Badge>
+        <span className="text-xs text-muted-foreground">{quadrant.description}</span>
+      </div>
+      
+      {/* Score Summary */}
+      <div className="space-y-3 p-3 rounded-md border border-border bg-muted/30">
+        {/* Total Valor */}
+        <div className="space-y-1" data-testid="score-total-valor">
+          <div className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <TrendingUp className="h-3 w-3" />
+              Total Valor
+            </span>
+            <span className="font-medium tabular-nums">{totalValor ?? "—"}/{maxValor}</span>
+          </div>
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-traffic-green transition-all"
+              style={{ width: `${totalValor ? (totalValor / maxValor) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+        
+        {/* Total Esfuerzo */}
+        <div className="space-y-1" data-testid="score-total-esfuerzo">
+          <div className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <Target className="h-3 w-3" />
+              Total Esfuerzo
+              <span className="text-[10px]">(mayor = menos esfuerzo)</span>
+            </span>
+            <span className="font-medium tabular-nums">{totalEsfuerzo ?? "—"}/{maxEsfuerzo}</span>
+          </div>
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500 transition-all"
+              style={{ width: `${totalEsfuerzo ? (totalEsfuerzo / maxEsfuerzo) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+        
+        {/* Puntaje Total and Ranking */}
+        <div className="flex items-center justify-between pt-2 border-t border-border">
+          <div className="flex items-center gap-4">
+            <div className="space-y-0.5" data-testid="score-puntaje-total">
+              <span className="text-xs text-muted-foreground">Puntaje Total</span>
+              <p className="text-lg font-semibold tabular-nums">{puntajeTotal ?? "—"}</p>
+            </div>
+          </div>
+          {ranking !== null && (
+            <div className="flex items-center gap-2" data-testid="score-ranking">
+              <Award className="h-5 w-5 text-traffic-yellow" />
+              <div className="text-right">
+                <span className="text-xs text-muted-foreground block">Ranking</span>
+                <span className="text-lg font-bold tabular-nums">#{ranking}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Dimension Breakdown - Collapsible */}
+      <Collapsible
+        open={isBreakdownExpanded}
+        onOpenChange={setIsBreakdownExpanded}
+        data-testid="scoring-dimensions-breakdown"
+      >
+        <CollapsibleTrigger className="flex items-center justify-between w-full py-2 text-sm font-medium hover-elevate rounded-md px-2 -mx-2">
+          <span>Desglose de Dimensiones</span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 transition-transform",
+              isBreakdownExpanded && "rotate-180"
+            )}
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="space-y-4 mt-2">
+            {/* Value Dimensions */}
+            <div className="space-y-2">
+              <h5 className="text-xs font-medium text-traffic-green flex items-center gap-1">
+                <TrendingUp className="h-3 w-3" />
+                Dimensiones de Valor
+              </h5>
+              <div className="space-y-1 pl-4">
+                {valueDimensions.map((dim) => (
+                  <div 
+                    key={dim.id} 
+                    className="flex items-center justify-between text-xs py-1 border-b border-border/30 last:border-0"
+                    data-testid={`dimension-${dim.id}`}
+                  >
+                    <span className="text-muted-foreground">{dim.label}</span>
+                    <div className="flex items-center gap-2">
+                      {dim.selectedPattern ? (
+                        <>
+                          <span className="font-medium truncate max-w-[120px]" title={dim.selectedPattern}>
+                            {dim.selectedPattern}
+                          </span>
+                          {dim.score !== null && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5">
+                              {dim.score}
+                            </Badge>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Effort Dimensions */}
+            <div className="space-y-2">
+              <h5 className="text-xs font-medium text-blue-500 flex items-center gap-1">
+                <Target className="h-3 w-3" />
+                Dimensiones de Esfuerzo
+              </h5>
+              <div className="space-y-1 pl-4">
+                {effortDimensions.map((dim) => (
+                  <div 
+                    key={dim.id} 
+                    className="flex items-center justify-between text-xs py-1 border-b border-border/30 last:border-0"
+                    data-testid={`dimension-${dim.id}`}
+                  >
+                    <span className="text-muted-foreground">{dim.label}</span>
+                    <div className="flex items-center gap-2">
+                      {dim.selectedPattern ? (
+                        <>
+                          <span className="font-medium truncate max-w-[120px]" title={dim.selectedPattern}>
+                            {dim.selectedPattern}
+                          </span>
+                          {dim.score !== null && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5">
+                              {dim.score}
+                            </Badge>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }
@@ -758,6 +1102,10 @@ export function ProjectDetailDrawer({
                   </div>
                 </>
               )}
+
+              {/* Scoring Breakdown Section - Priority Analysis */}
+              <Separator />
+              <ScoringBreakdownSection project={project} />
 
               {/* Extra Fields from Excel - Organized by PMO Categories */}
               {project.extraFields && Object.keys(project.extraFields).length > 0 && (
