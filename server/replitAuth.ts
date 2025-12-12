@@ -1,22 +1,21 @@
-import * as client from "openid-client";
-import { Strategy, type VerifyFunction } from "openid-client/passport";
-
 import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
-import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
+import bcrypt from "bcrypt";
 import { storage } from "./storage";
+import type { User } from "@shared/schema";
 
-const getOidcConfig = memoize(
-  async () => {
-    return await client.discovery(
-      new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-      process.env.REPL_ID!
-    );
-  },
-  { maxAge: 3600 * 1000 }
-);
+declare global {
+  namespace Express {
+    interface User {
+      id: string;
+      email: string;
+      role: string;
+    }
+  }
+}
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -34,33 +33,9 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
       maxAge: sessionTtl,
     },
-  });
-}
-
-function updateUserSession(
-  user: any,
-  tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers
-) {
-  user.claims = tokens.claims();
-  user.access_token = tokens.access_token;
-  user.refresh_token = tokens.refresh_token;
-  user.expires_at = user.claims?.exp;
-}
-
-async function upsertUser(claims: any) {
-  const userCount = await storage.getUserCount();
-  const isFirstUser = userCount === 0;
-  
-  await storage.upsertUser({
-    id: claims["sub"],
-    email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
-    role: isFirstUser ? "admin" : undefined,
   });
 }
 
@@ -70,148 +45,173 @@ export async function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  const config = await getOidcConfig();
+  // Local strategy for email/password authentication
+  passport.use(
+    new LocalStrategy(
+      {
+        usernameField: "email",
+        passwordField: "password",
+      },
+      async (email, password, done) => {
+        try {
+          const user = await storage.getUserByEmail(email.toLowerCase());
+          
+          if (!user) {
+            return done(null, false, { message: "Usuario no encontrado" });
+          }
 
-  const verify: VerifyFunction = async (
-    tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
-    verified: passport.AuthenticateCallback
-  ) => {
-    const user = {};
-    updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
-    verified(null, user);
-  };
+          if (!user.passwordHash) {
+            return done(null, false, { message: "Contraseña no configurada" });
+          }
 
-  const registeredStrategies = new Set<string>();
+          const isValid = await bcrypt.compare(password, user.passwordHash);
+          if (!isValid) {
+            return done(null, false, { message: "Contraseña incorrecta" });
+          }
 
-  const ensureStrategy = (domain: string) => {
-    const strategyName = `replitauth:${domain}`;
-    if (!registeredStrategies.has(strategyName)) {
-      const strategy = new Strategy(
-        {
-          name: strategyName,
-          config,
-          scope: "openid email profile offline_access",
-          callbackURL: `https://${domain}/api/callback`,
-        },
-        verify,
-      );
-      passport.use(strategy);
-      registeredStrategies.add(strategyName);
-    }
-  };
+          return done(null, {
+            id: user.id,
+            email: user.email!,
+            role: user.role,
+          });
+        } catch (error) {
+          return done(error);
+        }
+      }
+    )
+  );
 
-  passport.serializeUser((user: Express.User, cb) => cb(null, user));
-  passport.deserializeUser((user: Express.User, cb) => cb(null, user));
+  passport.serializeUser((user: Express.User, cb) => {
+    cb(null, { id: user.id, email: user.email, role: user.role });
+  });
 
-  app.get("/api/login", (req, res, next) => {
-    ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile", "offline_access"],
+  passport.deserializeUser((user: Express.User, cb) => {
+    cb(null, user);
+  });
+
+  // Login endpoint
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: Express.User | false, info: { message: string }) => {
+      if (err) {
+        console.error("Login error:", err);
+        return res.status(500).json({ message: "Error de autenticación" });
+      }
+      if (!user) {
+        return res.status(401).json({ message: info?.message || "Credenciales inválidas" });
+      }
+      req.logIn(user, (err) => {
+        if (err) {
+          console.error("Login session error:", err);
+          return res.status(500).json({ message: "Error al iniciar sesión" });
+        }
+        return res.json({ 
+          success: true, 
+          user: { id: user.id, email: user.email, role: user.role }
+        });
+      });
     })(req, res, next);
   });
 
-  app.get("/api/callback", (req, res, next) => {
-    ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
-    })(req, res, next);
-  });
-
-  app.get("/api/logout", (req, res) => {
-    req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+  // Logout endpoint
+  app.post("/api/logout", (req, res) => {
+    req.logout((err) => {
+      if (err) {
+        console.error("Logout error:", err);
+        return res.status(500).json({ message: "Error al cerrar sesión" });
+      }
+      req.session.destroy((err) => {
+        if (err) {
+          console.error("Session destroy error:", err);
+        }
+        res.clearCookie("connect.sid");
+        res.json({ success: true });
+      });
     });
   });
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-
-  // Debug logging
-  const hasSession = !!req.session;
-  const hasSessionId = !!req.sessionID;
-  const isAuth = req.isAuthenticated();
-  const hasUser = !!req.user;
-  const hasExpires = !!(user?.expires_at);
-  
-  console.log(`[Auth Debug] ${req.method} ${req.path} - session:${hasSession} sessionId:${hasSessionId} isAuth:${isAuth} user:${hasUser} expires:${hasExpires}`);
-
-  if (!req.isAuthenticated() || !user?.expires_at) {
-    console.log(`[Auth Debug] REJECTED - isAuth:${isAuth} expires_at:${user?.expires_at}`);
-    return res.status(401).json({ message: "Unauthorized" });
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ message: "No autorizado" });
   }
-
-  const now = Math.floor(Date.now() / 1000);
-  if (now <= user.expires_at) {
-    return next();
-  }
-
-  const refreshToken = user.refresh_token;
-  if (!refreshToken) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  try {
-    const config = await getOidcConfig();
-    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-    updateUserSession(user, tokenResponse);
-    return next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
+  return next();
 };
 
 export const isAdmin: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-  
-  if (!req.isAuthenticated() || !user?.claims?.sub) {
-    return res.status(401).json({ message: "Unauthorized" });
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ message: "No autorizado" });
   }
 
-  const dbUser = await storage.getUser(user.claims.sub);
+  const dbUser = await storage.getUser(req.user.id);
   if (!dbUser || dbUser.role !== "admin") {
-    return res.status(403).json({ message: "Forbidden - Admin access required" });
+    return res.status(403).json({ message: "Acceso denegado - Se requiere rol de administrador" });
   }
 
   return next();
 };
 
 export const isEditor: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-  
-  if (!req.isAuthenticated() || !user?.claims?.sub) {
-    return res.status(401).json({ message: "Unauthorized" });
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ message: "No autorizado" });
   }
 
-  const dbUser = await storage.getUser(user.claims.sub);
+  const dbUser = await storage.getUser(req.user.id);
   if (!dbUser || (dbUser.role !== "admin" && dbUser.role !== "editor")) {
-    return res.status(403).json({ message: "Forbidden - Editor access required" });
+    return res.status(403).json({ message: "Acceso denegado - Se requiere rol de editor" });
   }
 
   return next();
 };
 
 export const isViewer: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-  
-  if (!req.isAuthenticated() || !user?.claims?.sub) {
-    return res.status(401).json({ message: "Unauthorized" });
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ message: "No autorizado" });
   }
 
-  const dbUser = await storage.getUser(user.claims.sub);
+  const dbUser = await storage.getUser(req.user.id);
   if (!dbUser) {
-    return res.status(403).json({ message: "Forbidden - User not found" });
+    return res.status(403).json({ message: "Usuario no encontrado" });
   }
 
   return next();
 };
+
+// Utility function to hash passwords
+export async function hashPassword(password: string): Promise<string> {
+  const saltRounds = 10;
+  return bcrypt.hash(password, saltRounds);
+}
+
+// Seed admin users
+export async function seedAdminUsers() {
+  const adminUsers = [
+    { email: "pilararenasreina@gmail.com", password: "123456" },
+    { email: "jorgealvarez_rincon@hotmail.com", password: "123456" },
+  ];
+
+  for (const admin of adminUsers) {
+    const existing = await storage.getUserByEmail(admin.email);
+    if (!existing) {
+      const passwordHash = await hashPassword(admin.password);
+      await storage.createUserWithPassword(
+        admin.email,
+        passwordHash,
+        "admin",
+        admin.email.split("@")[0]
+      );
+      console.log(`Admin user created: ${admin.email}`);
+    } else if (!existing.passwordHash) {
+      // Update existing user with password hash if missing
+      const passwordHash = await hashPassword(admin.password);
+      const { db } = await import("./db");
+      const { users } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      await db.update(users)
+        .set({ passwordHash, role: "admin" })
+        .where(eq(users.id, existing.id));
+      console.log(`Admin user updated with password: ${admin.email}`);
+    } else {
+      console.log(`Admin user already exists: ${admin.email}`);
+    }
+  }
+}

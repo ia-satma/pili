@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useMutation } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Table2,
@@ -29,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { apiRequest } from "@/lib/queryClient";
 
 const mainNavItems = [
   {
@@ -99,15 +101,24 @@ function getRoleLabel(role: string): string {
 }
 
 export function AppSidebar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user, isLoading, isAuthenticated, isAdmin, isEditor } = useAuth();
 
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/logout");
+    },
+    onSuccess: () => {
+      window.location.reload();
+    },
+  });
+
   const handleLogin = () => {
-    window.location.href = "/api/login";
+    setLocation("/login");
   };
 
   const handleLogout = () => {
-    window.location.href = "/api/logout";
+    logoutMutation.mutate();
   };
 
   const getUserInitials = () => {

@@ -17,8 +17,10 @@ import { db } from "./db";
 import { eq, desc, and, sql, inArray, count } from "drizzle-orm";
 
 export interface IStorage {
-  // User operations - required for Replit Auth
+  // User operations - email/password auth
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUserWithPassword(email: string, passwordHash: string, role?: string, firstName?: string, lastName?: string): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
   getUserCount(): Promise<number>;
   updateUserRole(id: string, role: string): Promise<User>;
@@ -83,9 +85,28 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // User operations - required for Replit Auth
+  // User operations - email/password auth
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async createUserWithPassword(
+    email: string, 
+    passwordHash: string, 
+    role: string = "viewer",
+    firstName?: string,
+    lastName?: string
+  ): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values({ email, passwordHash, role, firstName, lastName })
+      .returning();
     return user;
   }
 

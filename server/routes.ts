@@ -7,7 +7,7 @@ import { storage } from "./storage";
 import { parseExcelBuffer, type ParsedProject } from "./excel-parser";
 import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./openai";
 import type { InsertChangeLog, InsertKpiValue, Project, InsertProject } from "@shared/schema";
-import { setupAuth, isAuthenticated, isAdmin, isEditor, isViewer } from "./replitAuth";
+import { setupAuth, isAuthenticated, isAdmin, isEditor, isViewer, seedAdminUsers } from "./replitAuth";
 
 // Validation schemas
 const sendMessageSchema = z.object({
@@ -322,11 +322,15 @@ export async function registerRoutes(
   
   // ===== AUTH SETUP =====
   await setupAuth(app);
+  await seedAdminUsers();
 
   // ===== AUTH ROUTES =====
-  app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
+  app.get("/api/auth/user", async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ message: "No autorizado" });
+      }
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
