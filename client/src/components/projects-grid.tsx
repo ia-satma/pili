@@ -95,6 +95,7 @@ export function ProjectsGrid() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [analystFilter, setAnalystFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("projectName");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
@@ -218,24 +219,35 @@ export function ProjectsGrid() {
     },
   });
 
-  // Extract unique statuses, departments, and responsibles for filters
-  const { statuses, departments, responsibles } = useMemo(() => {
-    if (!data?.projects) return { statuses: [], departments: [], responsibles: [] };
+  // Extract unique statuses, departments, responsibles, and Business Process Analysts for filters
+  const { statuses, departments, responsibles, businessProcessAnalysts } = useMemo(() => {
+    if (!data?.projects) return { statuses: [], departments: [], responsibles: [], businessProcessAnalysts: [] };
     
     const statusSet = new Set<string>();
     const deptSet = new Set<string>();
     const respSet = new Set<string>();
+    const analystSet = new Set<string>();
     
     data.projects.forEach((p) => {
       if (p.status) statusSet.add(p.status);
       if (p.departmentName) deptSet.add(p.departmentName);
       if (p.responsible) respSet.add(p.responsible);
+      
+      // Extract Business Process Analyst from extraFields
+      const extraFields = p.extraFields as Record<string, unknown> | null;
+      if (extraFields) {
+        const analyst = extraFields["Business Process Analyst"] as string | undefined;
+        if (analyst && typeof analyst === "string" && analyst.trim()) {
+          analystSet.add(analyst.trim());
+        }
+      }
     });
     
     return {
       statuses: Array.from(statusSet).sort(),
       departments: Array.from(deptSet).sort(),
       responsibles: Array.from(respSet).sort(),
+      businessProcessAnalysts: Array.from(analystSet).sort(),
     };
   }, [data?.projects]);
 
@@ -265,6 +277,15 @@ export function ProjectsGrid() {
         return false;
       }
 
+      // Business Process Analyst filter
+      if (analystFilter !== "all") {
+        const extraFields = project.extraFields as Record<string, unknown> | null;
+        const analyst = extraFields?.["Business Process Analyst"] as string | undefined;
+        if (!analyst || analyst.trim() !== analystFilter) {
+          return false;
+        }
+      }
+
       return true;
     });
 
@@ -287,7 +308,7 @@ export function ProjectsGrid() {
     });
 
     return filtered;
-  }, [data?.projects, search, statusFilter, departmentFilter, sortField, sortDirection]);
+  }, [data?.projects, search, statusFilter, departmentFilter, analystFilter, sortField, sortDirection]);
 
   // Paginate
   const paginatedProjects = useMemo(() => {
@@ -367,11 +388,12 @@ export function ProjectsGrid() {
     setSearch("");
     setStatusFilter("all");
     setDepartmentFilter("all");
+    setAnalystFilter("all");
     setActivePresetId(null);
     setPage(1);
   };
 
-  const hasActiveFilters = search || statusFilter !== "all" || departmentFilter !== "all";
+  const hasActiveFilters = search || statusFilter !== "all" || departmentFilter !== "all" || analystFilter !== "all";
 
   const handleSavePreset = () => {
     if (!presetName.trim()) return;
@@ -565,36 +587,26 @@ export function ProjectsGrid() {
           </>
         )}
 
-        {presetsData?.presets && presetsData.presets.length > 0 && (
-          <Select
-            value={activePresetId?.toString() || "none"}
-            onValueChange={handleApplyPreset}
-          >
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-filter-presets">
-              <BookmarkCheck className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Filtros guardados" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Sin preset</SelectItem>
-              {presetsData.presets.map((preset) => (
-                <SelectItem key={preset.id} value={preset.id.toString()}>
-                  <div className="flex items-center justify-between gap-2 w-full">
-                    <span>{preset.name}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 ml-2"
-                      onClick={(e) => handleDeletePreset(e, preset.id)}
-                      data-testid={`button-delete-preset-${preset.id}`}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <Select
+          value={analystFilter}
+          onValueChange={(value) => {
+            setAnalystFilter(value);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-full sm:w-52" data-testid="select-analyst-filter">
+            <User className="h-4 w-4 mr-2" />
+            <SelectValue placeholder="Business Analyst" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los analistas</SelectItem>
+            {businessProcessAnalysts.map((analyst) => (
+              <SelectItem key={analyst} value={analyst}>
+                {analyst}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <Button
           variant="outline"
@@ -642,6 +654,15 @@ export function ProjectsGrid() {
                 <X
                   className="h-3 w-3 cursor-pointer"
                   onClick={() => setDepartmentFilter("all")}
+                />
+              </Badge>
+            )}
+            {analystFilter !== "all" && (
+              <Badge variant="secondary" className="gap-1">
+                Analista: {analystFilter}
+                <X
+                  className="h-3 w-3 cursor-pointer"
+                  onClick={() => setAnalystFilter("all")}
                 />
               </Badge>
             )}
