@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { FilterProvider } from "@/contexts/filter-context";
 import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
@@ -94,7 +95,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <TooltipProvider>
-          <AppContent />
+          <FilterProvider>
+            <AppContent />
+          </FilterProvider>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

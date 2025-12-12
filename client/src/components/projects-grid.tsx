@@ -1,13 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   ChevronDown,
   ChevronUp,
-  Filter,
-  Search,
-  X,
   ArrowUpDown,
   Eye,
   Download,
@@ -17,11 +14,14 @@ import {
   BookmarkCheck,
   RefreshCw,
   AlertTriangle,
-  User,
   Lock,
+  User,
+  X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useFilters } from "@/contexts/filter-context";
+import { FilterBar } from "@/components/filter-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -92,10 +92,7 @@ const PRIORITY_OPTIONS = ["Alta", "Media", "Baja"];
 type BulkField = "status" | "priority" | "responsible";
 
 export function ProjectsGrid() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
-  const [analystFilter, setAnalystFilter] = useState<string>("all");
+  const { filters, setFilters, hasActiveFilters, clearFilters: clearGlobalFilters, buildQueryString } = useFilters();
   const [sortField, setSortField] = useState<SortField>("projectName");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
@@ -114,9 +111,16 @@ export function ProjectsGrid() {
   const pageSize = 20;
   const { toast } = useToast();
   const { isAdmin, isEditor } = useAuth();
+  
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [filters.q, filters.estado, filters.depto, filters.analista]);
 
+  const queryString = buildQueryString();
   const { data, isLoading, error } = useQuery<ProjectsResponse>({
-    queryKey: ["/api/projects"],
+    queryKey: ["/api/projects", queryString],
+    queryFn: () => fetch(`/api/projects${queryString ? `?${queryString}` : ""}`).then(r => r.json()),
   });
 
   const { data: projectDetail, isLoading: isLoadingDetail } = useQuery<ProjectDetailResponse>({
@@ -251,14 +255,14 @@ export function ProjectsGrid() {
     };
   }, [data?.projects]);
 
-  // Filter and sort projects
+  // Filter and sort projects using global filter context
   const filteredProjects = useMemo(() => {
     if (!data?.projects) return [];
 
     let filtered = data.projects.filter((project) => {
-      // Search filter
-      if (search) {
-        const searchLower = search.toLowerCase();
+      // Search filter (using global q)
+      if (filters.q) {
+        const searchLower = filters.q.toLowerCase();
         const matchesSearch =
           project.projectName?.toLowerCase().includes(searchLower) ||
           project.responsible?.toLowerCase().includes(searchLower) ||
@@ -267,21 +271,21 @@ export function ProjectsGrid() {
         if (!matchesSearch) return false;
       }
 
-      // Status filter
-      if (statusFilter !== "all" && project.status !== statusFilter) {
+      // Status filter (using global estado)
+      if (filters.estado !== "all" && project.status !== filters.estado) {
         return false;
       }
 
-      // Department filter
-      if (departmentFilter !== "all" && project.departmentName !== departmentFilter) {
+      // Department filter (using global depto)
+      if (filters.depto !== "all" && project.departmentName !== filters.depto) {
         return false;
       }
 
-      // Business Process Analyst filter
-      if (analystFilter !== "all") {
+      // Business Process Analyst filter (using global analista)
+      if (filters.analista !== "all") {
         const extraFields = project.extraFields as Record<string, unknown> | null;
         const analyst = extraFields?.["Business Process Analyst"] as string | undefined;
-        if (!analyst || analyst.trim() !== analystFilter) {
+        if (!analyst || analyst.trim() !== filters.analista) {
           return false;
         }
       }
@@ -308,7 +312,7 @@ export function ProjectsGrid() {
     });
 
     return filtered;
-  }, [data?.projects, search, statusFilter, departmentFilter, analystFilter, sortField, sortDirection]);
+  }, [data?.projects, filters.q, filters.estado, filters.depto, filters.analista, sortField, sortDirection]);
 
   // Paginate
   const paginatedProjects = useMemo(() => {
@@ -385,15 +389,10 @@ export function ProjectsGrid() {
   };
 
   const clearFilters = () => {
-    setSearch("");
-    setStatusFilter("all");
-    setDepartmentFilter("all");
-    setAnalystFilter("all");
+    clearGlobalFilters();
     setActivePresetId(null);
     setPage(1);
   };
-
-  const hasActiveFilters = search || statusFilter !== "all" || departmentFilter !== "all" || analystFilter !== "all";
 
   const handleSavePreset = () => {
     if (!presetName.trim()) return;
@@ -401,9 +400,9 @@ export function ProjectsGrid() {
     createPresetMutation.mutate({
       name: presetName.trim(),
       filters: {
-        search: search,
-        status: statusFilter,
-        department: departmentFilter,
+        search: filters.q,
+        status: filters.estado,
+        department: filters.depto,
       },
     });
   };
@@ -416,9 +415,11 @@ export function ProjectsGrid() {
     
     const preset = presetsData?.presets.find(p => p.id === parseInt(presetId));
     if (preset && preset.filters) {
-      setSearch(preset.filters.search || "");
-      setStatusFilter(preset.filters.status || "all");
-      setDepartmentFilter(preset.filters.department || "all");
+      setFilters({
+        q: preset.filters.search || "",
+        estado: preset.filters.status || "all",
+        depto: preset.filters.department || "all",
+      });
       setActivePresetId(preset.id);
       setPage(1);
     }
@@ -439,9 +440,10 @@ export function ProjectsGrid() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          search: search || undefined,
-          status: statusFilter !== "all" ? statusFilter : undefined,
-          department: departmentFilter !== "all" ? departmentFilter : undefined,
+          search: filters.q || undefined,
+          status: filters.estado !== "all" ? filters.estado : undefined,
+          department: filters.depto !== "all" ? filters.depto : undefined,
+          analista: filters.analista !== "all" ? filters.analista : undefined,
         }),
       });
 
@@ -509,73 +511,12 @@ export function ProjectsGrid() {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar proyectos..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="pl-9"
-            data-testid="input-search-projects"
-          />
+      <div className="flex flex-col sm:flex-row gap-3 items-start">
+        <div className="flex-1 w-full">
+          <FilterBar showResultCount resultCount={filteredProjects.length} />
         </div>
-        
-        <Select
-          value={statusFilter}
-          onValueChange={(value) => {
-            setStatusFilter(value);
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="w-full sm:w-40" data-testid="select-status-filter">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los estados</SelectItem>
-            {statuses.map((status) => (
-              <SelectItem key={status} value={status}>
-                {status}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={departmentFilter}
-          onValueChange={(value) => {
-            setDepartmentFilter(value);
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="w-full sm:w-48" data-testid="select-department-filter">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Departamento" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los dptos.</SelectItem>
-            {departments.map((dept) => (
-              <SelectItem key={dept} value={dept}>
-                {dept}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {hasActiveFilters && (
-          <>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={clearFilters}
-              data-testid="button-clear-filters"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+        <div className="flex gap-2 flex-shrink-0">
+          {hasActiveFilters && (
             <Button
               variant="outline"
               onClick={() => setSaveDialogOpen(true)}
@@ -584,90 +525,21 @@ export function ProjectsGrid() {
               <Save className="h-4 w-4 mr-2" />
               Guardar Filtro
             </Button>
-          </>
-        )}
-
-        <Select
-          value={analystFilter}
-          onValueChange={(value) => {
-            setAnalystFilter(value);
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="w-full sm:w-52" data-testid="select-analyst-filter">
-            <User className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Business Analyst" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los analistas</SelectItem>
-            {businessProcessAnalysts.map((analyst) => (
-              <SelectItem key={analyst} value={analyst}>
-                {analyst}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Button
-          variant="outline"
-          onClick={handleExport}
-          disabled={isExporting || isLoading}
-          data-testid="button-export-excel"
-        >
-          {isExporting ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4 mr-2" />
           )}
-          Exportar Excel
-        </Button>
-      </div>
-
-      {/* Results count */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {filteredProjects.length} proyecto{filteredProjects.length !== 1 ? "s" : ""} encontrado{filteredProjects.length !== 1 ? "s" : ""}
-        </p>
-        {hasActiveFilters && (
-          <div className="flex gap-2">
-            {search && (
-              <Badge variant="secondary" className="gap-1">
-                Búsqueda: {search}
-                <X
-                  className="h-3 w-3 cursor-pointer"
-                  onClick={() => setSearch("")}
-                />
-              </Badge>
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={isExporting || isLoading}
+            data-testid="button-export-excel"
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
             )}
-            {statusFilter !== "all" && (
-              <Badge variant="secondary" className="gap-1">
-                Estado: {statusFilter}
-                <X
-                  className="h-3 w-3 cursor-pointer"
-                  onClick={() => setStatusFilter("all")}
-                />
-              </Badge>
-            )}
-            {departmentFilter !== "all" && (
-              <Badge variant="secondary" className="gap-1">
-                Dpto: {departmentFilter}
-                <X
-                  className="h-3 w-3 cursor-pointer"
-                  onClick={() => setDepartmentFilter("all")}
-                />
-              </Badge>
-            )}
-            {analystFilter !== "all" && (
-              <Badge variant="secondary" className="gap-1">
-                Analista: {analystFilter}
-                <X
-                  className="h-3 w-3 cursor-pointer"
-                  onClick={() => setAnalystFilter("all")}
-                />
-              </Badge>
-            )}
-          </div>
-        )}
+            Exportar Excel
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -914,9 +786,9 @@ export function ProjectsGrid() {
             </div>
             <div className="text-sm text-muted-foreground space-y-1">
               <p className="font-medium">Filtros actuales:</p>
-              {search && <p>Búsqueda: {search}</p>}
-              {statusFilter !== "all" && <p>Estado: {statusFilter}</p>}
-              {departmentFilter !== "all" && <p>Departamento: {departmentFilter}</p>}
+              {filters.q && <p>Búsqueda: {filters.q}</p>}
+              {filters.estado !== "all" && <p>Estado: {filters.estado}</p>}
+              {filters.depto !== "all" && <p>Departamento: {filters.depto}</p>}
             </div>
           </div>
           <DialogFooter>

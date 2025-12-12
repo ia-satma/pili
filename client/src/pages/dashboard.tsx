@@ -18,6 +18,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiCard, KpiCardSkeleton } from "@/components/kpi-card";
 import { TrafficLight, calculateTrafficLight } from "@/components/traffic-light";
+import { FilterBar } from "@/components/filter-bar";
+import { useFilters } from "@/contexts/filter-context";
 import {
   BarChart,
   Bar,
@@ -124,13 +126,17 @@ const QUADRANT_COLORS = {
 
 export default function Dashboard() {
   useDocumentTitle("Dashboard");
+  const { buildQueryString, hasActiveFilters } = useFilters();
+  const queryString = buildQueryString();
   
   const { data, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["/api/dashboard"],
+    queryKey: ["/api/dashboard", queryString],
+    queryFn: () => fetch(`/api/dashboard${queryString ? `?${queryString}` : ""}`).then(r => r.json()),
   });
 
   const { data: scoringData, isLoading: scoringLoading } = useQuery<ScoringMatrixData>({
-    queryKey: ["/api/scoring/matrix"],
+    queryKey: ["/api/scoring/matrix", queryString],
+    queryFn: () => fetch(`/api/scoring/matrix${queryString ? `?${queryString}` : ""}`).then(r => r.json()),
   });
 
   if (error) {
@@ -161,11 +167,19 @@ export default function Dashboard() {
   return (
     <div className="space-y-8 p-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Vista general de proyectos de mejora continua
-        </p>
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Vista general de proyectos de mejora continua
+          </p>
+        </div>
+        <FilterBar />
+        {hasActiveFilters && (
+          <p className="text-sm text-muted-foreground">
+            Mostrando datos filtrados
+          </p>
+        )}
       </div>
 
       {/* KPI Cards */}

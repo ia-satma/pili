@@ -370,7 +370,43 @@ export async function registerRoutes(
   // ===== DASHBOARD =====
   app.get("/api/dashboard", async (req, res) => {
     try {
-      const allProjects = await storage.getProjects();
+      const { q, estado, depto, analista } = req.query as {
+        q?: string;
+        estado?: string;
+        depto?: string;
+        analista?: string;
+      };
+      
+      let allProjects = await storage.getProjects();
+      
+      // Apply global filters
+      if (q || estado || depto || analista) {
+        allProjects = allProjects.filter(project => {
+          if (q) {
+            const searchLower = q.toLowerCase();
+            const matchesSearch =
+              project.projectName?.toLowerCase().includes(searchLower) ||
+              project.responsible?.toLowerCase().includes(searchLower) ||
+              project.departmentName?.toLowerCase().includes(searchLower) ||
+              project.legacyId?.toLowerCase().includes(searchLower);
+            if (!matchesSearch) return false;
+          }
+          if (estado && estado !== "all" && project.status !== estado) {
+            return false;
+          }
+          if (depto && depto !== "all" && project.departmentName !== depto) {
+            return false;
+          }
+          if (analista && analista !== "all") {
+            const extraFields = project.extraFields as Record<string, unknown> | null;
+            const analyst = extraFields?.["Business Process Analyst"] as string | undefined;
+            if (!analyst || analyst.trim() !== analista) {
+              return false;
+            }
+          }
+          return true;
+        });
+      }
       
       // Calculate stats
       let openProjects = 0;
@@ -518,8 +554,38 @@ export async function registerRoutes(
   // ===== PROJECTS =====
   app.get("/api/projects", async (req, res) => {
     try {
-      const allProjects = await storage.getProjects();
-      res.json({ projects: allProjects, total: allProjects.length });
+      let projects = await storage.getProjects();
+      
+      // Apply global filters
+      const { q, estado, depto, analista } = req.query;
+      
+      if (q && typeof q === "string") {
+        const searchLower = q.toLowerCase();
+        projects = projects.filter(p =>
+          p.projectName?.toLowerCase().includes(searchLower) ||
+          p.departmentName?.toLowerCase().includes(searchLower) ||
+          p.responsible?.toLowerCase().includes(searchLower) ||
+          p.legacyId?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      if (estado && estado !== "all") {
+        projects = projects.filter(p => p.status === estado);
+      }
+      
+      if (depto && depto !== "all") {
+        projects = projects.filter(p => p.departmentName === depto);
+      }
+      
+      if (analista && analista !== "all") {
+        projects = projects.filter(p => {
+          const extra = (p.extraFields || {}) as Record<string, unknown>;
+          const projectAnalyst = extra["Business Process Analyst"] as string | undefined;
+          return projectAnalyst && projectAnalyst.trim() === analista;
+        });
+      }
+      
+      res.json({ projects, total: projects.length });
     } catch (error) {
       console.error("Projects error:", error);
       res.status(500).json({ message: "Error loading projects" });
@@ -853,8 +919,8 @@ export async function registerRoutes(
           await storage.updateProject(existing.id, updateData);
           
           if (changes.length > 0) {
-            for (const change of changes as InsertChangeLog[]) {
-              (change as InsertChangeLog).projectId = existing.id;
+            for (const change of changes) {
+              (change as { projectId: number }).projectId = existing.id;
             }
             allChanges.push(...changes);
             modifiedCount++;
@@ -1089,7 +1155,36 @@ export async function registerRoutes(
   // ===== SCORING MATRIX =====
   app.get("/api/scoring/matrix", async (req, res) => {
     try {
-      const allProjects = await storage.getProjects();
+      let allProjects = await storage.getProjects();
+      
+      // Apply filters (same as /api/dashboard)
+      const { q, estado, depto, analista } = req.query;
+      
+      if (q && typeof q === "string") {
+        const searchLower = q.toLowerCase();
+        allProjects = allProjects.filter(p =>
+          p.projectName?.toLowerCase().includes(searchLower) ||
+          p.departmentName?.toLowerCase().includes(searchLower) ||
+          p.responsible?.toLowerCase().includes(searchLower) ||
+          p.legacyId?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      if (estado && estado !== "all") {
+        allProjects = allProjects.filter(p => p.status === estado);
+      }
+      
+      if (depto && depto !== "all") {
+        allProjects = allProjects.filter(p => p.departmentName === depto);
+      }
+      
+      if (analista && analista !== "all") {
+        allProjects = allProjects.filter(p => {
+          const extra = (p.extraFields || {}) as Record<string, unknown>;
+          const projectAnalyst = extra["Business Process Analyst"] as string | undefined;
+          return projectAnalyst && projectAnalyst.trim() === analista;
+        });
+      }
       
       // Extract scoring data from dedicated columns OR extraFields (for legacy data)
       const projectsWithScoring = allProjects
