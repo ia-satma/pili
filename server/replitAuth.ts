@@ -187,6 +187,7 @@ export async function seedAdminUsers() {
   const adminUsers = [
     { email: "pilararenasreina@gmail.com", password: "123456" },
     { email: "jorgealvarez_rincon@hotmail.com", password: "123456" },
+    { email: "santiago@satma.mx", password: "Accesowe1#" },
   ];
 
   for (const admin of adminUsers) {
