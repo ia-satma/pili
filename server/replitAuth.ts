@@ -91,9 +91,9 @@ export async function setupAuth(app: Express) {
 
   // Login endpoint
   app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err: any, user: Express.User | false, info: { message: string }) => {
+    passport.authenticate("local", (err: Error | null, user: Express.User | false, info: { message: string }) => {
       if (err) {
-        console.error("Login error:", err);
+        console.error("Login error:", err instanceof Error ? err.message : String(err));
         return res.status(500).json({ message: "Error de autenticación" });
       }
       if (!user) {

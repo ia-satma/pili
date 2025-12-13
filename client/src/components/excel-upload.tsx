@@ -67,7 +67,10 @@ export function ExcelUpload() {
           if (response.status === 403) {
             throw new Error("No tienes permisos para subir archivos. Contacta a un administrador.");
           }
-          const error = await response.json().catch(() => ({}));
+          const error = await response.json().catch((parseErr) => {
+            console.error("[ExcelUpload] Failed to parse error response:", parseErr);
+            return { message: null };
+          });
           throw new Error(error.message || "Error al subir el archivo");
         }
 

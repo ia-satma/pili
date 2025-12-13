@@ -325,7 +325,7 @@ export async function registerRoutes(
   await seedAdminUsers();
 
   // ===== AUTH ROUTES =====
-  app.get("/api/auth/user", async (req: any, res) => {
+  app.get("/api/auth/user", async (req, res) => {
     try {
       if (!req.isAuthenticated() || !req.user) {
         return res.status(401).json({ message: "No autorizado" });

@@ -20,8 +20,8 @@ export function isOpenAIConfigured(): boolean {
   return isConfigured;
 }
 
-function isRateLimitError(error: any): boolean {
-  const errorMsg = error?.message || String(error);
+function isRateLimitError(error: unknown): boolean {
+  const errorMsg = error instanceof Error ? error.message : String(error);
   return (
     errorMsg.includes("429") ||
     errorMsg.includes("RATELIMIT_EXCEEDED") ||

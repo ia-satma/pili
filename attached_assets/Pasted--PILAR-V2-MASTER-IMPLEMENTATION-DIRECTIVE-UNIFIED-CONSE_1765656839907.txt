@@ -1,0 +1,195 @@
+# PILAR V2 — MASTER IMPLEMENTATION DIRECTIVE (UNIFIED CONSENSUS)
+
+ROLE: Lead Backend Engineer + Systems Architect
+STACK: Node.js (Express), TypeScript (strict), Drizzle ORM, Postgres (Neon), React
+ENV: Replit (stateless runtime, persistent DB). Monolithic modular only.
+
+THIS DIRECTIVE SUPERSEDES ALL PREVIOUS PROMPTS.
+
+## PRODUCT PIVOT (NON-NEGOTIABLE)
+PILAR becomes a Digitalization Governance OS.
+- Postgres is the Source of Truth.
+- Excel is a compatibility channel: transient import + OFFICIAL VERSIONED EXPORT.
+- Zero lies: if evidence is missing, return INSF_EVIDENCE + missing_fields. Never invent.
+
+## HARD CONSTRAINTS (ABSOLUTE)
+1) ARTIFACTS-IN-DB (Gemini-approved Delta):
+   - Store raw Excel uploads AND exported Excel files in Postgres BYTEA (no filesystem, no S3).
+2) NO SILENT FAILURES:
+   - No empty catch blocks. Every error becomes a persisted validation_issue and is visible in UI.
+3) IDEMPOTENCY:
+   - Uploading the same file twice must produce NOOP / delta=0. Never duplicate truth.
+4) DB-BACKED AUTONOMY:
+   - Do NOT rely on node-cron/setInterval for critical tasks.
+   - Use jobs table + worker loop + row locking (FOR UPDATE SKIP LOCKED).
+5) STATELESSNESS:
+   - No global in-memory state for pipeline steps. Persist everything immediately.
+
+## FOLDER ARCHITECTURE (MODULAR MONOLITH)
+- server/ingestion/        (templates, parsing, validation, hashing)
+- server/services/         (domain services; only place that writes DB)
+- server/jobs/             (job runner + job handlers)
+- server/agents/           (LLM agents as pure functions: input -> JSON output)
+- shared/schema.ts         (Drizzle schema)
+- shared/validators/       (Zod schemas + validation codes)
+- client/                  (UI)
+
+## STANDARD JSON CONTRACT FOR AGENTS (MUST)
+Every agent must output ONLY JSON:
+{
+  "status": "OK|INSUFFICIENT_EVIDENCE|BLOCKED|ERROR",
+  "entity": "...",
+  "summary": "...",
+  "data": {...},
+  "missing_fields": [],
+  "evidence_refs": [],
+  "next_actions": [],
+  "audit": { "timestamp": "...", "model": "...", "version": "..." }
+}
+
+Agents do NOT touch UI directly.
+
+---
+
+# EXECUTION PLAN (SEQUENTIAL, STOP-GATED)
+You MUST execute phases in order. After each phase, stop and report results + tests.
+
+## 🛑 PHASE H0: HARDENING (MANDATORY)
+Goal: stabilize current codebase before schema work.
+Tasks:
+1) Remove/replace ALL empty catch blocks; add structured error logging.
+2) Tighten type safety on critical paths (auth, upload, parsing).
+3) Ensure UI can display backend validation errors (not generic).
+
+STOP CONDITION:
+- Provide a list of fixed silent-failure locations + evidence (diff/summary).
+
+## 🏗️ PHASE H1: DATA FOUNDATION (CUSTODY + VALIDATION + ARTIFACTS-IN-DB)
+Goal: ingestion is auditable, idempotent, and self-contained.
+
+Schema additions (Drizzle + migrations):
+A) ingestion_batches:
+   - id uuid PK
+   - source_file_hash sha256 (indexed, used for idempotency)
+   - uploaded_by, uploaded_at
+   - status: PENDING|VALIDATED|COMMITTED|REJECTED|COMMITTED_WITH_WARNINGS
+   - parser_version, template_version, scoring_model_version_id
+   - raw_validation_report jsonb
+
+B) raw_artifacts (BYTEA):
+   - id uuid PK
+   - batch_id FK ingestion_batches
+   - file_name, mime_type
+   - content_sha256, content_size_bytes
+   - is_compressed/compression (optional)
+   - file_content BYTEA  (CRITICAL)
+   - received_at
+
+C) validation_issues (normalized, not only jsonb):
+   - id uuid PK
+   - batch_id FK
+   - severity HARD|SOFT
+   - code (DATE_PARSE_HEURISTIC, TOTAL_MISMATCH, DUPLICATE_KEY, FILE_TOO_LARGE, etc.)
+   - message
+   - sheet_name, row_number, column_key
+   - raw_value (text)
+   - created_at
+
+D) template_versions:
+   - id uuid PK
+   - name
+   - active_from
+   - structure_json (layout-aware: sections/weights/questions/rubrics)
+   - created_at
+
+E) jobs + job_runs (DB-backed autonomy foundation):
+   - jobs: id, type, payload_json, run_at, status, locked_by, locked_at, attempts, max_attempts, last_error
+   - job_runs: job_id, started_at, finished_at, status, metrics_json
+
+F) export_batches + export_artifacts (BYTEA) (create now to avoid later breaking migrations):
+   - export_batches: id, generated_at, generated_by, template_version_id, model_version_id, status
+   - export_artifacts: id, export_batch_id, file_name, mime_type, content_sha256, content_size_bytes, file_content BYTEA, generated_at
+
+Ingestion logic:
+1) Create ingestion_batch (PENDING) + store raw_artifact(file_content) in same transaction.
+2) Template detection (PGP sheets etc.) -> template_version.
+3) Layout-aware parsing using template structure (multi-row headers).
+4) Validation:
+   - HARD -> REJECTED (no snapshots written), with validation_issues.
+   - SOFT -> COMMITTED_WITH_WARNINGS, with validation_issues.
+5) Idempotency rule:
+   - If source_file_hash already exists as COMMITTED/COMMITTED_WITH_WARNINGS for same template -> NOOP.
+6) Provide endpoints:
+   - POST /api/ingest/upload
+   - GET /api/ingest/batches
+   - GET /api/ingest/batches/:id/issues
+   - GET /api/ingest/artifacts/:id/download  (stream BYTEA safely)
+
+UPDATED DoD (includes Gemini delta):
+- DB restore test: after restore, historical raw Excel files are downloadable from BYTEA.
+- Upload same Excel twice -> NOOP or 0 deltas (for now, record "no changes detected").
+- No silent failures; validation issues appear in UI.
+
+STOP AFTER H1:
+- Do NOT proceed to H2 until user confirms H1 passes tests.
+
+## 🧱 PHASE H2: CANONICAL DOMAIN MODEL (GOVERNANCE READY)
+(Execute only after H1 confirmed)
+Add tables:
+- initiatives (id, title, type, business_unit, owner_user_id, current_stage_gate, external_ids/devops_id/power_steering_id, created_at, updated_at)
+- projects (id, initiative_id, pm_user_id, delivery_method, dates, status)
+- scoring_models, scoring_criteria, scoring_options
+- initiative_snapshots (linked to batch_id)
+- assessment_entries (per-criterion scores + evidence_text)
+- benefit_records
+- status_updates
+- action_items
+- committee_packets, committee_decisions, gate_transitions
+- delta_events
+
+DoD:
+- New upload creates snapshots (never overwrite).
+- Score totals computed from criteria; mismatches logged as SOFT warnings.
+
+STOP AFTER H2.
+
+## ⚡ PHASE H3: DELTA ENGINE + SIGNALS
+Compute delta_events snapshot-to-snapshot per initiative.
+Implement initial risk signals (Zombie, Sliding Date, Score Inflation, Flip-Flop, Value Drainage) stored as governance_actions/alerts.
+
+STOP AFTER H3.
+
+## 🤖 PHASE H4: DB-BACKED AUTONOMY + OFFICIAL EXCEL EXPORT
+Implement workerLoop for jobs with row locking.
+Jobs:
+- GENERATE_COMMITTEE_PACKET (weekly)
+- DETECT_LIMBO (daily)
+- DRAFT_CHASERS (daily/weekly)
+- GENERATE_EXPORT_EXCEL (weekly)
+
+Export engine:
+- Generate Excel from latest snapshots with template layout.
+- Store in export_artifacts.file_content (BYTEA).
+- Provide download endpoint.
+
+STOP AFTER H4.
+
+## 🧠 PHASE H5: AGENTIC RACK + RAG-LITE (GROUNDED)
+Agents to implement as pure functions returning JSON:
+- IntakeAgent, CharterAgent, RequirementsAgent, ProcessAgent,
+  PrioritizationAgent, CommitteeBriefAgent, TechAdvisorAgent, BenefitsAgent, RiskExplainerAgent.
+Grounding rule:
+- Agents may only use DB evidence pulled by services. No invented facts.
+- If evidence missing: INSF_EVIDENCE + missing_fields.
+
+RAG-lite:
+- Retrieval is DB-grounded first (no embeddings required initially).
+- Optional later: add documents/chunks/embeddings only if needed.
+
+STOP AFTER H5.
+
+REPORTING REQUIREMENT AT EACH STOP:
+- List of changed files
+- Migration summary
+- Tests executed + results
+- Known risks or TODOs
