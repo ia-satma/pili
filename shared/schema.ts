@@ -521,6 +521,74 @@ export const governanceAlerts = pgTable("governance_alerts", {
   index("idx_governance_alerts_status").on(table.status),
 ]);
 
+// ===== H5 Agentic Framework Tables =====
+
+// Agent Definitions - registry of available agents
+export const agentDefinitions = pgTable("agent_definitions", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").unique().notNull(),
+  purpose: text("purpose"),
+  inputSchemaJson: jsonb("input_schema_json").$type<Record<string, unknown>>(),
+  outputSchemaJson: jsonb("output_schema_json").$type<Record<string, unknown>>(),
+  enabled: boolean("enabled").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Agent Versions - versioned prompts with model configuration
+export const agentVersions = pgTable("agent_versions", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  agentId: integer("agent_id").references(() => agentDefinitions.id).notNull(),
+  version: text("version").notNull(),
+  promptTemplate: text("prompt_template"),
+  modelProvider: text("model_provider").notNull(), // openai, anthropic, google
+  modelName: text("model_name").notNull(), // gpt-4o, claude-3, gemini-pro
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_agent_version_unique").on(table.agentId, table.version),
+]);
+
+// Agent Runs - execution records
+export const agentRuns = pgTable("agent_runs", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  agentVersionId: integer("agent_version_id").references(() => agentVersions.id).notNull(),
+  initiativeId: integer("initiative_id").references(() => initiatives.id),
+  initiatedByUserId: varchar("initiated_by_user_id").references(() => users.id),
+  status: text("status").notNull().default("QUEUED"), // QUEUED, RUNNING, SUCCEEDED, FAILED, BLOCKED
+  inputJson: jsonb("input_json").$type<Record<string, unknown>>(),
+  outputJson: jsonb("output_json").$type<Record<string, unknown>>(),
+  evidenceRefsJson: jsonb("evidence_refs_json").$type<{ batchIds?: number[]; snapshotIds?: number[] }>(),
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
+  tokensJson: jsonb("tokens_json").$type<{ input?: number; output?: number; total?: number }>(),
+  costJson: jsonb("cost_json").$type<{ inputCost?: number; outputCost?: number; totalCost?: number }>(),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_agent_runs_status").on(table.status),
+  index("idx_agent_runs_initiative").on(table.initiativeId),
+]);
+
+// Council Reviews - review records from CHAIRMAN/CRITIC/QUANT
+export const councilReviews = pgTable("council_reviews", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  agentRunId: integer("agent_run_id").references(() => agentRuns.id).notNull(),
+  reviewerType: text("reviewer_type").notNull(), // CHAIRMAN, CRITIC, QUANT
+  status: text("status").notNull(), // APPROVED, BLOCKED, NEEDS_REVISION
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_council_review_unique").on(table.agentRunId, table.reviewerType),
+]);
+
+// System Docs - auto-generated documentation
+export const systemDocs = pgTable("system_docs", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  docType: text("doc_type").notNull(), // ARCHITECTURE, OPS_MANUAL, AGENT_REGISTRY, DATA_LINEAGE
+  contentMarkdown: text("content_markdown"),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+});
+
 // Relations
 export const excelVersionsRelations = relations(excelVersions, ({ many }) => ({
   projects: many(projects),
@@ -775,6 +843,13 @@ export const insertGovernanceAlertSchema = createInsertSchema(governanceAlerts).
 export const insertCommitteePacketSchema = createInsertSchema(committeePackets).omit({ id: true, createdAt: true } as Record<string, true>);
 export const insertChaserDraftSchema = createInsertSchema(chaserDrafts).omit({ id: true, createdAt: true } as Record<string, true>);
 
+// H5 Agentic Framework Insert Schemas
+export const insertAgentDefinitionSchema = createInsertSchema(agentDefinitions).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertAgentVersionSchema = createInsertSchema(agentVersions).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertAgentRunSchema = createInsertSchema(agentRuns).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertCouncilReviewSchema = createInsertSchema(councilReviews).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertSystemDocSchema = createInsertSchema(systemDocs).omit({ id: true, generatedAt: true } as Record<string, true>);
+
 // Types
 export type ExcelVersion = typeof excelVersions.$inferSelect;
 export type InsertExcelVersion = z.infer<typeof insertExcelVersionSchema>;
@@ -844,6 +919,18 @@ export type CommitteePacket = typeof committeePackets.$inferSelect;
 export type InsertCommitteePacket = z.infer<typeof insertCommitteePacketSchema>;
 export type ChaserDraft = typeof chaserDrafts.$inferSelect;
 export type InsertChaserDraft = z.infer<typeof insertChaserDraftSchema>;
+
+// H5 Agentic Framework Types
+export type AgentDefinition = typeof agentDefinitions.$inferSelect;
+export type InsertAgentDefinition = z.infer<typeof insertAgentDefinitionSchema>;
+export type AgentVersion = typeof agentVersions.$inferSelect;
+export type InsertAgentVersion = z.infer<typeof insertAgentVersionSchema>;
+export type AgentRun = typeof agentRuns.$inferSelect;
+export type InsertAgentRun = z.infer<typeof insertAgentRunSchema>;
+export type CouncilReview = typeof councilReviews.$inferSelect;
+export type InsertCouncilReview = z.infer<typeof insertCouncilReviewSchema>;
+export type SystemDoc = typeof systemDocs.$inferSelect;
+export type InsertSystemDoc = z.infer<typeof insertSystemDocSchema>;
 
 // Traffic light status enum for frontend
 export type TrafficLightStatus = 'green' | 'yellow' | 'red' | 'gray';

@@ -1,0 +1,178 @@
+✅ PHASE H5 — AGENTIC RACK + COUNCIL AUDIT + RAG-LITE (DB-GROUNDED) + AUTO-DOCS VISIBLE
+⛔ STOP al terminar H5. No avanzar a fases posteriores. No pedir validación manual al usuario.
+
+ABSOLUTE RULES
+1) User does not review code or run SQL. You must self-verify and paste outputs.
+2) ZERO LIES: Agents must only use DB evidence. If missing evidence -> INSF_EVIDENCE + missing_fields.
+3) Council Governance: Any agent output that makes recommendations must be reviewed by:
+   - CRITIC (Claude) and QUANT (Gemini). If keys missing -> reviewers return BLOCKED (not invented).
+4) Feature flags: Any agent can be disabled without breaking UI.
+5) Keep monolithic modular pattern: server/services, server/agents, DB-first.
+
+====================================================
+H5.1 — DB SCHEMA: AGENT REGISTRY + RUNS + COUNCIL REVIEWS + SYSTEM DOCS
+====================================================
+Create tables (Drizzle + migrations):
+
+A) agent_definitions
+- id uuid PK
+- name text UNIQUE
+- purpose text
+- input_schema_json jsonb
+- output_schema_json jsonb
+- enabled boolean default false
+- created_at timestamp
+
+B) agent_versions
+- id uuid PK
+- agent_id FK agent_definitions (indexed)
+- version text
+- prompt_template text
+- model_provider text (OPENAI|ANTHROPIC|GOOGLE)
+- model_name text
+- created_at timestamp
+- UNIQUE(agent_id, version)
+
+C) agent_runs
+- id uuid PK
+- agent_version_id FK agent_versions (indexed)
+- initiative_id uuid nullable (FK initiatives)  -- agents may run per initiative
+- initiated_by_user_id uuid nullable
+- status text (QUEUED|RUNNING|SUCCEEDED|BLOCKED|FAILED)
+- input_json jsonb
+- output_json jsonb
+- evidence_refs_json jsonb
+- started_at timestamp
+- finished_at timestamp
+- tokens_json jsonb nullable
+- cost_json jsonb nullable
+- error_message text nullable
+
+D) council_reviews
+- id uuid PK
+- agent_run_id FK agent_runs (indexed)
+- reviewer_type text (CHAIRMAN|CRITIC|QUANT)
+- status text (APPROVE|BLOCK|WARN|BLOCKED)  -- BLOCKED means missing deps/keys
+- notes text
+- created_at timestamp
+- UNIQUE(agent_run_id, reviewer_type)
+
+E) system_docs
+- id uuid PK
+- doc_type text  (SCHEMA_SUMMARY|ENDPOINT_INVENTORY|PHASE_STATUS|RUNBOOK)
+- content_markdown text
+- generated_at timestamp default now()
+
+====================================================
+H5.2 — EVIDENCE PACK SERVICE (DB-GROUNDED “RAG-LITE”)
+====================================================
+Implement server/services/evidencePack.ts:
+Given initiative_id, return a single object:
+{
+  initiative,
+  latest_snapshot,
+  recent_snapshots (last 3),
+  recent_deltas (last 20),
+  open_alerts,
+  recent_status_updates (last 5),
+  benefits (latest),
+  data_quality (latest snapshot score + warning counts if available),
+  provenance: { batch_ids, snapshot_ids }
+}
+
+Rules:
+- Evidence Pack MUST be DB-only. No external scraping.
+- Must include evidence_refs: batch_id, snapshot_id, alert_id, delta_event_id.
+
+====================================================
+H5.3 — AGENT CONTRACT + BASE AGENT RUNNER
+====================================================
+Create server/services/agentRunner.ts:
+- takes agent_name + initiative_id + optional user_text
+- loads active agent_version + prompt_template
+- fetches evidencePack
+- calls provider adapter (OpenAI mandatory; Anthropic/Google optional if keys configured)
+- persists agent_run (input/output/evidence_refs)
+- runs Council reviews:
+  - CHAIRMAN: the generator run itself (always recorded)
+  - CRITIC (Claude) and QUANT (Gemini):
+    - If keys missing, create council_review with status=BLOCKED and notes="missing API key"
+    - If keys present, call model to review output vs evidencePack and return APPROVE/BLOCK/WARN with notes
+- Final rule:
+  - If CRITIC or QUANT returns BLOCK => agent_run.status = BLOCKED
+  - Else agent_run.status = SUCCEEDED
+- Never invent success.
+
+====================================================
+H5.4 — AGENT FLEET (9 agents, JSON-only)
+====================================================
+Implement as server/agents/*.ts (or config-driven via agent_versions prompt_template):
+1) IntakeAgent
+2) CharterAgent
+3) RequirementsAgent
+4) ProcessAgent (AS-IS/TO-BE)
+5) PrioritizationAgent
+6) CommitteeBriefAgent
+7) TechAdvisorAgent
+8) BenefitsAgent
+9) RiskExplainerAgent
+
+Each agent output MUST be JSON with:
+status, entity, summary, data, missing_fields, evidence_refs, next_actions, audit
+
+IMPORTANT:
+- For initial implementation, you may start by registering ONLY 1 agent end-to-end:
+  - CommitteeBriefAgent (most valuable)
+Then scaffold the other agents as disabled definitions with placeholder prompt_templates.
+
+====================================================
+H5.5 — AUTO-DOCUMENTATION (VISIBLE IN FRONTEND)
+====================================================
+Implement job type GENERATE_SYSTEM_DOCS (DB-backed):
+- Generates markdown for:
+  1) SCHEMA_SUMMARY (from information_schema + drizzle tables list)
+  2) ENDPOINT_INVENTORY (list all Express routes registered)
+  3) PHASE_STATUS (H0..H5 completion + DoD status)
+  4) RUNBOOK (how to operate: ingest, exports, jobs, alerts)
+
+Persist to system_docs.
+
+Add UI (admin-only):
+/system with tabs:
+- Ops: batches, jobs, exports, alerts
+- Docs: render system_docs markdown + show replit.md contents if exists
+- Agents: list agent_definitions, versions, last agent_runs, council_reviews
+
+Endpoints:
+- POST /api/system/docs/run (enqueue job GENERATE_SYSTEM_DOCS)
+- GET /api/system/docs (list)
+- GET /api/system/docs/:id (content)
+- GET /api/agents (registry)
+- POST /api/agents/:name/run (runs agentRunner for an initiative_id)
+
+====================================================
+H5 DoD — SELF-VERIFY AND REPORT (NO USER VALIDATION)
+====================================================
+You must self-verify and paste outputs:
+
+A) Register CommitteeBriefAgent in agent_definitions + agent_versions (enabled=true)
+B) Run CommitteeBriefAgent on the existing initiative:
+   - Creates agent_run row
+   - Output_json contains evidence_refs
+   - council_reviews rows created for CHAIRMAN, CRITIC, QUANT
+     - If keys missing => BLOCKED is acceptable, but must be explicit
+C) Generate system docs:
+   - Enqueue GENERATE_SYSTEM_DOCS job
+   - system_docs rows created
+   - /system/docs displays markdown
+D) Feature flag:
+   - Show that disabling agent_definitions.enabled prevents execution (returns BLOCKED)
+
+STOP:
+After H5 complete, STOP and provide final Spanish report:
+1) Files changed
+2) Migrations applied
+3) Endpoints + UI routes added
+4) DoD proof outputs (agent_run + council_reviews + system_docs)
+5) Any risks/TODOs (e.g. missing API keys)
+No questions to user.

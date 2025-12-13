@@ -5,6 +5,7 @@ import {
   ingestionBatches, rawArtifacts, validationIssues, templateVersions,
   exportBatches, exportArtifacts, jobs, jobRuns, committeePackets, chaserDrafts,
   initiatives, initiativeSnapshots, deltaEvents, governanceAlerts, statusUpdates,
+  agentDefinitions, agentVersions, agentRuns, councilReviews, systemDocs,
   type ExcelVersion, type InsertExcelVersion,
   type Project, type InsertProject,
   type Department, type InsertDepartment,
@@ -29,6 +30,11 @@ import {
   type ExportArtifact, type InsertExportArtifact,
   type CommitteePacket, type InsertCommitteePacket,
   type ChaserDraft, type InsertChaserDraft,
+  type AgentDefinition, type InsertAgentDefinition,
+  type AgentVersion, type InsertAgentVersion,
+  type AgentRun, type InsertAgentRun,
+  type CouncilReview, type InsertCouncilReview,
+  type SystemDoc, type InsertSystemDoc,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray, count, lt, lte, or, isNull } from "drizzle-orm";
@@ -186,6 +192,34 @@ export interface IStorage {
   // H4 - Latest snapshots for export
   getLatestSnapshotPerInitiative(): Promise<InitiativeSnapshot[]>;
   getAlertCountByInitiative(): Promise<Map<number, number>>;
+
+  // H5 - Agent Definitions
+  createAgentDefinition(data: InsertAgentDefinition): Promise<AgentDefinition>;
+  getAgentDefinition(id: number): Promise<AgentDefinition | undefined>;
+  getAgentDefinitions(): Promise<AgentDefinition[]>;
+  getAgentDefinitionByName(name: string): Promise<AgentDefinition | undefined>;
+  updateAgentDefinition(id: number, data: Partial<AgentDefinition>): Promise<void>;
+
+  // H5 - Agent Versions
+  createAgentVersion(data: InsertAgentVersion): Promise<AgentVersion>;
+  getActiveAgentVersion(agentName: string): Promise<AgentVersion | undefined>;
+  getAgentVersionsByAgentId(agentId: number): Promise<AgentVersion[]>;
+
+  // H5 - Agent Runs
+  createAgentRun(data: InsertAgentRun): Promise<AgentRun>;
+  updateAgentRun(id: number, data: Partial<AgentRun>): Promise<void>;
+  getAgentRun(id: number): Promise<AgentRun | undefined>;
+  getAgentRunsByInitiative(initiativeId: number): Promise<AgentRun[]>;
+
+  // H5 - Council Reviews
+  createCouncilReview(data: InsertCouncilReview): Promise<CouncilReview>;
+  getCouncilReviewsByRunId(agentRunId: number): Promise<CouncilReview[]>;
+
+  // H5 - System Docs
+  createSystemDoc(data: InsertSystemDoc): Promise<SystemDoc>;
+  getSystemDocs(): Promise<SystemDoc[]>;
+  getSystemDoc(id: number): Promise<SystemDoc | undefined>;
+  getSystemDocByType(docType: string): Promise<SystemDoc | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1053,6 +1087,117 @@ export class DatabaseStorage implements IStorage {
       alertMap.set(r.initiativeId, r.alertCount);
     }
     return alertMap;
+  }
+
+  // H5 - Agent Definitions
+  async createAgentDefinition(data: InsertAgentDefinition): Promise<AgentDefinition> {
+    const [result] = await db.insert(agentDefinitions).values(data).returning();
+    return result;
+  }
+
+  async getAgentDefinition(id: number): Promise<AgentDefinition | undefined> {
+    const [result] = await db.select().from(agentDefinitions).where(eq(agentDefinitions.id, id));
+    return result;
+  }
+
+  async getAgentDefinitions(): Promise<AgentDefinition[]> {
+    return db.select().from(agentDefinitions).orderBy(agentDefinitions.name);
+  }
+
+  async getAgentDefinitionByName(name: string): Promise<AgentDefinition | undefined> {
+    const [result] = await db.select().from(agentDefinitions).where(eq(agentDefinitions.name, name));
+    return result;
+  }
+
+  async updateAgentDefinition(id: number, data: Partial<AgentDefinition>): Promise<void> {
+    await db.update(agentDefinitions).set(data).where(eq(agentDefinitions.id, id));
+  }
+
+  // H5 - Agent Versions
+  async createAgentVersion(data: InsertAgentVersion): Promise<AgentVersion> {
+    const [result] = await db.insert(agentVersions).values(data).returning();
+    return result;
+  }
+
+  async getActiveAgentVersion(agentName: string): Promise<AgentVersion | undefined> {
+    const agent = await this.getAgentDefinitionByName(agentName);
+    if (!agent) return undefined;
+
+    const [result] = await db.select()
+      .from(agentVersions)
+      .where(and(
+        eq(agentVersions.agentId, agent.id),
+        eq(agentVersions.isActive, true)
+      ))
+      .orderBy(desc(agentVersions.createdAt))
+      .limit(1);
+    return result;
+  }
+
+  async getAgentVersionsByAgentId(agentId: number): Promise<AgentVersion[]> {
+    return db.select()
+      .from(agentVersions)
+      .where(eq(agentVersions.agentId, agentId))
+      .orderBy(desc(agentVersions.createdAt));
+  }
+
+  // H5 - Agent Runs
+  async createAgentRun(data: InsertAgentRun): Promise<AgentRun> {
+    const [result] = await db.insert(agentRuns).values(data).returning();
+    return result;
+  }
+
+  async updateAgentRun(id: number, data: Partial<AgentRun>): Promise<void> {
+    await db.update(agentRuns).set(data).where(eq(agentRuns.id, id));
+  }
+
+  async getAgentRun(id: number): Promise<AgentRun | undefined> {
+    const [result] = await db.select().from(agentRuns).where(eq(agentRuns.id, id));
+    return result;
+  }
+
+  async getAgentRunsByInitiative(initiativeId: number): Promise<AgentRun[]> {
+    return db.select()
+      .from(agentRuns)
+      .where(eq(agentRuns.initiativeId, initiativeId))
+      .orderBy(desc(agentRuns.createdAt));
+  }
+
+  // H5 - Council Reviews
+  async createCouncilReview(data: InsertCouncilReview): Promise<CouncilReview> {
+    const [result] = await db.insert(councilReviews).values(data).returning();
+    return result;
+  }
+
+  async getCouncilReviewsByRunId(agentRunId: number): Promise<CouncilReview[]> {
+    return db.select()
+      .from(councilReviews)
+      .where(eq(councilReviews.agentRunId, agentRunId))
+      .orderBy(councilReviews.createdAt);
+  }
+
+  // H5 - System Docs
+  async createSystemDoc(data: InsertSystemDoc): Promise<SystemDoc> {
+    const [result] = await db.insert(systemDocs).values(data).returning();
+    return result;
+  }
+
+  async getSystemDocs(): Promise<SystemDoc[]> {
+    return db.select().from(systemDocs).orderBy(desc(systemDocs.generatedAt));
+  }
+
+  async getSystemDoc(id: number): Promise<SystemDoc | undefined> {
+    const [result] = await db.select().from(systemDocs).where(eq(systemDocs.id, id));
+    return result;
+  }
+
+  async getSystemDocByType(docType: string): Promise<SystemDoc | undefined> {
+    const [result] = await db.select()
+      .from(systemDocs)
+      .where(eq(systemDocs.docType, docType))
+      .orderBy(desc(systemDocs.generatedAt))
+      .limit(1);
+    return result;
   }
 }
 
