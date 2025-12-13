@@ -4,6 +4,7 @@ import {
   changeLogs, kpiValues, chatMessages, filterPresets, users,
   ingestionBatches, rawArtifacts, validationIssues, templateVersions,
   exportBatches, exportArtifacts, jobs, jobRuns,
+  initiatives, initiativeSnapshots,
   type ExcelVersion, type InsertExcelVersion,
   type Project, type InsertProject,
   type Department, type InsertDepartment,
@@ -17,6 +18,8 @@ import {
   type IngestionBatch, type InsertIngestionBatch,
   type RawArtifact, type InsertRawArtifact,
   type ValidationIssue, type InsertValidationIssue,
+  type Initiative, type InsertInitiative,
+  type InitiativeSnapshot, type InsertInitiativeSnapshot,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray, count } from "drizzle-orm";
@@ -104,6 +107,19 @@ export interface IStorage {
   createValidationIssue(issue: InsertValidationIssue): Promise<ValidationIssue>;
   createValidationIssues(issues: InsertValidationIssue[]): Promise<ValidationIssue[]>;
   getValidationIssuesByBatchId(batchId: number): Promise<ValidationIssue[]>;
+
+  // H2 - Initiatives
+  createInitiative(data: InsertInitiative): Promise<Initiative>;
+  getInitiatives(): Promise<Initiative[]>;
+  getInitiative(id: number): Promise<Initiative | undefined>;
+  updateInitiative(id: number, data: Partial<Initiative>): Promise<void>;
+  findInitiativeByDevopsCardId(cardId: string): Promise<Initiative | undefined>;
+  findInitiativeByPowerSteeringId(psId: string): Promise<Initiative | undefined>;
+
+  // H2 - Snapshots
+  createInitiativeSnapshot(data: InsertInitiativeSnapshot): Promise<InitiativeSnapshot>;
+  getSnapshotsByInitiativeId(initiativeId: number): Promise<InitiativeSnapshot[]>;
+  getSnapshotsByBatchId(batchId: number): Promise<InitiativeSnapshot[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -575,6 +591,64 @@ export class DatabaseStorage implements IStorage {
       .from(validationIssues)
       .where(eq(validationIssues.batchId, batchId))
       .orderBy(validationIssues.rowNumber);
+  }
+
+  // H2 - Initiatives
+  async createInitiative(data: InsertInitiative): Promise<Initiative> {
+    const [result] = await db.insert(initiatives).values(data).returning();
+    return result;
+  }
+
+  async getInitiatives(): Promise<Initiative[]> {
+    return db.select()
+      .from(initiatives)
+      .where(eq(initiatives.isActive, true))
+      .orderBy(desc(initiatives.updatedAt));
+  }
+
+  async getInitiative(id: number): Promise<Initiative | undefined> {
+    const [result] = await db.select().from(initiatives).where(eq(initiatives.id, id));
+    return result;
+  }
+
+  async updateInitiative(id: number, data: Partial<Initiative>): Promise<void> {
+    await db.update(initiatives)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(initiatives.id, id));
+  }
+
+  async findInitiativeByDevopsCardId(cardId: string): Promise<Initiative | undefined> {
+    const [result] = await db.select()
+      .from(initiatives)
+      .where(eq(initiatives.devopsCardId, cardId));
+    return result;
+  }
+
+  async findInitiativeByPowerSteeringId(psId: string): Promise<Initiative | undefined> {
+    const [result] = await db.select()
+      .from(initiatives)
+      .where(eq(initiatives.powerSteeringId, psId));
+    return result;
+  }
+
+  // H2 - Snapshots
+  async createInitiativeSnapshot(data: InsertInitiativeSnapshot): Promise<InitiativeSnapshot> {
+    const [result] = await db.insert(initiativeSnapshots).values(data).returning();
+    return result;
+  }
+
+  async getSnapshotsByInitiativeId(initiativeId: number): Promise<InitiativeSnapshot[]> {
+    return db.select()
+      .from(initiativeSnapshots)
+      .where(eq(initiativeSnapshots.initiativeId, initiativeId))
+      .orderBy(desc(initiativeSnapshots.createdAt));
+  }
+
+  async getSnapshotsByBatchId(batchId: number): Promise<InitiativeSnapshot[]> {
+    return db.select()
+      .from(initiativeSnapshots)
+      .where(eq(initiativeSnapshots.batchId, batchId))
+      .orderBy(initiativeSnapshots.id);
   }
 }
 
