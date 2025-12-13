@@ -4,6 +4,15 @@
 A Project Management Office (PMO) dashboard for managing continuous improvement projects. The platform provides a centralized view of project status, performance, and key metrics. It features deterministic Excel data parsing, PostgreSQL persistence, role-based authentication, and a fact-based conversational AI assistant. The system aims to enhance project oversight, facilitate data-driven decision-making, and streamline continuous improvement initiatives within an organization.
 
 ## Recent Changes (Dec 2025)
+- **Phase H2 Initiative Snapshots Completed**: Identity resolution and immutable snapshot history
+  - Added H2 schema tables: initiatives, scoringModels, scoringCriteria, scoringOptions, initiativeSnapshots, assessmentEntries, benefitRecords, statusUpdates, actionItems
+  - Implemented Identity Resolution: devopsCardId > powerSteeringId > (title+owner) canonical matching
+  - Snapshot Engine creates immutable point-in-time snapshots (never overwritten)
+  - Unique constraint on [initiativeId, batchId] ensures exactly 1 snapshot per initiative per batch
+  - TOTAL_MISMATCH detection creates SOFT validation warnings when Excel totals differ from calculated
+  - Time-travel UI: /initiatives list page, /initiatives/:id detail with snapshot history
+  - API endpoints: GET /api/initiatives, GET /api/initiatives/:id, GET /api/initiatives/:id/snapshots
+
 - **Phase H1 Data Foundation Completed**: Added infrastructure for data ingestion and export
   - Added H1 schema tables: ingestion_batches, raw_artifacts, validation_issues, template_versions, export_batches, export_artifacts, jobs, job_runs
   - Implemented BYTEA custom type for storing binary files in PostgreSQL

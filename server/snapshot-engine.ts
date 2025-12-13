@@ -62,6 +62,23 @@ export async function createSnapshotsFromBatch(
       continue;
     }
     
+    // DoD requirement: exactly 1 snapshot per initiative per batch
+    // Check if snapshot already exists (duplicate rows in Excel)
+    const alreadyExists = await storage.snapshotExists(initiativeId, batchId);
+    if (alreadyExists) {
+      skipped++;
+      warnings.push({
+        batchId,
+        severity: "soft",
+        code: "DUPLICATE_INITIATIVE",
+        rowNumber,
+        columnName: "TITLE",
+        rawValue: row.title,
+        message: `Initiative already has a snapshot in this batch (duplicate row skipped)`,
+      });
+      continue;
+    }
+    
     // Calculate totals from criteria (placeholder - real logic depends on scoring model)
     // For now, use Excel values as calculated values
     const calculatedValor = row.totalValor || 0;

@@ -22,7 +22,7 @@ export default function InitiativeDetail() {
   useDocumentTitle("Detalle de Iniciativa");
   
   const { data, isLoading } = useQuery<SnapshotsResponse>({
-    queryKey: ["/api/initiatives", id, "snapshots"],
+    queryKey: ['/api/initiatives', id, 'snapshots'],
     enabled: !!id,
   });
 

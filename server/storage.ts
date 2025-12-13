@@ -120,6 +120,7 @@ export interface IStorage {
   createInitiativeSnapshot(data: InsertInitiativeSnapshot): Promise<InitiativeSnapshot>;
   getSnapshotsByInitiativeId(initiativeId: number): Promise<InitiativeSnapshot[]>;
   getSnapshotsByBatchId(batchId: number): Promise<InitiativeSnapshot[]>;
+  snapshotExists(initiativeId: number, batchId: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -649,6 +650,16 @@ export class DatabaseStorage implements IStorage {
       .from(initiativeSnapshots)
       .where(eq(initiativeSnapshots.batchId, batchId))
       .orderBy(initiativeSnapshots.id);
+  }
+
+  async snapshotExists(initiativeId: number, batchId: number): Promise<boolean> {
+    const [result] = await db.select({ count: count() })
+      .from(initiativeSnapshots)
+      .where(and(
+        eq(initiativeSnapshots.initiativeId, initiativeId),
+        eq(initiativeSnapshots.batchId, batchId)
+      ));
+    return (result?.count ?? 0) > 0;
   }
 }
 
