@@ -4,6 +4,14 @@
 A Project Management Office (PMO) dashboard for managing continuous improvement projects. The platform provides a centralized view of project status, performance, and key metrics. It features deterministic Excel data parsing, PostgreSQL persistence, role-based authentication, and a fact-based conversational AI assistant. The system aims to enhance project oversight, facilitate data-driven decision-making, and streamline continuous improvement initiatives within an organization.
 
 ## Recent Changes (Dec 2025)
+- **Phase H1 Data Foundation Completed**: Added infrastructure for data ingestion and export
+  - Added H1 schema tables: ingestion_batches, raw_artifacts, validation_issues, template_versions, export_batches, export_artifacts, jobs, job_runs
+  - Implemented BYTEA custom type for storing binary files in PostgreSQL
+  - Created ingestion endpoints: POST /api/ingest/upload, GET /api/ingest/batches, GET /api/ingest/batches/:id/issues, GET /api/ingest/artifacts/:id/download
+  - Added idempotency check using SHA-256 hash - duplicate files return NOOP
+  - All validation issues persisted to validation_issues table
+  - Created IngestionStatus UI component for monitoring upload batches
+
 - **Phase H0 Hardening Completed**: Fixed type safety issues across critical paths
   - Removed `any` type bypasses in auth, OpenAI, and upload handlers
   - Added structured error logging with proper type narrowing
@@ -50,3 +58,56 @@ A Project Management Office (PMO) dashboard for managing continuous improvement 
 -   **OpenAI GPT-5**: AI model used for the PMO Chatbot functionality.
 -   **Replit AI Integrations**: Platform for integrating AI services.
 -   **Replit Auth**: OpenID Connect authentication for user management.
+
+## Database Restore Test Procedure
+
+### Prerequisites
+- Access to Replit database pane or Neon console
+- Admin credentials for the application
+
+### Test Steps
+
+1. **Verify H1 Tables Exist**
+   ```sql
+   SELECT table_name FROM information_schema.tables 
+   WHERE table_schema = 'public' 
+   AND table_name IN ('ingestion_batches', 'raw_artifacts', 'validation_issues', 
+                      'template_versions', 'export_batches', 'export_artifacts', 
+                      'jobs', 'job_runs');
+   ```
+
+2. **Test Ingestion Upload**
+   - Upload an Excel file via POST /api/ingest/upload
+   - Verify batch created in ingestion_batches table
+   - Verify raw artifact stored in raw_artifacts table
+   - Check validation_issues for any parsing errors
+
+3. **Test Idempotency**
+   - Upload the same file again
+   - Response should return `noop: true` with existing batch ID
+   - No duplicate records should be created
+
+4. **Test Artifact Download**
+   - GET /api/ingest/artifacts/{id}/download
+   - Verify Content-Type matches original file MIME type
+   - Verify Content-Disposition header contains original filename
+   - Compare file hash to ensure binary integrity
+
+5. **Verify Foreign Key Constraints**
+   ```sql
+   -- Verify constraints exist
+   SELECT conname, conrelid::regclass, confrelid::regclass 
+   FROM pg_constraint 
+   WHERE contype = 'f' 
+   AND conrelid::regclass::text IN ('raw_artifacts', 'validation_issues', 
+                                     'export_artifacts', 'job_runs');
+   ```
+
+### Recovery Steps
+
+If tables are missing after restore:
+```bash
+npm run db:push
+```
+
+This will recreate all tables defined in shared/schema.ts without data loss for existing tables.

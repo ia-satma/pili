@@ -1,12 +1,13 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
+import crypto from "crypto";
 import { z } from "zod";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import { parseExcelBuffer, type ParsedProject } from "./excel-parser";
 import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./openai";
-import type { InsertChangeLog, InsertKpiValue, Project, InsertProject } from "@shared/schema";
+import type { InsertChangeLog, InsertKpiValue, Project, InsertProject, InsertValidationIssue } from "@shared/schema";
 import { setupAuth, isAuthenticated, isAdmin, isEditor, isViewer, seedAdminUsers } from "./replitAuth";
 
 // Validation schemas
@@ -1384,6 +1385,248 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete filter preset error:", error);
       res.status(500).json({ message: "Error deleting filter preset" });
+    }
+  });
+
+  // ===== H1 DATA FOUNDATION - INGESTION =====
+  
+  // POST /api/ingest/upload - Upload file with idempotency check
+  app.post("/api/ingest/upload", isAuthenticated, isEditor, upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const fileBuffer = req.file.buffer;
+      const fileName = req.file.originalname;
+      const fileSize = req.file.size;
+      const mimeType = req.file.mimetype;
+
+      // Calculate SHA-256 hash
+      const fileHash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+
+      // Idempotency check: if file with same hash already committed, return NOOP
+      const existingBatch = await storage.getIngestionBatchByHash(fileHash);
+      if (existingBatch) {
+        return res.json({
+          success: true,
+          noop: true,
+          message: "Archivo ya procesado anteriormente",
+          batchId: existingBatch.id,
+          status: existingBatch.status,
+        });
+      }
+
+      // Get user ID from authenticated session
+      const authenticatedUser = req.user as Express.User;
+      const userId = authenticatedUser?.id || null;
+
+      // Create ingestion batch
+      const batch = await storage.createIngestionBatch({
+        sourceFileHash: fileHash,
+        sourceFileName: fileName,
+        status: "pending",
+        totalRows: 0,
+        processedRows: 0,
+        hardErrorCount: 0,
+        softErrorCount: 0,
+        uploadedBy: userId,
+      });
+
+      // Store raw artifact
+      await storage.createRawArtifact({
+        batchId: batch.id,
+        fileContent: fileBuffer,
+        fileName: fileName,
+        fileSize: fileSize,
+        mimeType: mimeType,
+        fileHash: fileHash,
+      });
+
+      // Update batch to processing
+      await storage.updateIngestionBatchStatus(batch.id, "processing", 0, 0, 0);
+
+      // Parse and validate the Excel file (this can create validation issues)
+      let totalRows = 0;
+      let hardErrorCount = 0;
+      let softErrorCount = 0;
+      const validationIssues: InsertValidationIssue[] = [];
+
+      try {
+        const workbook = XLSX.read(fileBuffer, { type: "buffer" });
+        const projectsSheet = workbook.Sheets["Proyectos PGP"];
+        
+        if (!projectsSheet) {
+          validationIssues.push({
+            batchId: batch.id,
+            severity: "hard",
+            code: "SHEET_NOT_FOUND",
+            rowNumber: null,
+            columnName: null,
+            rawValue: null,
+            message: "La hoja 'Proyectos PGP' no fue encontrada en el archivo",
+          });
+          hardErrorCount = 1;
+        } else {
+          const jsonData = XLSX.utils.sheet_to_json(projectsSheet, { defval: "" });
+          totalRows = jsonData.length;
+          
+          // Basic validation - count potential issues
+          jsonData.forEach((row: unknown, index: number) => {
+            const rowData = row as Record<string, unknown>;
+            const rowNum = index + 2; // Account for header row
+            
+            // Check for missing project name (hard error)
+            const projectName = rowData["PROYECTO"] || rowData["Proyecto"] || rowData["NOMBRE"] || rowData["Nombre"];
+            if (!projectName || String(projectName).trim() === "") {
+              validationIssues.push({
+                batchId: batch.id,
+                severity: "hard",
+                code: "MISSING_PROJECT_NAME",
+                rowNumber: rowNum,
+                columnName: "PROYECTO",
+                rawValue: null,
+                message: `Fila ${rowNum}: Nombre del proyecto es requerido`,
+              });
+              hardErrorCount++;
+            }
+            
+            // Check for invalid dates (soft error)
+            const startDate = rowData["INICIO"] || rowData["Inicio"] || rowData["FECHA INICIO"];
+            if (startDate && !isValidDate(String(startDate))) {
+              validationIssues.push({
+                batchId: batch.id,
+                severity: "soft",
+                code: "INVALID_DATE",
+                rowNumber: rowNum,
+                columnName: "INICIO",
+                rawValue: String(startDate),
+                message: `Fila ${rowNum}: Fecha de inicio inválida`,
+              });
+              softErrorCount++;
+            }
+          });
+        }
+      } catch (parseError) {
+        const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
+        validationIssues.push({
+          batchId: batch.id,
+          severity: "hard",
+          code: "PARSE_ERROR",
+          rowNumber: null,
+          columnName: null,
+          rawValue: null,
+          message: `Error al parsear archivo: ${errorMessage}`,
+        });
+        hardErrorCount = 1;
+      }
+
+      // Persist all validation issues
+      if (validationIssues.length > 0) {
+        await storage.createValidationIssues(validationIssues);
+      }
+
+      // Update batch with final status
+      const finalStatus = hardErrorCount > 0 ? "failed" : "committed";
+      await storage.updateIngestionBatchStatus(batch.id, finalStatus, hardErrorCount, softErrorCount, totalRows);
+
+      // Reload batch for response
+      const updatedBatch = await storage.getIngestionBatch(batch.id);
+
+      res.json({
+        success: hardErrorCount === 0,
+        noop: false,
+        batchId: batch.id,
+        status: finalStatus,
+        totalRows,
+        hardErrorCount,
+        softErrorCount,
+        message: hardErrorCount > 0 
+          ? `Archivo procesado con ${hardErrorCount} errores críticos` 
+          : `Archivo procesado exitosamente con ${softErrorCount} advertencias`,
+      });
+    } catch (error) {
+      console.error("Ingest upload error:", error instanceof Error ? error.message : String(error));
+      res.status(500).json({ message: "Error al procesar el archivo" });
+    }
+  });
+
+  // Helper function to validate dates
+  function isValidDate(dateStr: string): boolean {
+    if (!dateStr || dateStr.trim() === "" || dateStr.toLowerCase() === "tbd") return true;
+    const parsed = Date.parse(dateStr);
+    return !isNaN(parsed);
+  }
+
+  // GET /api/ingest/batches - List all ingestion batches with artifact info
+  app.get("/api/ingest/batches", async (req, res) => {
+    try {
+      const batches = await storage.getIngestionBatches();
+      
+      // Enrich batches with artifact info for download functionality
+      const batchesWithArtifacts = await Promise.all(
+        batches.map(async (batch) => {
+          const artifacts = await storage.getRawArtifactsByBatchId(batch.id);
+          const primaryArtifact = artifacts[0]; // Usually one artifact per batch
+          return {
+            ...batch,
+            artifactId: primaryArtifact?.id ?? null,
+            artifactFileName: primaryArtifact?.fileName ?? null,
+          };
+        })
+      );
+      
+      res.json({ batches: batchesWithArtifacts });
+    } catch (error) {
+      console.error("Get ingestion batches error:", error);
+      res.status(500).json({ message: "Error loading batches" });
+    }
+  });
+
+  // GET /api/ingest/batches/:id/issues - Get validation issues for a batch
+  app.get("/api/ingest/batches/:id/issues", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid batch ID" });
+      }
+
+      const batch = await storage.getIngestionBatch(id);
+      if (!batch) {
+        return res.status(404).json({ message: "Batch not found" });
+      }
+
+      const issues = await storage.getValidationIssuesByBatchId(id);
+      res.json({ batch, issues });
+    } catch (error) {
+      console.error("Get batch issues error:", error);
+      res.status(500).json({ message: "Error loading validation issues" });
+    }
+  });
+
+  // GET /api/ingest/artifacts/:id/download - Download raw artifact
+  app.get("/api/ingest/artifacts/:id/download", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid artifact ID" });
+      }
+
+      const artifact = await storage.getRawArtifact(id);
+      if (!artifact) {
+        return res.status(404).json({ message: "Artifact not found" });
+      }
+
+      // Set proper headers for file download
+      res.setHeader("Content-Type", artifact.mimeType);
+      res.setHeader("Content-Disposition", `attachment; filename="${artifact.fileName}"`);
+      res.setHeader("Content-Length", artifact.fileSize);
+
+      // Send the binary content
+      res.send(artifact.fileContent);
+    } catch (error) {
+      console.error("Download artifact error:", error);
+      res.status(500).json({ message: "Error downloading artifact" });
     }
   });
 

@@ -2,6 +2,8 @@
 import { 
   excelVersions, projects, departments, milestones, projectUpdates, 
   changeLogs, kpiValues, chatMessages, filterPresets, users,
+  ingestionBatches, rawArtifacts, validationIssues, templateVersions,
+  exportBatches, exportArtifacts, jobs, jobRuns,
   type ExcelVersion, type InsertExcelVersion,
   type Project, type InsertProject,
   type Department, type InsertDepartment,
@@ -12,6 +14,9 @@ import {
   type ChatMessage, type InsertChatMessage,
   type FilterPreset, type InsertFilterPreset,
   type User, type UpsertUser,
+  type IngestionBatch, type InsertIngestionBatch,
+  type RawArtifact, type InsertRawArtifact,
+  type ValidationIssue, type InsertValidationIssue,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray, count } from "drizzle-orm";
@@ -82,6 +87,23 @@ export interface IStorage {
   // Bulk Operations
   bulkUpdateProjects(ids: number[], field: string, value: string): Promise<number>;
   bulkDeleteProjects(ids: number[]): Promise<number>;
+
+  // H1 Data Foundation - Ingestion
+  createIngestionBatch(batch: InsertIngestionBatch): Promise<IngestionBatch>;
+  getIngestionBatches(): Promise<IngestionBatch[]>;
+  getIngestionBatch(id: number): Promise<IngestionBatch | undefined>;
+  getIngestionBatchByHash(hash: string): Promise<IngestionBatch | undefined>;
+  updateIngestionBatchStatus(id: number, status: string, hardErrors: number, softErrors: number, processedRows: number): Promise<void>;
+  
+  // H1 Data Foundation - Raw Artifacts
+  createRawArtifact(artifact: InsertRawArtifact): Promise<RawArtifact>;
+  getRawArtifact(id: number): Promise<RawArtifact | undefined>;
+  getRawArtifactsByBatchId(batchId: number): Promise<RawArtifact[]>;
+  
+  // H1 Data Foundation - Validation Issues
+  createValidationIssue(issue: InsertValidationIssue): Promise<ValidationIssue>;
+  createValidationIssues(issues: InsertValidationIssue[]): Promise<ValidationIssue[]>;
+  getValidationIssuesByBatchId(batchId: number): Promise<ValidationIssue[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -477,6 +499,82 @@ export class DatabaseStorage implements IStorage {
     }
 
     return projectsToDelete.length;
+  }
+
+  // H1 Data Foundation - Ingestion Batches
+  async createIngestionBatch(batch: InsertIngestionBatch): Promise<IngestionBatch> {
+    const [result] = await db.insert(ingestionBatches).values(batch).returning();
+    return result;
+  }
+
+  async getIngestionBatches(): Promise<IngestionBatch[]> {
+    return db.select().from(ingestionBatches).orderBy(desc(ingestionBatches.createdAt));
+  }
+
+  async getIngestionBatch(id: number): Promise<IngestionBatch | undefined> {
+    const [result] = await db.select().from(ingestionBatches).where(eq(ingestionBatches.id, id));
+    return result;
+  }
+
+  async getIngestionBatchByHash(hash: string): Promise<IngestionBatch | undefined> {
+    const [result] = await db.select()
+      .from(ingestionBatches)
+      .where(and(
+        eq(ingestionBatches.sourceFileHash, hash),
+        eq(ingestionBatches.status, "committed")
+      ));
+    return result;
+  }
+
+  async updateIngestionBatchStatus(
+    id: number, 
+    status: string, 
+    hardErrors: number, 
+    softErrors: number, 
+    processedRows: number
+  ): Promise<void> {
+    await db.update(ingestionBatches)
+      .set({ 
+        status, 
+        hardErrorCount: hardErrors, 
+        softErrorCount: softErrors,
+        processedRows,
+        completedAt: status === "committed" || status === "failed" ? new Date() : null,
+      })
+      .where(eq(ingestionBatches.id, id));
+  }
+
+  // H1 Data Foundation - Raw Artifacts
+  async createRawArtifact(artifact: InsertRawArtifact): Promise<RawArtifact> {
+    const [result] = await db.insert(rawArtifacts).values(artifact).returning();
+    return result;
+  }
+
+  async getRawArtifact(id: number): Promise<RawArtifact | undefined> {
+    const [result] = await db.select().from(rawArtifacts).where(eq(rawArtifacts.id, id));
+    return result;
+  }
+
+  async getRawArtifactsByBatchId(batchId: number): Promise<RawArtifact[]> {
+    return db.select().from(rawArtifacts).where(eq(rawArtifacts.batchId, batchId));
+  }
+
+  // H1 Data Foundation - Validation Issues
+  async createValidationIssue(issue: InsertValidationIssue): Promise<ValidationIssue> {
+    const [result] = await db.insert(validationIssues).values(issue).returning();
+    return result;
+  }
+
+  async createValidationIssues(issues: InsertValidationIssue[]): Promise<ValidationIssue[]> {
+    if (issues.length === 0) return [];
+    return db.insert(validationIssues).values(issues).returning();
+  }
+
+  async getValidationIssuesByBatchId(batchId: number): Promise<ValidationIssue[]> {
+    return db.select()
+      .from(validationIssues)
+      .where(eq(validationIssues.batchId, batchId))
+      .orderBy(validationIssues.rowNumber);
   }
 }
 

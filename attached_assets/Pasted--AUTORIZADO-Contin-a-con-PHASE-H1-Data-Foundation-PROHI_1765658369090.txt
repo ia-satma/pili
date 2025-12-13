@@ -1,0 +1,56 @@
+✅ AUTORIZADO: Continúa con PHASE H1 (Data Foundation). 
+⛔ PROHIBIDO avanzar a H2 hasta que yo valide H1 con los DoD.
+
+H1 OBJETIVO:
+Implementar Ingestión auditable + Custodia + Validación + Idempotencia usando Postgres como Source of Truth y guardando los Excels dentro de la BD (BYTEA) según el Delta aprobado.
+
+H1 ENTREGABLES OBLIGATORIOS (sin excepción):
+
+1) DRIZZLE SCHEMA + MIGRATIONS (shared/schema.ts + migrations)
+   Crear tablas:
+   - ingestion_batches
+   - raw_artifacts  (file_content MUST be BYTEA)
+   - validation_issues (normalizado: hard/soft, code, row/col, raw_value)
+   - template_versions (structure_json para layout multi-header)
+   - export_batches + export_artifacts (file_content BYTEA)  [aunque el export engine sea H4]
+   - jobs + job_runs (solo schema en H1; ejecución en H4)
+
+   Nota técnica: para BYTEA usa el tipo nativo de Drizzle `bytea()` (pg-core). 
+   (No custom types si no es estrictamente necesario). 
+
+2) ENDPOINTS MÍNIMOS H1 (backend)
+   - POST /api/ingest/upload 
+     * Calcula sha256 del archivo
+     * Crea ingestion_batch + raw_artifact(file_content BYTEA) en transacción
+     * Idempotencia:
+       - Si el mismo source_file_hash ya existe COMMITTED/COMMITTED_WITH_WARNINGS, responde NOOP (no dupliques file_content).
+     * Persistir validation_issues (hard/soft) + status del batch
+   - GET /api/ingest/batches
+   - GET /api/ingest/batches/:id/issues
+   - GET /api/ingest/artifacts/:id/download
+     * Debe devolver el binario desde BYTEA (con Content-Type y Content-Disposition)
+
+3) UI MÍNIMA H1 (cliente)
+   - Mostrar último batch (status + conteo de hard/soft)
+   - Mostrar lista de issues del batch (aunque sea una tabla simple)
+   - Botón/link para descargar el raw artifact (Excel) desde la DB
+
+H1 DoD (criterios de aceptación) — NO NEGOCIABLES:
+A) IDEMPOTENCIA:
+   - Subir el MISMO Excel 2 veces => segunda vez NOOP / delta=0.
+   - No debe insertarse un segundo raw_artifact duplicado (mismo hash) en la BD.
+
+B) VALIDACIÓN VISIBLE:
+   - Cualquier error o warning se persiste en validation_issues y se muestra en UI.
+   - No existen fallas silenciosas.
+
+C) ARTIFACT RECOVERABILITY (Delta Gemini):
+   - Se puede descargar el Excel histórico desde la BD (BYTEA).
+   - Documenta en replit.md un procedimiento mínimo de “DB restore test” y verifica que tras restaurar se puede volver a descargar el archivo.
+
+STOP:
+Cuando termines H1, detente y entrega:
+- lista de archivos cambiados
+- migraciones creadas
+- evidencia de los DoD (capturas/logs de NOOP, issues visibles, descarga OK)
+No avances a H2 sin mi confirmación.

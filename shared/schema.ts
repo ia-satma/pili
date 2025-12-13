@@ -1,7 +1,20 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, date, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, date, jsonb, index, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Custom BYTEA type for storing binary data (Excel files)
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+  toDriver(value: Buffer): Buffer {
+    return value;
+  },
+  fromDriver(value: Buffer): Buffer {
+    return value;
+  },
+});
 
 // Session storage table - required for Replit Auth
 export const sessions = pgTable(
@@ -187,6 +200,103 @@ export const filterPresets = pgTable("filter_presets", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ===== H1 Data Foundation Tables =====
+
+// Ingestion batches - tracks file upload sessions
+export const ingestionBatches = pgTable("ingestion_batches", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  sourceFileHash: text("source_file_hash").notNull(),
+  sourceFileName: text("source_file_name").notNull(),
+  status: text("status").notNull().default("pending"), // pending, processing, committed, failed
+  totalRows: integer("total_rows").default(0),
+  processedRows: integer("processed_rows").default(0),
+  hardErrorCount: integer("hard_error_count").default(0),
+  softErrorCount: integer("soft_error_count").default(0),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+// Raw artifacts - stores original uploaded files as BYTEA
+export const rawArtifacts = pgTable("raw_artifacts", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  batchId: integer("batch_id").references(() => ingestionBatches.id).notNull(),
+  fileContent: bytea("file_content").notNull(),
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileHash: text("file_hash").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Validation issues - tracks all hard/soft errors during ingestion
+export const validationIssues = pgTable("validation_issues", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  batchId: integer("batch_id").references(() => ingestionBatches.id).notNull(),
+  severity: text("severity").notNull(), // "hard" or "soft"
+  code: text("code").notNull(), // error code for categorization
+  rowNumber: integer("row_number"),
+  columnName: text("column_name"),
+  rawValue: text("raw_value"),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Template versions - tracks Excel template structure changes
+export const templateVersions = pgTable("template_versions", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").notNull(),
+  version: text("version").notNull(),
+  structureJson: jsonb("structure_json").$type<Record<string, unknown>>().notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Export batches - tracks export operations
+export const exportBatches = pgTable("export_batches", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  status: text("status").notNull().default("pending"), // pending, processing, completed, failed
+  exportType: text("export_type").notNull(), // excel, pdf, csv
+  filterCriteria: jsonb("filter_criteria").$type<Record<string, unknown>>().default({}),
+  requestedBy: varchar("requested_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+// Export artifacts - stores generated export files
+export const exportArtifacts = pgTable("export_artifacts", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  batchId: integer("batch_id").references(() => exportBatches.id).notNull(),
+  fileContent: bytea("file_content").notNull(),
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size").notNull(),
+  mimeType: text("mime_type").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Jobs - scheduled background tasks
+export const jobs = pgTable("jobs", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").notNull().unique(),
+  jobType: text("job_type").notNull(),
+  cronExpression: text("cron_expression"),
+  isEnabled: boolean("is_enabled").default(true),
+  lastRunAt: timestamp("last_run_at"),
+  nextRunAt: timestamp("next_run_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Job runs - execution history for scheduled jobs
+export const jobRuns = pgTable("job_runs", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  jobId: integer("job_id").references(() => jobs.id).notNull(),
+  status: text("status").notNull(), // pending, running, completed, failed
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  errorMessage: text("error_message"),
+  resultSummary: jsonb("result_summary").$type<Record<string, unknown>>(),
+});
+
 // Relations
 export const excelVersionsRelations = relations(excelVersions, ({ many }) => ({
   projects: many(projects),
@@ -260,6 +370,56 @@ export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
   }),
 }));
 
+// H1 Data Foundation Relations
+export const ingestionBatchesRelations = relations(ingestionBatches, ({ one, many }) => ({
+  uploadedByUser: one(users, {
+    fields: [ingestionBatches.uploadedBy],
+    references: [users.id],
+  }),
+  rawArtifacts: many(rawArtifacts),
+  validationIssues: many(validationIssues),
+}));
+
+export const rawArtifactsRelations = relations(rawArtifacts, ({ one }) => ({
+  batch: one(ingestionBatches, {
+    fields: [rawArtifacts.batchId],
+    references: [ingestionBatches.id],
+  }),
+}));
+
+export const validationIssuesRelations = relations(validationIssues, ({ one }) => ({
+  batch: one(ingestionBatches, {
+    fields: [validationIssues.batchId],
+    references: [ingestionBatches.id],
+  }),
+}));
+
+export const exportBatchesRelations = relations(exportBatches, ({ one, many }) => ({
+  requestedByUser: one(users, {
+    fields: [exportBatches.requestedBy],
+    references: [users.id],
+  }),
+  exportArtifacts: many(exportArtifacts),
+}));
+
+export const exportArtifactsRelations = relations(exportArtifacts, ({ one }) => ({
+  batch: one(exportBatches, {
+    fields: [exportArtifacts.batchId],
+    references: [exportBatches.id],
+  }),
+}));
+
+export const jobsRelations = relations(jobs, ({ many }) => ({
+  runs: many(jobRuns),
+}));
+
+export const jobRunsRelations = relations(jobRuns, ({ one }) => ({
+  job: one(jobs, {
+    fields: [jobRuns.jobId],
+    references: [jobs.id],
+  }),
+}));
+
 // Insert schemas - using type assertion to work around drizzle-zod omit() TypeScript bug
 // See: https://github.com/drizzle-team/drizzle-orm/issues/4016
 export const insertExcelVersionSchema = createInsertSchema(excelVersions).omit({ id: true, uploadedAt: true } as Record<string, true>);
@@ -271,6 +431,16 @@ export const insertChangeLogSchema = createInsertSchema(changeLogs).omit({ id: t
 export const insertKpiValueSchema = createInsertSchema(kpiValues).omit({ id: true, calculatedAt: true } as Record<string, true>);
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true } as Record<string, true>);
 export const insertFilterPresetSchema = createInsertSchema(filterPresets).omit({ id: true, createdAt: true } as Record<string, true>);
+
+// H1 Data Foundation Insert Schemas
+export const insertIngestionBatchSchema = createInsertSchema(ingestionBatches).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertRawArtifactSchema = createInsertSchema(rawArtifacts).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertValidationIssueSchema = createInsertSchema(validationIssues).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertTemplateVersionSchema = createInsertSchema(templateVersions).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertExportBatchSchema = createInsertSchema(exportBatches).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertExportArtifactSchema = createInsertSchema(exportArtifacts).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertJobRunSchema = createInsertSchema(jobRuns).omit({ id: true, startedAt: true } as Record<string, true>);
 
 // Types
 export type ExcelVersion = typeof excelVersions.$inferSelect;
@@ -291,6 +461,24 @@ export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type FilterPreset = typeof filterPresets.$inferSelect;
 export type InsertFilterPreset = z.infer<typeof insertFilterPresetSchema>;
+
+// H1 Data Foundation Types
+export type IngestionBatch = typeof ingestionBatches.$inferSelect;
+export type InsertIngestionBatch = z.infer<typeof insertIngestionBatchSchema>;
+export type RawArtifact = typeof rawArtifacts.$inferSelect;
+export type InsertRawArtifact = z.infer<typeof insertRawArtifactSchema>;
+export type ValidationIssue = typeof validationIssues.$inferSelect;
+export type InsertValidationIssue = z.infer<typeof insertValidationIssueSchema>;
+export type TemplateVersion = typeof templateVersions.$inferSelect;
+export type InsertTemplateVersion = z.infer<typeof insertTemplateVersionSchema>;
+export type ExportBatch = typeof exportBatches.$inferSelect;
+export type InsertExportBatch = z.infer<typeof insertExportBatchSchema>;
+export type ExportArtifact = typeof exportArtifacts.$inferSelect;
+export type InsertExportArtifact = z.infer<typeof insertExportArtifactSchema>;
+export type Job = typeof jobs.$inferSelect;
+export type InsertJob = z.infer<typeof insertJobSchema>;
+export type JobRun = typeof jobRuns.$inferSelect;
+export type InsertJobRun = z.infer<typeof insertJobRunSchema>;
 
 // Traffic light status enum for frontend
 export type TrafficLightStatus = 'green' | 'yellow' | 'red' | 'gray';
