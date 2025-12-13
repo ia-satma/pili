@@ -260,16 +260,17 @@ export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
   }),
 }));
 
-// Insert schemas
-export const insertExcelVersionSchema = createInsertSchema(excelVersions).omit({ id: true, uploadedAt: true });
-export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });
-export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertMilestoneSchema = createInsertSchema(milestones).omit({ id: true, createdAt: true });
-export const insertProjectUpdateSchema = createInsertSchema(projectUpdates).omit({ id: true });
-export const insertChangeLogSchema = createInsertSchema(changeLogs).omit({ id: true, changedAt: true });
-export const insertKpiValueSchema = createInsertSchema(kpiValues).omit({ id: true, calculatedAt: true });
-export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
-export const insertFilterPresetSchema = createInsertSchema(filterPresets).omit({ id: true, createdAt: true });
+// Insert schemas - using type assertion to work around drizzle-zod omit() TypeScript bug
+// See: https://github.com/drizzle-team/drizzle-orm/issues/4016
+export const insertExcelVersionSchema = createInsertSchema(excelVersions).omit({ id: true, uploadedAt: true } as Record<string, true>);
+export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true } as Record<string, true>);
+export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, createdAt: true, updatedAt: true } as Record<string, true>);
+export const insertMilestoneSchema = createInsertSchema(milestones).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertProjectUpdateSchema = createInsertSchema(projectUpdates).omit({ id: true } as Record<string, true>);
+export const insertChangeLogSchema = createInsertSchema(changeLogs).omit({ id: true, changedAt: true } as Record<string, true>);
+export const insertKpiValueSchema = createInsertSchema(kpiValues).omit({ id: true, calculatedAt: true } as Record<string, true>);
+export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertFilterPresetSchema = createInsertSchema(filterPresets).omit({ id: true, createdAt: true } as Record<string, true>);
 
 // Types
 export type ExcelVersion = typeof excelVersions.$inferSelect;
