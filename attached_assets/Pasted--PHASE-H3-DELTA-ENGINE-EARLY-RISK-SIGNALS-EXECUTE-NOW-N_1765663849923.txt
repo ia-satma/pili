@@ -1,0 +1,127 @@
+✅ PHASE H3 — DELTA ENGINE + EARLY RISK SIGNALS (EXECUTE NOW)
+⛔ NO avances a H4/H5. Al terminar H3 DETENTE y entrega reporte con evidencia (sin pedir al usuario que valide).
+
+REGLAS:
+1) No sobrescribir snapshots. Deltas siempre comparan snapshot actual vs snapshot previo.
+2) No silent failures. Toda falla o anomalía se registra como issue/alert visible.
+3) Idempotencia sigue vigente (H1/H2 no se rompe).
+4) El usuario NO revisa SQL ni código: tú haces auto-verificación y pegas outputs.
+
+====================================================
+H3.1 — NUEVA TABLA: delta_events (DB-first + migration)
+====================================================
+Crear tabla delta_events:
+- id uuid PK
+- initiative_id FK initiatives (indexed)
+- from_snapshot_id FK initiative_snapshots
+- to_snapshot_id FK initiative_snapshots
+- field_path text NOT NULL (ej: "dates.end_date", "financials.benefit_estimated", "status.status_text", "scores.total")
+- old_value text nullable
+- new_value text nullable
+- severity enum INFO|WARN|RISK (o text con constraint)
+- detected_at timestamp default now()
+
+IMPORTANTE:
+- No intentes almacenar JSON completo en delta_events. Solo cambios.
+- Crea índices por initiative_id y detected_at.
+
+====================================================
+H3.2 — DELTA ENGINE (core logic)
+====================================================
+Implementar un servicio server/services/deltaEngine.ts (o similar) que:
+1) Para cada initiative_id con nuevo snapshot (to_snapshot):
+   - Buscar snapshot previo (from_snapshot) por captured_at DESC donde snapshot.id != to_snapshot.id
+2) Comparar:
+   - campos relevantes en snapshots:
+     a) dates_json
+     b) financials_json
+     c) status_json
+     d) calculated_total_value / effort / score
+     e) calculated_scores_json (si existe)
+3) Generar delta_events por cada diferencia detectada:
+   - normalizar values a string (JSON.stringify cuando aplique)
+   - field_path consistente (ej. "dates.<key>", "financials.<key>", "status.<key>", "calculated.total_score")
+   - severity:
+     - INFO: cambios menores (texto descriptivo, notas)
+     - WARN: cambios de fechas, esfuerzo, o score moderado
+     - RISK: cambios repetidos o degradación de valor (ver señales)
+
+Integración:
+- Al cerrar un batch COMMITTED / COMMITTED_WITH_WARNINGS (después de snapshots):
+  - corre deltaEngine para todas las initiatives afectadas por el batch
+
+====================================================
+H3.3 — SEÑALES TEMPRANAS (persistentes y visibles)
+====================================================
+Crear tabla governance_alerts (o reutiliza action_items si ya existe, pero prefiero separada):
+- id uuid PK
+- initiative_id FK initiatives (indexed)
+- signal_code text NOT NULL
+- severity enum LOW|MEDIUM|HIGH
+- status enum OPEN|ACKNOWLEDGED|RESOLVED (default OPEN)
+- rationale text
+- detected_at timestamp default now()
+- related_snapshot_id uuid nullable
+- related_batch_id uuid nullable
+
+Implementar 5 señales mínimas (trigger post-delta):
+1) ZOMBI (Silence Risk):
+   - Si no existe status_update en > 21 días (usa status_updates.created_at)
+   - severity MEDIUM
+2) ANGUILA (Sliding Date):
+   - end_date se movió > 15 días en 3 snapshots consecutivos (requiere historial; si aún no hay 3, no dispara)
+   - severity HIGH
+3) OPTIMISTA (Score Inflation):
+   - calculated_total_score sube > 20% sin cambio de stage_gate y sin incremento en evidencia (si evidencia aún no existe, usa heurística: no hay nuevos assessment_entries)
+   - severity MEDIUM/HIGH según magnitud
+4) INDECISO (Flip-Flop):
+   - Un campo clave cambia A->B->A dentro de 4 semanas (ej: prioridad, tipo, beneficio)
+   - severity MEDIUM
+5) DRENAJE_DE_VALOR:
+   - benefit_estimated disminuye en snapshots consecutivos (tendencia negativa)
+   - severity MEDIUM/HIGH
+
+REGLA DE NO-DUPLICACIÓN:
+- No crear la misma alerta OPEN repetida para el mismo initiative_id + signal_code.
+- Si ya existe OPEN, actualizar rationale/detected_at o guardar evento adicional (tu elección, pero debe ser consistente).
+
+====================================================
+H3.4 — API ENDPOINTS + UI mínima (para operar sin Excel)
+====================================================
+Endpoints:
+- GET /api/initiatives/:id/deltas (últimos N deltas)
+- GET /api/alerts?status=OPEN (lista de alertas)
+- GET /api/initiatives/:id/alerts
+
+UI mínima:
+- En /initiatives/:id agregar 2 secciones:
+  A) Cambios recientes (deltas)
+  B) Alertas activas (signals)
+- Una pantalla simple /alerts para ver alertas OPEN
+
+====================================================
+H3 DoD — AUTO-VERIFICACIÓN (tú lo pruebas y pegas resultados)
+====================================================
+Debes probar con dos cargas distintas:
+1) Subir Excel A (baseline)
+2) Modificar 2-3 campos en Excel B (fecha fin, beneficio, texto status) y volver a subir
+
+EVIDENCIA OBLIGATORIA EN TU REPORTE FINAL:
+A) Conteo de delta_events creados para un initiative con cambios
+B) Ejemplo de 3 delta_events reales con field_path + old/new
+C) Alertas:
+   - Al menos 1 alerta creada (si no se disparan por falta de historial, crea un test controlado: forzar un status_update antiguo o simular snapshots adicionales; documenta cómo lo hiciste)
+D) Confirmar que H1/H2 siguen: no overwrite, idempotencia, artifacts BYTEA intactos
+
+====================================================
+STOP
+====================================================
+Al terminar H3:
+- STOP. No avances a H4/H5.
+- Reporte final en español con:
+  1) Archivos cambiados
+  2) Migraciones aplicadas
+  3) Endpoints y pantallas nuevas
+  4) Evidencia pegada (outputs/ejemplos) sin pedir al usuario validar
+  5) Riesgos/TODOs
+No preguntas al usuario.
