@@ -4,6 +4,17 @@
 A Project Management Office (PMO) dashboard for managing continuous improvement projects. The platform provides a centralized view of project status, performance, and key metrics. It features deterministic Excel data parsing, PostgreSQL persistence, role-based authentication, and a fact-based conversational AI assistant. The system aims to enhance project oversight, facilitate data-driven decision-making, and streamline continuous improvement initiatives within an organization.
 
 ## Recent Changes (Dec 2025)
+- **Phase H4 DB-Backed Autonomy & Excel Export Completed**: Job queue system and official exports
+  - Job Queue System (DB-backed, no cron): jobs table with status/locking/retry, job_runs for history
+  - Worker Loop (server/services/workerLoop.ts): Polls QUEUED jobs, SELECT FOR UPDATE locking, stale lock detection (10 min TTL)
+  - Job Types: GENERATE_EXPORT_EXCEL, GENERATE_COMMITTEE_PACKET, DETECT_LIMBO, DRAFT_CHASERS
+  - Export Engine (server/services/exportEngine.ts): Latest snapshots → Excel BYTEA with content_sha256
+  - Committee Packet Generator (server/services/committeePacketGenerator.ts): JSON summary with recommended actions
+  - Chaser Drafts (server/services/chaserDraftGenerator.ts): Draft emails for HIGH/ZOMBI alerts
+  - API endpoints: POST /api/exports/run, GET /api/exports, GET /api/exports/:id/download, POST /api/committee/run, GET /api/committee/packets, GET /api/chasers, GET /api/jobs/:id
+  - UI: /exports, /committee, /committee/:id, /chasers pages with Spanish text
+  - New tables: committee_packets, chaser_drafts (jobs/job_runs redesigned for queue-based)
+
 - **Phase H3 Delta Engine & Signal Detection Completed**: Change tracking and governance alerts
   - Added H3 schema tables: delta_events, governance_alerts with proper indexes
   - Delta Engine (server/services/deltaEngine.ts): Compares consecutive snapshots, generates deltas
