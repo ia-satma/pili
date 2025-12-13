@@ -101,7 +101,7 @@ export async function setupAuth(app: Express) {
       }
       req.logIn(user, (err) => {
         if (err) {
-          console.error("Login session error:", err);
+          console.error("Login session error:", err instanceof Error ? err.message : String(err));
           return res.status(500).json({ message: "Error al iniciar sesión" });
         }
         return res.json({ 

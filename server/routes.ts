@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { z } from "zod";
@@ -325,16 +325,17 @@ export async function registerRoutes(
   await seedAdminUsers();
 
   // ===== AUTH ROUTES =====
-  app.get("/api/auth/user", async (req, res) => {
+  app.get("/api/auth/user", async (req: Request, res: Response) => {
     try {
       if (!req.isAuthenticated() || !req.user) {
         return res.status(401).json({ message: "No autorizado" });
       }
-      const userId = req.user.id;
+      const authenticatedUser = req.user as Express.User;
+      const userId = authenticatedUser.id;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
-      console.error("Error fetching user:", error);
+      console.error("Error fetching user:", error instanceof Error ? error.message : String(error));
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
