@@ -44,7 +44,7 @@ export async function runBatchIndependentLimboDetection(): Promise<LimboDetectio
           initiativeId: initiative.id,
           signalCode: "ZOMBI",
           severity: "MEDIUM",
-          message: zombiReason,
+          rationale: zombiReason,
           status: "OPEN",
           detectedAt: now,
         });
@@ -59,7 +59,7 @@ export async function runBatchIndependentLimboDetection(): Promise<LimboDetectio
         initiativeId: initiative.id,
         signalCode: "MISSING_SNAPSHOT",
         severity: "MEDIUM",
-        message: "Initiative has no snapshots recorded",
+        rationale: "Initiative has no snapshots recorded",
         status: "OPEN",
         detectedAt: now,
       });
