@@ -442,6 +442,38 @@ export const actionItems = pgTable("action_items", {
   completedAt: timestamp("completed_at"),
 });
 
+// H3 - Delta events - tracks changes between snapshots
+export const deltaEvents = pgTable("delta_events", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  initiativeId: integer("initiative_id").references(() => initiatives.id).notNull(),
+  fromSnapshotId: integer("from_snapshot_id").references(() => initiativeSnapshots.id),
+  toSnapshotId: integer("to_snapshot_id").references(() => initiativeSnapshots.id).notNull(),
+  fieldPath: text("field_path").notNull(), // e.g. "dates.end_date", "scores.total"
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  severity: text("severity").notNull().default("INFO"), // INFO, WARN, RISK
+  detectedAt: timestamp("detected_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_delta_events_initiative").on(table.initiativeId),
+  index("idx_delta_events_detected").on(table.detectedAt),
+]);
+
+// H3 - Governance alerts - early warning signals
+export const governanceAlerts = pgTable("governance_alerts", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  initiativeId: integer("initiative_id").references(() => initiatives.id).notNull(),
+  signalCode: text("signal_code").notNull(), // ZOMBI, ANGUILA, OPTIMISTA, INDECISO, DRENAJE_DE_VALOR
+  severity: text("severity").notNull().default("MEDIUM"), // LOW, MEDIUM, HIGH
+  status: text("status").notNull().default("OPEN"), // OPEN, ACKNOWLEDGED, RESOLVED
+  rationale: text("rationale"),
+  detectedAt: timestamp("detected_at").defaultNow().notNull(),
+  relatedSnapshotId: integer("related_snapshot_id").references(() => initiativeSnapshots.id),
+  relatedBatchId: integer("related_batch_id").references(() => ingestionBatches.id),
+}, (table) => [
+  index("idx_governance_alerts_initiative").on(table.initiativeId),
+  index("idx_governance_alerts_status").on(table.status),
+]);
+
 // Relations
 export const excelVersionsRelations = relations(excelVersions, ({ many }) => ({
   projects: many(projects),
@@ -688,6 +720,10 @@ export const insertBenefitRecordSchema = createInsertSchema(benefitRecords).omit
 export const insertStatusUpdateSchema = createInsertSchema(statusUpdates).omit({ id: true, createdAt: true } as Record<string, true>);
 export const insertActionItemSchema = createInsertSchema(actionItems).omit({ id: true, createdAt: true } as Record<string, true>);
 
+// H3 Delta Engine Insert Schemas
+export const insertDeltaEventSchema = createInsertSchema(deltaEvents).omit({ id: true, detectedAt: true } as Record<string, true>);
+export const insertGovernanceAlertSchema = createInsertSchema(governanceAlerts).omit({ id: true, detectedAt: true } as Record<string, true>);
+
 // Types
 export type ExcelVersion = typeof excelVersions.$inferSelect;
 export type InsertExcelVersion = z.infer<typeof insertExcelVersionSchema>;
@@ -745,6 +781,12 @@ export type StatusUpdate = typeof statusUpdates.$inferSelect;
 export type InsertStatusUpdate = z.infer<typeof insertStatusUpdateSchema>;
 export type ActionItem = typeof actionItems.$inferSelect;
 export type InsertActionItem = z.infer<typeof insertActionItemSchema>;
+
+// H3 Delta Engine Types
+export type DeltaEvent = typeof deltaEvents.$inferSelect;
+export type InsertDeltaEvent = z.infer<typeof insertDeltaEventSchema>;
+export type GovernanceAlert = typeof governanceAlerts.$inferSelect;
+export type InsertGovernanceAlert = z.infer<typeof insertGovernanceAlertSchema>;
 
 // Traffic light status enum for frontend
 export type TrafficLightStatus = 'green' | 'yellow' | 'red' | 'gray';
