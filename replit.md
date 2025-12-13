@@ -3,6 +3,13 @@
 ## Overview
 A Project Management Office (PMO) dashboard for managing continuous improvement projects. The platform provides a centralized view of project status, performance, and key metrics. It features deterministic Excel data parsing, PostgreSQL persistence, role-based authentication, and a fact-based conversational AI assistant. The system aims to enhance project oversight, facilitate data-driven decision-making, and streamline continuous improvement initiatives within an organization.
 
+## Recent Changes (Dec 2025)
+- **Phase H0 Hardening Completed**: Fixed type safety issues across critical paths
+  - Removed `any` type bypasses in auth, OpenAI, and upload handlers
+  - Added structured error logging with proper type narrowing
+  - Fixed silent error swallowing in Excel upload component
+  - Applied workaround for drizzle-zod omit() TypeScript bug (see GitHub issue #4016)
+
 ## User Preferences
 - Language: Spanish (ES-MX)
 - Zero hallucination requirement for all data
