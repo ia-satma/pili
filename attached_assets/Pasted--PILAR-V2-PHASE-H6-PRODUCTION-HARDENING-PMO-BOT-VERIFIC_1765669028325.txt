@@ -1,0 +1,161 @@
+# PILAR V2 — PHASE H6: PRODUCTION HARDENING + PMO BOT VERIFICATION (COPY/PASTE)
+
+ROLE: Lead Engineer + Security/Operations
+ENV: Replit
+STACK: Node/Express + TS + Drizzle + Postgres + React
+
+ABSOLUTE RULES
+1) Do NOT ask the user to review code, run SQL, or validate manually.
+2) You must self-verify and paste concrete evidence outputs in your final report.
+3) Do NOT proceed beyond H6. STOP and report.
+4) Zero lies: if something is missing/broken, report it explicitly and propose the minimal fix.
+
+MISSION
+Perform Production Hardening for PILAR V2 and VERIFY that the PMO Analyst Bot is ACTIVE and WORKING.
+Additionally, evolve the PMO Bot into an orchestrator-friendly “Idea Bounce” interaction that is DB-grounded (Evidence Pack first).
+
+========================================================
+H6.1 — RBAC + ACCESS CONTROL (NON-NEGOTIABLE)
+========================================================
+Goal: Protect admin/system surfaces and sensitive endpoints.
+
+Tasks:
+1) Make /system UI admin-only (or at minimum: Admin + Editor; never Viewer).
+   - If RBAC middleware exists, reuse it. If not, implement minimal role middleware.
+2) Protect these endpoints with RBAC:
+   - /api/system/* (docs run, docs list)
+   - /api/agents/* (run agent, list agents)
+   - /api/exports/:id/download (BYTEA)
+   - /api/ingest/artifacts/:id/download (BYTEA)
+   - /api/jobs/* (job status, enqueue endpoints)
+3) Add audit logging for downloads:
+   - Create table download_audit:
+     - id uuid PK
+     - user_id nullable
+     - artifact_type (RAW|EXPORT)
+     - artifact_id uuid
+     - ip text nullable
+     - user_agent text nullable
+     - created_at timestamp
+   - On download endpoints: insert a row.
+
+DoD evidence (paste in report):
+- Show the middleware checks (route protection list).
+- Demonstrate unauthorized access returns 403 and authorized returns 200 (via server logs or test requests).
+
+========================================================
+H6.2 — RATE LIMITS + ABUSE GUARDRAILS
+========================================================
+Goal: Prevent runaway costs and misuse.
+
+Tasks:
+1) Add rate limiting to:
+   - POST /api/agents/:name/run  (strict)
+   - POST /api/system/docs/run   (moderate)
+   - POST /api/exports/run       (moderate)
+   - POST /api/ingest/upload     (moderate)
+2) Add Evidence Pack size limits:
+   - Cap: maxSnapshots=3, maxDeltas=50, maxStatusUpdates=5, maxAlerts=20 (configurable).
+   - Ensure evidencePack service enforces these caps.
+3) Add file upload size cap for Excel:
+   - Hard error FILE_TOO_LARGE (persist validation_issue HARD).
+   - Choose a sensible limit (e.g., 10–25MB). Document it in system docs.
+
+DoD evidence:
+- Show rate limit config and one example of limit being triggered (429) in logs.
+- Show evidencePack returns capped lists (counts) in one debug output.
+
+========================================================
+H6.3 — PMO ANALYST BOT: VERIFY ACTIVE + UPGRADE TO “IDEA BOUNCE ORCHESTRATOR”
+========================================================
+Goal: Ensure the PMO Bot is functional and becomes a core “rebote de ideas” interface that is DB-grounded.
+
+Tasks:
+1) Locate the existing PMO Analyst Bot implementation (e.g., server/openai.ts, /api/chat, etc.).
+2) Verify it is still active:
+   - There is a UI entry point (page or component) and a backend endpoint.
+   - It performs DB-grounded retrieval (Evidence Pack or equivalent) and does NOT hallucinate outside DB.
+3) Upgrade flow to be orchestrator-friendly:
+   - Implement a new endpoint: POST /api/orchestrator/bounce
+     Input JSON:
+     {
+       "initiative_id": "uuid (optional)",
+       "message": "string",
+       "mode": "BRAINSTORM|DECIDE|RISKS|NEXT_ACTIONS"
+     }
+   - Behavior:
+     a) If initiative_id provided: build Evidence Pack and attach evidence_refs.
+     b) If not provided: treat as general ideation, but MUST label as "no-project-context".
+     c) The response must be structured JSON:
+        - summary
+        - ideas[]
+        - risks[]
+        - next_actions[]
+        - questions_to_clarify[]
+        - evidence_refs[] (empty if no initiative_id)
+     d) If evidence is insufficient: return INSUFFICIENT_EVIDENCE + missing_fields + questions_to_clarify.
+4) UI:
+   - Add a sidebar entry: “PMO Bot / Orquestador”
+   - Simple chat-like interface that hits /api/orchestrator/bounce
+   - Show evidence_refs when present.
+
+DoD evidence:
+- Demonstrate 2 successful calls:
+  A) With initiative_id: response includes evidence_refs and grounded insights.
+  B) Without initiative_id: response explicitly states no project context and asks clarifying questions.
+- Confirm endpoint returns 200 and logs show the DB evidence retrieval.
+
+========================================================
+H6.4 — MINIMUM EVALS (QUALITY GATES)
+========================================================
+Goal: Prevent quality regression.
+
+Tasks:
+1) Create a minimal “eval harness” script (node) that runs 5 fixtures for:
+   - CommitteeBriefAgent (enabled agent)
+   - Orchestrator bounce endpoint
+2) Fixtures must include:
+   - Evidence complete
+   - Evidence missing (should produce INSUFFICIENT_EVIDENCE)
+   - Open alerts HIGH
+   - Conflicting deltas
+   - Benefits missing
+3) Store results:
+   - Create table eval_runs: id, suite_name, started_at, finished_at, results_json
+   - Or write JSON file under docs/ (choose one; DB preferred)
+
+DoD evidence:
+- Paste a summary table of eval results (pass/fail per fixture) in final report.
+
+========================================================
+H6.5 — SYSTEM DOCS UPDATE (AUTO)
+========================================================
+Goal: Ensure documentation stays current and visible.
+
+Tasks:
+1) Update GENERATE_SYSTEM_DOCS job to include:
+   - RBAC protections list
+   - Rate limit config summary
+   - Upload size limits
+   - PMO Bot endpoints and usage
+   - Evals summary (latest eval_runs)
+2) From UI /system, run docs generation and confirm new sections appear.
+
+DoD evidence:
+- Show the system_docs row created and a snippet of updated markdown content (key headings).
+
+========================================================
+STOP + FINAL REPORT REQUIREMENTS
+========================================================
+After H6:
+- STOP. Do not proceed further.
+- Provide a final Spanish report with:
+  1) Files changed (list)
+  2) DB migrations applied (list)
+  3) Endpoints protected + RBAC rules
+  4) Rate limits + file size caps
+  5) PMO Bot status (ACTIVE/NOT ACTIVE) + proof + orchestrator endpoint proof
+  6) Evals proof summary
+  7) Remaining TODOs/risks (if any)
+
+No questions to the user. No requests for manual validation.

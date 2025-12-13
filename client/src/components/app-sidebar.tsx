@@ -17,6 +17,7 @@ import {
   UsersRound,
   Mail,
   Settings,
+  Brain,
 } from "lucide-react";
 import {
   Sidebar,
@@ -101,6 +102,12 @@ const managementItems = [
     url: "/chat",
     icon: MessageSquare,
     requiredRole: null,
+  },
+  {
+    title: "Orquestador",
+    url: "/orchestrator",
+    icon: Brain,
+    requiredRole: "editor" as const,
   },
 ];
 

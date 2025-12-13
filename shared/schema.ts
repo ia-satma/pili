@@ -589,6 +589,33 @@ export const systemDocs = pgTable("system_docs", {
   generatedAt: timestamp("generated_at").defaultNow().notNull(),
 });
 
+// H6 - Download Audit table
+export const downloadAudit = pgTable("download_audit", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: text("user_id"),
+  artifactType: text("artifact_type").notNull(), // RAW | EXPORT
+  artifactId: integer("artifact_id").notNull(),
+  fileName: text("file_name"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ===== H6.4 Eval Runs Table =====
+export const evalRuns = pgTable("eval_runs", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  suiteName: text("suite_name").notNull(),
+  fixtureName: text("fixture_name").notNull(),
+  mode: text("mode").notNull(),
+  status: text("status").notNull(), // PASS | FAIL | ERROR
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+  latencyMs: integer("latency_ms"),
+  success: boolean("success"),
+  notes: jsonb("notes").$type<Record<string, unknown>>(),
+  outputJson: jsonb("output_json").$type<Record<string, unknown>>(),
+});
+
 // Relations
 export const excelVersionsRelations = relations(excelVersions, ({ many }) => ({
   projects: many(projects),
@@ -850,6 +877,12 @@ export const insertAgentRunSchema = createInsertSchema(agentRuns).omit({ id: tru
 export const insertCouncilReviewSchema = createInsertSchema(councilReviews).omit({ id: true, createdAt: true } as Record<string, true>);
 export const insertSystemDocSchema = createInsertSchema(systemDocs).omit({ id: true, generatedAt: true } as Record<string, true>);
 
+// H6 Download Audit Insert Schema
+export const insertDownloadAuditSchema = createInsertSchema(downloadAudit).omit({ id: true, createdAt: true } as Record<string, true>);
+
+// H6.4 Eval Runs
+export const insertEvalRunSchema = createInsertSchema(evalRuns).omit({ id: true } as Record<string, true>);
+
 // Types
 export type ExcelVersion = typeof excelVersions.$inferSelect;
 export type InsertExcelVersion = z.infer<typeof insertExcelVersionSchema>;
@@ -931,6 +964,14 @@ export type CouncilReview = typeof councilReviews.$inferSelect;
 export type InsertCouncilReview = z.infer<typeof insertCouncilReviewSchema>;
 export type SystemDoc = typeof systemDocs.$inferSelect;
 export type InsertSystemDoc = z.infer<typeof insertSystemDocSchema>;
+
+// H6 Download Audit Types
+export type DownloadAudit = typeof downloadAudit.$inferSelect;
+export type InsertDownloadAudit = z.infer<typeof insertDownloadAuditSchema>;
+
+// H6.4 Eval Runs Types
+export type EvalRun = typeof evalRuns.$inferSelect;
+export type InsertEvalRun = z.infer<typeof insertEvalRunSchema>;
 
 // Traffic light status enum for frontend
 export type TrafficLightStatus = 'green' | 'yellow' | 'red' | 'gray';

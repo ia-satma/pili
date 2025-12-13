@@ -13,6 +13,8 @@ import type { InsertChangeLog, InsertKpiValue, Project, InsertProject, InsertVal
 import { exportBatches, jobs, jobRuns } from "@shared/schema";
 import { setupAuth, isAuthenticated, isAdmin, isEditor, isViewer, seedAdminUsers } from "./replitAuth";
 import { enqueueJob } from "./services/workerLoop";
+import { agentRateLimit, exportRateLimit, uploadRateLimit, systemDocsRateLimit } from "./middleware/rateLimiter";
+import { runOrchestrator } from "./services/orchestrator";
 
 // Validation schemas
 const sendMessageSchema = z.object({
@@ -29,6 +31,13 @@ const bulkUpdateSchema = z.object({
 
 const bulkDeleteSchema = z.object({
   ids: z.array(z.number()).min(1, "Debe seleccionar al menos un proyecto"),
+});
+
+// Orchestrator request schema
+const orchestratorRequestSchema = z.object({
+  initiativeId: z.number().optional(),
+  message: z.string().min(1, "El mensaje no puede estar vacío").max(2000, "El mensaje es demasiado largo"),
+  mode: z.enum(["BRAINSTORM", "DECIDE", "RISKS", "NEXT_ACTIONS"]),
 });
 
 // Schema for creating individual projects
@@ -60,7 +69,7 @@ const createProjectSchema = z.object({
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB limit
+    fileSize: 15 * 1024 * 1024, // 15MB limit
   },
   fileFilter: (req, file, cb) => {
     const allowedMimes = [
@@ -1395,7 +1404,7 @@ export async function registerRoutes(
   // ===== H1 DATA FOUNDATION - INGESTION =====
   
   // POST /api/ingest/upload - Upload file with idempotency check
-  app.post("/api/ingest/upload", isAuthenticated, isEditor, upload.single("file"), async (req, res) => {
+  app.post("/api/ingest/upload", isAuthenticated, isEditor, uploadRateLimit, upload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -1609,7 +1618,7 @@ export async function registerRoutes(
   });
 
   // GET /api/ingest/artifacts/:id/download - Download raw artifact
-  app.get("/api/ingest/artifacts/:id/download", isAuthenticated, async (req, res) => {
+  app.get("/api/ingest/artifacts/:id/download", isAuthenticated, isEditor, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -1620,6 +1629,17 @@ export async function registerRoutes(
       if (!artifact) {
         return res.status(404).json({ message: "Artifact not found" });
       }
+
+      // Audit log the download
+      const user = req.user as Express.User;
+      await storage.createDownloadAudit({
+        userId: user?.id || null,
+        artifactType: "RAW",
+        artifactId: id,
+        fileName: artifact.fileName,
+        ipAddress: req.ip || null,
+        userAgent: req.headers["user-agent"] || null,
+      });
 
       // Set proper headers for file download
       res.setHeader("Content-Type", artifact.mimeType);
@@ -1771,7 +1791,7 @@ export async function registerRoutes(
   // ===== H4 EXPORTS =====
 
   // POST /api/exports/run - Enqueue GENERATE_EXPORT_EXCEL job
-  app.post("/api/exports/run", isAuthenticated, isEditor, async (req, res) => {
+  app.post("/api/exports/run", isAuthenticated, isEditor, exportRateLimit, async (req, res) => {
     try {
       const user = req.user as Express.User;
       const filterCriteria = req.body.filterCriteria || {};
@@ -1826,7 +1846,7 @@ export async function registerRoutes(
   });
 
   // GET /api/exports/:id/download - Download export artifact
-  app.get("/api/exports/:id/download", isAuthenticated, async (req, res) => {
+  app.get("/api/exports/:id/download", isAuthenticated, isEditor, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -1837,6 +1857,17 @@ export async function registerRoutes(
       if (!artifact) {
         return res.status(404).json({ message: "Archivo no encontrado" });
       }
+
+      // Audit log the download
+      const user = req.user as Express.User;
+      await storage.createDownloadAudit({
+        userId: user?.id || null,
+        artifactType: "EXPORT",
+        artifactId: id,
+        fileName: artifact.fileName,
+        ipAddress: req.ip || null,
+        userAgent: req.headers["user-agent"] || null,
+      });
 
       res.setHeader("Content-Type", artifact.mimeType);
       res.setHeader("Content-Disposition", `attachment; filename="${artifact.fileName}"`);
@@ -1851,7 +1882,7 @@ export async function registerRoutes(
   // ===== H4 COMMITTEE PACKETS =====
 
   // POST /api/committee/run - Enqueue GENERATE_COMMITTEE_PACKET job
-  app.post("/api/committee/run", isAuthenticated, isEditor, async (req, res) => {
+  app.post("/api/committee/run", isAuthenticated, isEditor, exportRateLimit, async (req, res) => {
     try {
       const job = await storage.createJob({
         jobType: "GENERATE_COMMITTEE_PACKET",
@@ -1958,7 +1989,7 @@ export async function registerRoutes(
   // ===== H4 JOB STATUS =====
 
   // GET /api/jobs/recent - Get recent jobs for system status page
-  app.get("/api/jobs/recent", isAuthenticated, async (req, res) => {
+  app.get("/api/jobs/recent", isAuthenticated, isEditor, async (req, res) => {
     try {
       const recentJobs = await storage.getRecentJobs(20);
       res.json({ jobs: recentJobs });
@@ -1985,7 +2016,7 @@ export async function registerRoutes(
   });
 
   // GET /api/jobs/:id - Get job status and runs for polling
-  app.get("/api/jobs/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/jobs/:id", isAuthenticated, isEditor, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -2012,7 +2043,7 @@ export async function registerRoutes(
   // ===== H5 Agent Routes =====
   
   // Get all agent definitions
-  app.get("/api/agents", isAuthenticated, async (req: Request, res: Response) => {
+  app.get("/api/agents", isAuthenticated, isEditor, async (req: Request, res: Response) => {
     try {
       const { getAgentFleetStatus } = await import("./services/agentFleet");
       const status = await getAgentFleetStatus();
@@ -2024,7 +2055,7 @@ export async function registerRoutes(
   });
 
   // Seed agent fleet
-  app.post("/api/agents/seed", isAdmin, async (req: Request, res: Response) => {
+  app.post("/api/agents/seed", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
     try {
       const { seedAgentFleet } = await import("./services/agentFleet");
       const result = await seedAgentFleet();
@@ -2036,7 +2067,7 @@ export async function registerRoutes(
   });
 
   // Run an agent on an initiative
-  app.post("/api/agents/:name/run", isEditor, async (req: Request, res: Response) => {
+  app.post("/api/agents/:name/run", isAuthenticated, isEditor, agentRateLimit, async (req: Request, res: Response) => {
     try {
       const { name } = req.params;
       const { initiativeId } = req.body;
@@ -2080,7 +2111,7 @@ export async function registerRoutes(
   // ===== H5 System Docs Routes =====
 
   // Get system docs
-  app.get("/api/system/docs", isAuthenticated, async (req: Request, res: Response) => {
+  app.get("/api/system/docs", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
     try {
       const docs = await storage.getSystemDocs();
       res.json(docs);
@@ -2091,7 +2122,7 @@ export async function registerRoutes(
   });
 
   // Get single system doc
-  app.get("/api/system/docs/:id", isAuthenticated, async (req: Request, res: Response) => {
+  app.get("/api/system/docs/:id", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -2111,13 +2142,34 @@ export async function registerRoutes(
   });
 
   // Generate system docs (enqueue job)
-  app.post("/api/system/docs/run", isAdmin, async (req: Request, res: Response) => {
+  app.post("/api/system/docs/run", isAdmin, systemDocsRateLimit, async (req: Request, res: Response) => {
     try {
       const jobId = await enqueueJob("GENERATE_SYSTEM_DOCS" as any, {});
       res.json({ jobId, message: "Generación de documentación encolada" });
     } catch (error) {
       console.error("[SystemDocs] Error enqueuing job:", error);
       res.status(500).json({ message: "Error al encolar generación" });
+    }
+  });
+
+  // ===== H6 Orchestrator Routes =====
+
+  // POST /api/orchestrator/bounce - PMO Bot Orchestrator
+  app.post("/api/orchestrator/bounce", isAuthenticated, isEditor, agentRateLimit, async (req: Request, res: Response) => {
+    try {
+      const validation = orchestratorRequestSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          message: "Datos inválidos",
+          errors: validation.error.errors,
+        });
+      }
+
+      const result = await runOrchestrator(validation.data);
+      res.json(result);
+    } catch (error) {
+      console.error("[Orchestrator] Error:", error);
+      res.status(500).json({ message: "Error al procesar solicitud del orquestador" });
     }
   });
 

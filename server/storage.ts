@@ -6,6 +6,7 @@ import {
   exportBatches, exportArtifacts, jobs, jobRuns, committeePackets, chaserDrafts,
   initiatives, initiativeSnapshots, deltaEvents, governanceAlerts, statusUpdates,
   agentDefinitions, agentVersions, agentRuns, councilReviews, systemDocs,
+  downloadAudit, evalRuns,
   type ExcelVersion, type InsertExcelVersion,
   type Project, type InsertProject,
   type Department, type InsertDepartment,
@@ -35,6 +36,7 @@ import {
   type AgentRun, type InsertAgentRun,
   type CouncilReview, type InsertCouncilReview,
   type SystemDoc, type InsertSystemDoc,
+  type DownloadAudit, type InsertDownloadAudit,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray, count, lt, lte, or, isNull } from "drizzle-orm";
@@ -222,6 +224,9 @@ export interface IStorage {
   getSystemDocs(): Promise<SystemDoc[]>;
   getSystemDoc(id: number): Promise<SystemDoc | undefined>;
   getSystemDocByType(docType: string): Promise<SystemDoc | undefined>;
+
+  // H6 - Download Audit
+  createDownloadAudit(data: InsertDownloadAudit): Promise<DownloadAudit>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1214,6 +1219,12 @@ export class DatabaseStorage implements IStorage {
       .where(eq(systemDocs.docType, docType))
       .orderBy(desc(systemDocs.generatedAt))
       .limit(1);
+    return result;
+  }
+
+  // H6 - Download Audit
+  async createDownloadAudit(data: InsertDownloadAudit): Promise<DownloadAudit> {
+    const [result] = await db.insert(downloadAudit).values(data).returning();
     return result;
   }
 }

@@ -7,6 +7,13 @@ import type {
   StatusUpdate,
 } from "@shared/schema";
 
+const EVIDENCE_CAPS = {
+  maxSnapshots: 3,
+  maxDeltas: 50,
+  maxStatusUpdates: 5,
+  maxAlerts: 20,
+};
+
 export interface EvidencePack {
   initiative: Initiative;
   latestSnapshot: InitiativeSnapshot | null;
@@ -29,15 +36,15 @@ export async function buildEvidencePack(initiativeId: number): Promise<EvidenceP
   }
 
   const snapshots = await storage.getSnapshotsByInitiativeId(initiativeId);
-  const recentSnapshots = snapshots.slice(0, 3);
+  const recentSnapshots = snapshots.slice(0, EVIDENCE_CAPS.maxSnapshots);
   const latestSnapshot = recentSnapshots[0] || null;
 
-  const recentDeltas = await storage.getDeltasByInitiativeId(initiativeId, 20);
+  const recentDeltas = await storage.getDeltasByInitiativeId(initiativeId, EVIDENCE_CAPS.maxDeltas);
 
   const allAlerts = await storage.getAlertsByInitiativeId(initiativeId);
-  const openAlerts = allAlerts.filter((a) => a.status === "OPEN");
+  const openAlerts = allAlerts.filter((a) => a.status === "OPEN").slice(0, EVIDENCE_CAPS.maxAlerts);
 
-  const recentStatusUpdates = await storage.getRecentStatusUpdates(initiativeId, 5);
+  const recentStatusUpdates = await storage.getRecentStatusUpdates(initiativeId, EVIDENCE_CAPS.maxStatusUpdates);
 
   const batchIds = Array.from(new Set(recentSnapshots.map((s) => s.batchId)));
   const snapshotIds = recentSnapshots.map((s) => s.id);
