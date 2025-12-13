@@ -1630,5 +1630,72 @@ export async function registerRoutes(
     }
   });
 
+  // ===== H2 CANONICAL DOMAIN MODEL - INITIATIVES =====
+
+  // GET /api/initiatives - List all initiatives
+  app.get("/api/initiatives", isAuthenticated, async (req, res) => {
+    try {
+      const initiatives = await storage.getInitiatives();
+      res.json({ initiatives });
+    } catch (error) {
+      console.error("[Initiatives] Error fetching initiatives:", error);
+      res.status(500).json({ message: "Error al obtener iniciativas" });
+    }
+  });
+
+  // GET /api/initiatives/:id - Get initiative detail
+  app.get("/api/initiatives/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const initiative = await storage.getInitiative(id);
+      if (!initiative) {
+        return res.status(404).json({ message: "Iniciativa no encontrada" });
+      }
+      
+      // Get latest snapshot
+      const snapshots = await storage.getSnapshotsByInitiativeId(id);
+      const latestSnapshot = snapshots[0] || null;
+      
+      res.json({ 
+        initiative,
+        latestSnapshot,
+        snapshotCount: snapshots.length
+      });
+    } catch (error) {
+      console.error("[Initiatives] Error fetching initiative:", error);
+      res.status(500).json({ message: "Error al obtener iniciativa" });
+    }
+  });
+
+  // GET /api/initiatives/:id/snapshots - Get all snapshots for an initiative (history)
+  app.get("/api/initiatives/:id/snapshots", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const initiative = await storage.getInitiative(id);
+      if (!initiative) {
+        return res.status(404).json({ message: "Iniciativa no encontrada" });
+      }
+      
+      const snapshots = await storage.getSnapshotsByInitiativeId(id);
+      
+      res.json({ 
+        initiative,
+        snapshots,
+        totalSnapshots: snapshots.length
+      });
+    } catch (error) {
+      console.error("[Initiatives] Error fetching snapshots:", error);
+      res.status(500).json({ message: "Error al obtener historial" });
+    }
+  });
+
   return httpServer;
 }

@@ -18,6 +18,8 @@ import Upload from "@/pages/upload";
 import Chat from "@/pages/chat";
 import AdminUsers from "@/pages/admin-users";
 import Login from "@/pages/login";
+import Initiatives from "@/pages/initiatives";
+import InitiativeDetail from "@/pages/initiative-detail";
 
 function ProtectedRouter() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -43,6 +45,8 @@ function ProtectedRouter() {
       <Route path="/history" component={History} />
       <Route path="/upload" component={Upload} />
       <Route path="/chat" component={Chat} />
+      <Route path="/initiatives" component={Initiatives} />
+      <Route path="/initiatives/:id" component={InitiativeDetail} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route component={NotFound} />
     </Switch>

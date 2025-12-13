@@ -11,6 +11,7 @@ import {
   Users,
   LogIn,
   LogOut,
+  Layers,
 } from "lucide-react";
 import {
   Sidebar,
@@ -42,6 +43,11 @@ const mainNavItems = [
     title: "Proyectos",
     url: "/projects",
     icon: Table2,
+  },
+  {
+    title: "Iniciativas",
+    url: "/initiatives",
+    icon: Layers,
   },
   {
     title: "Indicadores",
