@@ -59,6 +59,72 @@ A Project Management Office (PMO) dashboard for managing continuous improvement 
 -   **Replit AI Integrations**: Platform for integrating AI services.
 -   **Replit Auth**: OpenID Connect authentication for user management.
 
+## Phase H1 DoD Verification Checklist
+
+### Prerequisites
+- Admin or Editor user account logged in
+- Access to /upload page
+
+### DoD Test 1: Idempotency Check (h1-7)
+**Method**: Use browser DevTools Network tab while logged in as Editor/Admin
+
+1. Navigate to /upload page (logged in as Editor or Admin)
+2. Open browser DevTools → Network tab
+3. Use POST /api/ingest/upload with any Excel file (via curl or test script)
+4. Note the `batchId` from the JSON response
+5. Upload the SAME exact file again
+6. **Expected**: Response contains `"noop": true` and same `batchId`
+7. **Database Verification**:
+   ```sql
+   SELECT id, source_file_hash, status, created_at FROM ingestion_batches 
+   ORDER BY created_at DESC LIMIT 5;
+   -- Should show only ONE entry per unique file hash
+   ```
+
+### DoD Test 2: Validation Issues Visible (h1-8)
+**Method**: Visual inspection of /upload page
+
+1. Navigate to /upload page after uploading a file
+2. **Verify** IngestionStatus card shows:
+   - Title: "Estado de Ingesta"
+   - Source file name in description
+   - Total rows count (data-testid="text-total-rows")
+   - Processed rows count (data-testid="text-processed-rows")
+   - Hard error count (data-testid="text-hard-errors")
+   - Soft error count (data-testid="text-soft-errors")
+3. **If validation issues exist**, verify "Problemas de Validación" card appears with issue table
+
+### DoD Test 3: Artifact Download (h1-9)
+**Method**: Browser download and header inspection
+
+1. Navigate to /upload page after uploading a file
+2. Click "Descargar Archivo Original" button (data-testid="button-download-artifact")
+3. **Verify in DevTools Network tab**:
+   - Response status: 200
+   - Content-Type: `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+   - Content-Disposition: `attachment; filename="<original_filename>.xlsx"`
+4. **Expected**: Downloaded file opens correctly in Excel/LibreOffice
+
+### API Endpoints for Manual Testing
+```bash
+# Get all batches (requires auth session cookie)
+GET /api/ingest/batches
+
+# Get issues for a batch
+GET /api/ingest/batches/:id/issues
+
+# Download original artifact
+GET /api/ingest/artifacts/:id/download
+```
+
+### Test Script Example (requires authenticated session)
+```bash
+# First login to get session cookie, then:
+curl -X POST http://localhost:5000/api/ingest/upload \
+  -F "file=@path/to/test.xlsx" \
+  -b "connect.sid=<session_cookie>"
+```
+
 ## Database Restore Test Procedure
 
 ### Prerequisites

@@ -517,12 +517,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getIngestionBatchByHash(hash: string): Promise<IngestionBatch | undefined> {
+    // Check ALL batches (any status) to prevent duplicates during in-flight processing
     const [result] = await db.select()
       .from(ingestionBatches)
-      .where(and(
-        eq(ingestionBatches.sourceFileHash, hash),
-        eq(ingestionBatches.status, "committed")
-      ));
+      .where(eq(ingestionBatches.sourceFileHash, hash))
+      .orderBy(desc(ingestionBatches.createdAt))
+      .limit(1);
     return result;
   }
 
