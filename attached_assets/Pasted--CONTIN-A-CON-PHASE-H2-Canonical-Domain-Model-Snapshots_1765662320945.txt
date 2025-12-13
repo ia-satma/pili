@@ -1,0 +1,67 @@
+✅ CONTINÚA CON PHASE H2 (Canonical Domain Model + Snapshots)
+⛔ PROHIBIDO avanzar a H3/H4/H5 hasta que yo valide H2 con DoD.
+
+OBJETIVO H2:
+Separar “Initiative” vs “Project”, y materializar el “time-travel” real:
+- cada batch COMMITTED genera snapshots nuevos (NUNCA overwrite)
+- scoring se vuelve versionado (model/criteria) y calculable
+- snapshots quedan vinculados a ingestion_batch y al raw_artifact (evidencia)
+
+TAREAS H2 (SECUENCIA OBLIGATORIA):
+
+H2.1 — Drizzle Schema + Migrations (db-first)
+Crear tablas (si no existen):
+- initiatives
+- projects
+- scoring_models, scoring_criteria, scoring_options
+- initiative_snapshots
+- assessment_entries
+- benefit_records
+- status_updates
+- action_items
+(Nota: committee_* y gate_transitions pueden agregarse como schema ahora o dejarse para H4; NO implementar lógica aún.)
+
+H2.2 — Identity Resolution (sin ambigüedad)
+Definir una función de matching canónica:
+- preferir devops_card_id o power_steering_id si vienen en el Excel
+- si ambos faltan, no crear iniciativa automáticamente salvo que haya title + owner mínimo
+- evitar duplicados: unique constraints + upsert controlado
+
+H2.3 — Snapshot Engine (core)
+En el flujo de ingestión:
+- cuando un ingestion_batch queda COMMITTED o COMMITTED_WITH_WARNINGS:
+  1) materializa/actualiza initiatives (solo campos no destructivos)
+  2) crea initiative_snapshots NUEVOS (uno por iniciativa)
+  3) guarda assessment_entries (scores por criterio) si ya se pueden mapear
+  4) calcula totals (value/effort/total) desde criteria; si el Excel trae totals distintos -> SOFT warning (no hard)
+
+H2.4 — Endpoints mínimos H2 (para ver la verdad canónica)
+- GET /api/initiatives (lista)
+- GET /api/initiatives/:id (detalle)
+- GET /api/initiatives/:id/snapshots (histórico)
+- POST /api/initiatives (alta manual mínima) [opcional]
+- POST /api/initiatives/:id/status-updates (crear update) [opcional si rápido]
+
+H2.5 — UI mínima H2 (solo lo necesario para validar)
+- Pantalla lista de initiatives
+- Detalle de initiative con últimos snapshots (y link a batch)
+(No hacer rediseño; solo funcional.)
+
+DoD H2 (criterios de aceptación):
+A) Al subir un Excel (COMMITTED), se crean snapshots nuevos:
+   - 1 iniciativa => 1 snapshot por batch
+   - nunca se actualiza/borra el snapshot anterior
+
+B) Si subes un Excel distinto con un cambio, se crea un nuevo snapshot (y el anterior queda intacto)
+
+C) “Truth policy” del scoring:
+   - totals calculados por sistema (criteria)
+   - mismatch contra total Excel => validation_issue SOFT con código TOTAL_MISMATCH
+
+STOP:
+Al terminar H2, detente y entrega:
+- lista de archivos cambiados
+- migraciones aplicadas
+- evidencia (consultas SQL o logs) de que snapshots no se sobreescriben
+- ejemplo de una initiative con >=2 snapshots creados en batches distintos
+No avances a H3 sin confirmación.

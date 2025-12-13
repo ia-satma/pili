@@ -297,6 +297,148 @@ export const jobRuns = pgTable("job_runs", {
   resultSummary: jsonb("result_summary").$type<Record<string, unknown>>(),
 });
 
+// ===== H2 Canonical Domain Model Tables =====
+
+// Initiatives - canonical master entity
+export const initiatives = pgTable("initiatives", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  // Identity resolution fields - at least one should be present
+  devopsCardId: text("devops_card_id").unique(), // Azure DevOps card ID
+  powerSteeringId: text("power_steering_id").unique(), // PowerSteering ID
+  
+  // Core identity (immutable once set)
+  title: text("title").notNull(),
+  owner: text("owner"),
+  
+  // Current state tracking
+  currentStatus: text("current_status"), // Latest known status
+  isActive: boolean("is_active").default(true),
+  
+  // Audit
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Scoring models - versioned scoring templates
+export const scoringModels = pgTable("scoring_models", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").notNull(),
+  version: text("version").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Scoring criteria - criteria within a model
+export const scoringCriteria = pgTable("scoring_criteria", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  modelId: integer("model_id").references(() => scoringModels.id).notNull(),
+  category: text("category").notNull(), // "value" or "effort"
+  name: text("name").notNull(),
+  weight: integer("weight").default(1),
+  displayOrder: integer("display_order").default(0),
+  excelColumnName: text("excel_column_name"), // Maps to Excel column
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Scoring options - options for each criterion
+export const scoringOptions = pgTable("scoring_options", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  criterionId: integer("criterion_id").references(() => scoringCriteria.id).notNull(),
+  label: text("label").notNull(),
+  value: integer("value").notNull(), // Numeric score value
+  displayOrder: integer("display_order").default(0),
+});
+
+// Initiative snapshots - immutable point-in-time snapshots
+export const initiativeSnapshots = pgTable("initiative_snapshots", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  initiativeId: integer("initiative_id").references(() => initiatives.id).notNull(),
+  batchId: integer("batch_id").references(() => ingestionBatches.id).notNull(),
+  
+  // Snapshot data (copied from Excel row at time of batch)
+  title: text("title").notNull(),
+  description: text("description"),
+  owner: text("owner"),
+  sponsor: text("sponsor"),
+  departmentName: text("department_name"),
+  status: text("status"),
+  estatusAlDia: text("estatus_al_dia"),
+  priority: text("priority"),
+  category: text("category"),
+  projectType: text("project_type"),
+  
+  // Dates
+  startDate: date("start_date"),
+  endDateEstimated: date("end_date_estimated"),
+  endDateActual: date("end_date_actual"),
+  percentComplete: integer("percent_complete"),
+  
+  // Scoring (calculated by system)
+  totalValor: integer("total_valor"),
+  totalEsfuerzo: integer("total_esfuerzo"),
+  puntajeTotal: integer("puntaje_total"),
+  ranking: integer("ranking"),
+  
+  // Excel raw values (for comparison)
+  excelTotalValor: integer("excel_total_valor"),
+  excelTotalEsfuerzo: integer("excel_total_esfuerzo"),
+  excelPuntajeTotal: integer("excel_puntaje_total"),
+  
+  // Raw data
+  rawExcelRow: jsonb("raw_excel_row").$type<Record<string, unknown>>(),
+  
+  // Audit (immutable - never updated)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Assessment entries - scores per criterion per snapshot
+export const assessmentEntries = pgTable("assessment_entries", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  snapshotId: integer("snapshot_id").references(() => initiativeSnapshots.id).notNull(),
+  criterionId: integer("criterion_id").references(() => scoringCriteria.id).notNull(),
+  selectedOptionId: integer("selected_option_id").references(() => scoringOptions.id),
+  rawValue: text("raw_value"), // Original Excel value
+  numericValue: integer("numeric_value"), // Resolved numeric score
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Benefit records - benefits/impacts
+export const benefitRecords = pgTable("benefit_records", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  snapshotId: integer("snapshot_id").references(() => initiativeSnapshots.id).notNull(),
+  benefitType: text("benefit_type").notNull(), // efficiency, savings, revenue, etc.
+  description: text("description"),
+  amount: integer("amount"),
+  currency: text("currency").default("MXN"),
+  periodicity: text("periodicity"), // annual, monthly, one-time
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Status updates - status change history
+export const statusUpdates = pgTable("status_updates", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  initiativeId: integer("initiative_id").references(() => initiatives.id).notNull(),
+  batchId: integer("batch_id").references(() => ingestionBatches.id),
+  statusText: text("status_text"), // S: content
+  nextStepsText: text("next_steps_text"), // N: content
+  updatedBy: varchar("updated_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Action items - action items/tasks
+export const actionItems = pgTable("action_items", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  initiativeId: integer("initiative_id").references(() => initiatives.id).notNull(),
+  snapshotId: integer("snapshot_id").references(() => initiativeSnapshots.id),
+  title: text("title").notNull(),
+  assignee: text("assignee"),
+  dueDate: date("due_date"),
+  status: text("status").default("pending"), // pending, completed, cancelled
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
 // Relations
 export const excelVersionsRelations = relations(excelVersions, ({ many }) => ({
   projects: many(projects),
@@ -420,6 +562,96 @@ export const jobRunsRelations = relations(jobRuns, ({ one }) => ({
   }),
 }));
 
+// H2 Canonical Domain Model Relations
+export const initiativesRelations = relations(initiatives, ({ many }) => ({
+  snapshots: many(initiativeSnapshots),
+  statusUpdates: many(statusUpdates),
+  actionItems: many(actionItems),
+}));
+
+export const scoringModelsRelations = relations(scoringModels, ({ many }) => ({
+  criteria: many(scoringCriteria),
+}));
+
+export const scoringCriteriaRelations = relations(scoringCriteria, ({ one, many }) => ({
+  model: one(scoringModels, {
+    fields: [scoringCriteria.modelId],
+    references: [scoringModels.id],
+  }),
+  options: many(scoringOptions),
+  assessmentEntries: many(assessmentEntries),
+}));
+
+export const scoringOptionsRelations = relations(scoringOptions, ({ one, many }) => ({
+  criterion: one(scoringCriteria, {
+    fields: [scoringOptions.criterionId],
+    references: [scoringCriteria.id],
+  }),
+  assessmentEntries: many(assessmentEntries),
+}));
+
+export const initiativeSnapshotsRelations = relations(initiativeSnapshots, ({ one, many }) => ({
+  initiative: one(initiatives, {
+    fields: [initiativeSnapshots.initiativeId],
+    references: [initiatives.id],
+  }),
+  batch: one(ingestionBatches, {
+    fields: [initiativeSnapshots.batchId],
+    references: [ingestionBatches.id],
+  }),
+  assessmentEntries: many(assessmentEntries),
+  benefitRecords: many(benefitRecords),
+  actionItems: many(actionItems),
+}));
+
+export const assessmentEntriesRelations = relations(assessmentEntries, ({ one }) => ({
+  snapshot: one(initiativeSnapshots, {
+    fields: [assessmentEntries.snapshotId],
+    references: [initiativeSnapshots.id],
+  }),
+  criterion: one(scoringCriteria, {
+    fields: [assessmentEntries.criterionId],
+    references: [scoringCriteria.id],
+  }),
+  selectedOption: one(scoringOptions, {
+    fields: [assessmentEntries.selectedOptionId],
+    references: [scoringOptions.id],
+  }),
+}));
+
+export const benefitRecordsRelations = relations(benefitRecords, ({ one }) => ({
+  snapshot: one(initiativeSnapshots, {
+    fields: [benefitRecords.snapshotId],
+    references: [initiativeSnapshots.id],
+  }),
+}));
+
+export const statusUpdatesRelations = relations(statusUpdates, ({ one }) => ({
+  initiative: one(initiatives, {
+    fields: [statusUpdates.initiativeId],
+    references: [initiatives.id],
+  }),
+  batch: one(ingestionBatches, {
+    fields: [statusUpdates.batchId],
+    references: [ingestionBatches.id],
+  }),
+  updatedByUser: one(users, {
+    fields: [statusUpdates.updatedBy],
+    references: [users.id],
+  }),
+}));
+
+export const actionItemsRelations = relations(actionItems, ({ one }) => ({
+  initiative: one(initiatives, {
+    fields: [actionItems.initiativeId],
+    references: [initiatives.id],
+  }),
+  snapshot: one(initiativeSnapshots, {
+    fields: [actionItems.snapshotId],
+    references: [initiativeSnapshots.id],
+  }),
+}));
+
 // Insert schemas - using type assertion to work around drizzle-zod omit() TypeScript bug
 // See: https://github.com/drizzle-team/drizzle-orm/issues/4016
 export const insertExcelVersionSchema = createInsertSchema(excelVersions).omit({ id: true, uploadedAt: true } as Record<string, true>);
@@ -441,6 +673,17 @@ export const insertExportBatchSchema = createInsertSchema(exportBatches).omit({ 
 export const insertExportArtifactSchema = createInsertSchema(exportArtifacts).omit({ id: true, createdAt: true } as Record<string, true>);
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true } as Record<string, true>);
 export const insertJobRunSchema = createInsertSchema(jobRuns).omit({ id: true, startedAt: true } as Record<string, true>);
+
+// H2 Canonical Domain Model Insert Schemas
+export const insertInitiativeSchema = createInsertSchema(initiatives).omit({ id: true, createdAt: true, updatedAt: true } as Record<string, true>);
+export const insertScoringModelSchema = createInsertSchema(scoringModels).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertScoringCriterionSchema = createInsertSchema(scoringCriteria).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertScoringOptionSchema = createInsertSchema(scoringOptions).omit({ id: true } as Record<string, true>);
+export const insertInitiativeSnapshotSchema = createInsertSchema(initiativeSnapshots).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertAssessmentEntrySchema = createInsertSchema(assessmentEntries).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertBenefitRecordSchema = createInsertSchema(benefitRecords).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertStatusUpdateSchema = createInsertSchema(statusUpdates).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertActionItemSchema = createInsertSchema(actionItems).omit({ id: true, createdAt: true } as Record<string, true>);
 
 // Types
 export type ExcelVersion = typeof excelVersions.$inferSelect;
@@ -479,6 +722,26 @@ export type Job = typeof jobs.$inferSelect;
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type JobRun = typeof jobRuns.$inferSelect;
 export type InsertJobRun = z.infer<typeof insertJobRunSchema>;
+
+// H2 Canonical Domain Model Types
+export type Initiative = typeof initiatives.$inferSelect;
+export type InsertInitiative = z.infer<typeof insertInitiativeSchema>;
+export type ScoringModel = typeof scoringModels.$inferSelect;
+export type InsertScoringModel = z.infer<typeof insertScoringModelSchema>;
+export type ScoringCriterion = typeof scoringCriteria.$inferSelect;
+export type InsertScoringCriterion = z.infer<typeof insertScoringCriterionSchema>;
+export type ScoringOption = typeof scoringOptions.$inferSelect;
+export type InsertScoringOption = z.infer<typeof insertScoringOptionSchema>;
+export type InitiativeSnapshot = typeof initiativeSnapshots.$inferSelect;
+export type InsertInitiativeSnapshot = z.infer<typeof insertInitiativeSnapshotSchema>;
+export type AssessmentEntry = typeof assessmentEntries.$inferSelect;
+export type InsertAssessmentEntry = z.infer<typeof insertAssessmentEntrySchema>;
+export type BenefitRecord = typeof benefitRecords.$inferSelect;
+export type InsertBenefitRecord = z.infer<typeof insertBenefitRecordSchema>;
+export type StatusUpdate = typeof statusUpdates.$inferSelect;
+export type InsertStatusUpdate = z.infer<typeof insertStatusUpdateSchema>;
+export type ActionItem = typeof actionItems.$inferSelect;
+export type InsertActionItem = z.infer<typeof insertActionItemSchema>;
 
 // Traffic light status enum for frontend
 export type TrafficLightStatus = 'green' | 'yellow' | 'red' | 'gray';
