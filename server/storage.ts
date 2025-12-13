@@ -4,7 +4,7 @@ import {
   changeLogs, kpiValues, chatMessages, filterPresets, users,
   ingestionBatches, rawArtifacts, validationIssues, templateVersions,
   exportBatches, exportArtifacts, jobs, jobRuns,
-  initiatives, initiativeSnapshots,
+  initiatives, initiativeSnapshots, deltaEvents, governanceAlerts, statusUpdates,
   type ExcelVersion, type InsertExcelVersion,
   type Project, type InsertProject,
   type Department, type InsertDepartment,
@@ -20,9 +20,12 @@ import {
   type ValidationIssue, type InsertValidationIssue,
   type Initiative, type InsertInitiative,
   type InitiativeSnapshot, type InsertInitiativeSnapshot,
+  type DeltaEvent, type InsertDeltaEvent,
+  type GovernanceAlert, type InsertGovernanceAlert,
+  type StatusUpdate,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sql, inArray, count } from "drizzle-orm";
+import { eq, desc, and, sql, inArray, count, lt } from "drizzle-orm";
 
 export interface IStorage {
   // User operations - email/password auth
@@ -121,6 +124,21 @@ export interface IStorage {
   getSnapshotsByInitiativeId(initiativeId: number): Promise<InitiativeSnapshot[]>;
   getSnapshotsByBatchId(batchId: number): Promise<InitiativeSnapshot[]>;
   snapshotExists(initiativeId: number, batchId: number): Promise<boolean>;
+
+  // H3 - Delta Events
+  createDeltaEvent(data: InsertDeltaEvent): Promise<DeltaEvent>;
+  getDeltasByInitiativeId(initiativeId: number, limit?: number): Promise<DeltaEvent[]>;
+
+  // H3 - Governance Alerts
+  createGovernanceAlert(data: InsertGovernanceAlert): Promise<GovernanceAlert>;
+  getAlertsByInitiativeId(initiativeId: number): Promise<GovernanceAlert[]>;
+  getOpenAlerts(): Promise<GovernanceAlert[]>;
+  getOpenAlertBySignal(initiativeId: number, signalCode: string): Promise<GovernanceAlert | undefined>;
+  updateGovernanceAlert(id: number, data: Partial<GovernanceAlert>): Promise<void>;
+
+  // H3 - Status Updates
+  getLastStatusUpdate(initiativeId: number): Promise<StatusUpdate | undefined>;
+  getRecentSnapshots(initiativeId: number, limit: number): Promise<InitiativeSnapshot[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -660,6 +678,75 @@ export class DatabaseStorage implements IStorage {
         eq(initiativeSnapshots.batchId, batchId)
       ));
     return (result?.count ?? 0) > 0;
+  }
+
+  // H3 - Delta Events
+  async createDeltaEvent(data: InsertDeltaEvent): Promise<DeltaEvent> {
+    const [result] = await db.insert(deltaEvents).values(data).returning();
+    return result;
+  }
+
+  async getDeltasByInitiativeId(initiativeId: number, limit: number = 50): Promise<DeltaEvent[]> {
+    return db.select()
+      .from(deltaEvents)
+      .where(eq(deltaEvents.initiativeId, initiativeId))
+      .orderBy(desc(deltaEvents.detectedAt))
+      .limit(limit);
+  }
+
+  // H3 - Governance Alerts
+  async createGovernanceAlert(data: InsertGovernanceAlert): Promise<GovernanceAlert> {
+    const [result] = await db.insert(governanceAlerts).values(data).returning();
+    return result;
+  }
+
+  async getAlertsByInitiativeId(initiativeId: number): Promise<GovernanceAlert[]> {
+    return db.select()
+      .from(governanceAlerts)
+      .where(eq(governanceAlerts.initiativeId, initiativeId))
+      .orderBy(desc(governanceAlerts.detectedAt));
+  }
+
+  async getOpenAlerts(): Promise<GovernanceAlert[]> {
+    return db.select()
+      .from(governanceAlerts)
+      .where(eq(governanceAlerts.status, "OPEN"))
+      .orderBy(desc(governanceAlerts.detectedAt));
+  }
+
+  async getOpenAlertBySignal(initiativeId: number, signalCode: string): Promise<GovernanceAlert | undefined> {
+    const [result] = await db.select()
+      .from(governanceAlerts)
+      .where(and(
+        eq(governanceAlerts.initiativeId, initiativeId),
+        eq(governanceAlerts.signalCode, signalCode),
+        eq(governanceAlerts.status, "OPEN")
+      ));
+    return result;
+  }
+
+  async updateGovernanceAlert(id: number, data: Partial<GovernanceAlert>): Promise<void> {
+    await db.update(governanceAlerts)
+      .set(data)
+      .where(eq(governanceAlerts.id, id));
+  }
+
+  // H3 - Status Updates
+  async getLastStatusUpdate(initiativeId: number): Promise<StatusUpdate | undefined> {
+    const [result] = await db.select()
+      .from(statusUpdates)
+      .where(eq(statusUpdates.initiativeId, initiativeId))
+      .orderBy(desc(statusUpdates.createdAt))
+      .limit(1);
+    return result;
+  }
+
+  async getRecentSnapshots(initiativeId: number, limit: number): Promise<InitiativeSnapshot[]> {
+    return db.select()
+      .from(initiativeSnapshots)
+      .where(eq(initiativeSnapshots.initiativeId, initiativeId))
+      .orderBy(desc(initiativeSnapshots.createdAt))
+      .limit(limit);
   }
 }
 

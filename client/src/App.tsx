@@ -20,6 +20,7 @@ import AdminUsers from "@/pages/admin-users";
 import Login from "@/pages/login";
 import Initiatives from "@/pages/initiatives";
 import InitiativeDetail from "@/pages/initiative-detail";
+import Alerts from "@/pages/alerts";
 
 function ProtectedRouter() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -47,6 +48,7 @@ function ProtectedRouter() {
       <Route path="/chat" component={Chat} />
       <Route path="/initiatives" component={Initiatives} />
       <Route path="/initiatives/:id" component={InitiativeDetail} />
+      <Route path="/alerts" component={Alerts} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route component={NotFound} />
     </Switch>

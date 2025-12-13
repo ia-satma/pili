@@ -12,6 +12,7 @@ import {
   LogIn,
   LogOut,
   Layers,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -58,6 +59,11 @@ const mainNavItems = [
     title: "Historial",
     url: "/history",
     icon: History,
+  },
+  {
+    title: "Alertas",
+    url: "/alerts",
+    icon: AlertTriangle,
   },
 ];
 

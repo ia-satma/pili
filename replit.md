@@ -4,6 +4,18 @@
 A Project Management Office (PMO) dashboard for managing continuous improvement projects. The platform provides a centralized view of project status, performance, and key metrics. It features deterministic Excel data parsing, PostgreSQL persistence, role-based authentication, and a fact-based conversational AI assistant. The system aims to enhance project oversight, facilitate data-driven decision-making, and streamline continuous improvement initiatives within an organization.
 
 ## Recent Changes (Dec 2025)
+- **Phase H3 Delta Engine & Signal Detection Completed**: Change tracking and governance alerts
+  - Added H3 schema tables: delta_events, governance_alerts with proper indexes
+  - Delta Engine (server/services/deltaEngine.ts): Compares consecutive snapshots, generates deltas
+  - Signal Detector (server/services/signalDetector.ts): 5 governance signals:
+    - ZOMBI: No status updates in 21+ days
+    - ANGUILA: End date shifted >15 days in 3 consecutive snapshots
+    - OPTIMISTA: Score increased >20% without new assessments
+    - INDECISO: Field changed A→B→A within 4 weeks
+    - DRENAJE_DE_VALOR: Total value decreased between consecutive snapshots
+  - API endpoints: GET /api/initiatives/:id/deltas, GET /api/alerts, GET /api/initiatives/:id/alerts
+  - UI: /alerts page with governance alerts list, initiative detail page shows deltas and alerts
+
 - **Phase H2 Initiative Snapshots Completed**: Identity resolution and immutable snapshot history
   - Added H2 schema tables: initiatives, scoringModels, scoringCriteria, scoringOptions, initiativeSnapshots, assessmentEntries, benefitRecords, statusUpdates, actionItems
   - Implemented Identity Resolution: devopsCardId > powerSteeringId > (title+owner) canonical matching

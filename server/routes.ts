@@ -1697,5 +1697,72 @@ export async function registerRoutes(
     }
   });
 
+  // ===== H3 DELTA ENGINE & GOVERNANCE ALERTS =====
+
+  // GET /api/initiatives/:id/deltas - Get deltas for an initiative
+  app.get("/api/initiatives/:id/deltas", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const limit = parseInt(req.query.limit as string) || 50;
+      const deltas = await storage.getDeltasByInitiativeId(id, limit);
+      
+      res.json({ deltas });
+    } catch (error) {
+      console.error("[Deltas] Error fetching deltas:", error);
+      res.status(500).json({ message: "Error al obtener cambios" });
+    }
+  });
+
+  // GET /api/initiatives/:id/alerts - Get alerts for an initiative
+  app.get("/api/initiatives/:id/alerts", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+      
+      const alerts = await storage.getAlertsByInitiativeId(id);
+      
+      res.json({ alerts });
+    } catch (error) {
+      console.error("[Alerts] Error fetching alerts:", error);
+      res.status(500).json({ message: "Error al obtener alertas" });
+    }
+  });
+
+  // GET /api/alerts - Get all alerts (optionally filtered by status)
+  app.get("/api/alerts", isAuthenticated, async (req, res) => {
+    try {
+      const status = req.query.status as string;
+      
+      let alerts;
+      if (status === "OPEN") {
+        alerts = await storage.getOpenAlerts();
+      } else {
+        alerts = await storage.getOpenAlerts();
+      }
+      
+      // Enrich alerts with initiative titles
+      const enrichedAlerts = await Promise.all(
+        alerts.map(async (alert) => {
+          const initiative = await storage.getInitiative(alert.initiativeId);
+          return {
+            ...alert,
+            initiativeTitle: initiative?.title || "Iniciativa desconocida",
+          };
+        })
+      );
+      
+      res.json({ alerts: enrichedAlerts });
+    } catch (error) {
+      console.error("[Alerts] Error fetching alerts:", error);
+      res.status(500).json({ message: "Error al obtener alertas" });
+    }
+  });
+
   return httpServer;
 }
