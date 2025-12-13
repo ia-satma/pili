@@ -152,6 +152,10 @@ export interface IStorage {
   lockJob(jobId: number, lockedBy: string): Promise<Job | undefined>;
   updateJob(id: number, data: Partial<Job>): Promise<void>;
   getStaleRunningJobs(staleMinutes: number): Promise<Job[]>;
+  hasPendingJobByType(jobType: string): Promise<boolean>;
+
+  // H4 - Limbo Detection
+  getInitiativesForLimboCheck(): Promise<{ initiative: Initiative; latestSnapshot: InitiativeSnapshot | null; latestStatusUpdate: StatusUpdate | null }[]>;
 
   // H4 - Job Runs
   createJobRun(data: InsertJobRun): Promise<JobRun>;
@@ -845,6 +849,49 @@ export class DatabaseStorage implements IStorage {
           lt(jobs.lockedAt, staleThreshold)
         )
       );
+  }
+
+  async hasPendingJobByType(jobType: string): Promise<boolean> {
+    const [result] = await db.select({ cnt: count() })
+      .from(jobs)
+      .where(
+        and(
+          eq(jobs.jobType, jobType),
+          or(
+            eq(jobs.status, "QUEUED"),
+            eq(jobs.status, "RUNNING"),
+            eq(jobs.status, "RETRYING")
+          )
+        )
+      );
+    return (result?.cnt || 0) > 0;
+  }
+
+  async getInitiativesForLimboCheck(): Promise<{ initiative: Initiative; latestSnapshot: InitiativeSnapshot | null; latestStatusUpdate: StatusUpdate | null }[]> {
+    const allInitiatives = await db.select().from(initiatives);
+    const results: { initiative: Initiative; latestSnapshot: InitiativeSnapshot | null; latestStatusUpdate: StatusUpdate | null }[] = [];
+
+    for (const initiative of allInitiatives) {
+      const [latestSnapshot] = await db.select()
+        .from(initiativeSnapshots)
+        .where(eq(initiativeSnapshots.initiativeId, initiative.id))
+        .orderBy(desc(initiativeSnapshots.createdAt))
+        .limit(1);
+
+      const [latestStatusUpdate] = await db.select()
+        .from(statusUpdates)
+        .where(eq(statusUpdates.initiativeId, initiative.id))
+        .orderBy(desc(statusUpdates.createdAt))
+        .limit(1);
+
+      results.push({
+        initiative,
+        latestSnapshot: latestSnapshot || null,
+        latestStatusUpdate: latestStatusUpdate || null,
+      });
+    }
+
+    return results;
   }
 
   // H4 - Job Runs

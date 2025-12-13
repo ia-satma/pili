@@ -12,6 +12,7 @@ import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./
 import type { InsertChangeLog, InsertKpiValue, Project, InsertProject, InsertValidationIssue } from "@shared/schema";
 import { exportBatches, jobs, jobRuns } from "@shared/schema";
 import { setupAuth, isAuthenticated, isAdmin, isEditor, isViewer, seedAdminUsers } from "./replitAuth";
+import { enqueueJob } from "./services/workerLoop";
 
 // Validation schemas
 const sendMessageSchema = z.object({
@@ -1955,6 +1956,22 @@ export async function registerRoutes(
   });
 
   // ===== H4 JOB STATUS =====
+
+  // POST /api/jobs/enqueue-detect-limbo - Enqueue DETECT_LIMBO job
+  app.post("/api/jobs/enqueue-detect-limbo", isAuthenticated, isEditor, async (req, res) => {
+    try {
+      const hasPending = await storage.hasPendingJobByType("DETECT_LIMBO");
+      if (hasPending) {
+        return res.status(409).json({ message: "Ya existe un trabajo DETECT_LIMBO pendiente" });
+      }
+
+      const jobId = await enqueueJob("DETECT_LIMBO", {});
+      res.status(201).json({ jobId, message: "Trabajo de detección de limbo encolado" });
+    } catch (error) {
+      console.error("[Jobs] Error enqueueing DETECT_LIMBO:", error);
+      res.status(500).json({ message: "Error al encolar trabajo" });
+    }
+  });
 
   // GET /api/jobs/:id - Get job status and runs for polling
   app.get("/api/jobs/:id", isAuthenticated, async (req, res) => {

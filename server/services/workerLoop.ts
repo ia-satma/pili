@@ -2,7 +2,7 @@ import { storage } from "../storage";
 import { generateExportExcel } from "./exportEngine";
 import { generateCommitteePacket } from "./committeePacketGenerator";
 import { generateChaserDrafts } from "./chaserDraftGenerator";
-import { runSignalDetectionForBatch } from "./signalDetector";
+import { runBatchIndependentLimboDetection } from "./limboDetector";
 import type { Job, InsertJobRun } from "@shared/schema";
 import { hostname } from "os";
 
@@ -35,15 +35,28 @@ const jobHandlers: Record<JobType, JobHandler> = {
     };
   },
 
-  DETECT_LIMBO: async (job: Job) => {
-    const payload = job.payload as { batchId?: number };
-    if (!payload.batchId) {
-      throw new Error("DETECT_LIMBO requires batchId in payload");
+  DETECT_LIMBO: async (_job: Job) => {
+    const result = await runBatchIndependentLimboDetection();
+    
+    const hasPending = await storage.hasPendingJobByType("DETECT_LIMBO");
+    if (!hasPending) {
+      const nextRun = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await storage.createJob({
+        jobType: "DETECT_LIMBO",
+        status: "QUEUED",
+        payload: {},
+        runAt: nextRun,
+        attempts: 0,
+        maxAttempts: 3,
+      });
+      console.log(`[Worker] Scheduled next DETECT_LIMBO for ${nextRun.toISOString()}`);
     }
-    const result = await runSignalDetectionForBatch(payload.batchId);
+    
     return {
       totalAlerts: result.totalAlerts,
-      batchId: payload.batchId,
+      zombiAlerts: result.zombiAlerts,
+      missingSnapshotAlerts: result.missingSnapshotAlerts,
+      initiativesChecked: result.initiativesChecked,
     };
   },
 

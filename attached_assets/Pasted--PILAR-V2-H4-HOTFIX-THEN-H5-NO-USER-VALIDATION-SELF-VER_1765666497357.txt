@@ -1,0 +1,134 @@
+# PILAR V2 — H4 HOTFIX + THEN H5 (NO USER VALIDATION, SELF-VERIFY ONLY)
+
+ABSOLUTE RULES
+- Do NOT ask the user to review code or run SQL.
+- You must self-verify and paste outputs in final reports.
+- Do NOT proceed past the requested step; STOP and report.
+
+========================================================
+STEP 1 — H4 HOTFIX (BLOCKER): DETECT_LIMBO MUST SUCCEED
+========================================================
+Problem: DETECT_LIMBO currently fails with "requires batchId in payload". This is unacceptable.
+Limbo detection must be batch-independent and based on latest canonical truth.
+
+TASKS:
+1) Update DETECT_LIMBO handler to require NO batchId.
+   - It must compute limbo using:
+     a) initiatives table
+     b) latest snapshot per initiative (initiative_snapshots captured_at desc)
+     c) latest status_update per initiative (status_updates.created_at desc)
+     d) active governance_alerts if needed
+   - Define limbo rules (minimum):
+     - If no status_update in > 21 days => create/update governance_alert signal_code = "ZOMBI" (MEDIUM)
+     - If initiative has no snapshots ever => create governance_alert "MISSING_SNAPSHOT" (MEDIUM)
+     - If stage_gate unchanged for > N days (use updatedAt or last snapshot age) => "STALLED_GATE" (MEDIUM)
+
+2) Ensure no-duplication:
+   - Do not create duplicate OPEN alerts for same initiative_id + signal_code.
+   - If exists OPEN, update detected_at/rationale instead.
+
+3) Make DETECT_LIMBO job payload optional (empty JSON ok).
+   - Update job validation accordingly.
+
+4) DB-backed scheduling (no node-cron):
+   - Implement a minimal recurring mechanism WITHOUT cron:
+     Option A (preferred): A job handler that, on success, enqueues the next run (run_at = now + 24h).
+     Ensure idempotency: do not enqueue multiple future DETECT_LIMBO jobs if one already exists scheduled.
+
+5) Add/confirm endpoint:
+   - POST /api/jobs/enqueue-detect-limbo  (optional) to enqueue immediately.
+
+H4 HOTFIX DoD (SELF-VERIFY):
+- Enqueue DETECT_LIMBO with EMPTY payload.
+- It must end as SUCCEEDED (job_runs row).
+- governance_alerts must show at least one deterministic update (create or update).
+- Paste in report:
+  a) job_runs rows for DETECT_LIMBO
+  b) governance_alerts summary (count by signal_code/status)
+
+STOP after Hotfix and report in Spanish:
+- files changed
+- what you fixed
+- proof outputs
+Do NOT start H5 until I reply “OK H4 HOTFIX APPROVED”.
+
+========================================================
+STEP 2 — PHASE H5 (ONLY AFTER HOTFIX APPROVAL): AGENTS + RAG-LITE + COUNCIL AUDIT + AUTO-DOCS IN FRONTEND
+========================================================
+(Do not execute until explicitly approved after Step 1.)
+
+H5 GOAL:
+Implement the agentic rack as controlled services with full auditability and “Cero Mentiras”.
+Also implement automatic system documentation that is visible in the frontend.
+
+H5.1 — AGENT REGISTRY (DB)
+Create tables:
+- agent_definitions: id, name, purpose, input_schema_json, output_schema_json, enabled, created_at
+- agent_versions: id, agent_id, version, prompt_template, model_provider, model_name, created_at
+- agent_runs: id, agent_version_id, initiated_by_user_id nullable, status, input_json, output_json, evidence_refs_json, started_at, finished_at, tokens_json, cost_json, error_message
+
+H5.2 — COUNCIL AUDIT (2 auditors + chairman)
+Create tables:
+- council_reviews: id, agent_run_id, reviewer_type (CHAIRMAN|CRITIC|QUANT), status (APPROVE|BLOCK|WARN), notes, created_at
+
+Implementation:
+- Chairman = generator (OpenAI) produces structured output + claims[] + evidence_refs[]
+- Critic + Quant:
+  - Implement provider adapters (OpenAI/Anthropic/Google) BUT:
+    - If keys are missing, reviewer must return BLOCKED with missing dependency (no hallucination).
+  - If Critic or Quant returns BLOCK -> agent_run.status = BLOCKED and output is not promoted.
+
+H5.3 — EVIDENCE PACK SERVICE (RAG-LITE, DB-grounded)
+Implement server/services/evidencePack.ts:
+- Given initiative_id (and optional date range), return an Evidence Pack from DB only:
+  - latest snapshot + recent deltas + open alerts + recent status_updates + benefit_records
+- Agent prompts must ONLY receive evidence pack + explicit instructions to cite evidence_refs.
+
+H5.4 — AGENT FLEET (9 agents, pure JSON)
+Implement as server/agents/*.ts:
+1) IntakeAgent
+2) CharterAgent
+3) RequirementsAgent
+4) ProcessAgent (AS-IS/TO-BE)
+5) PrioritizationAgent
+6) CommitteeBriefAgent
+7) TechAdvisorAgent
+8) BenefitsAgent
+9) RiskExplainerAgent
+
+Each agent:
+- input: { initiative_id, evidence_pack, optional user_text }
+- output: JSON ONLY (standard contract)
+- if evidence missing: INSF_EVIDENCE + missing_fields
+- never writes to UI; persistence only through service layer
+
+H5.5 — AUTO-DOCUMENTATION (NO MORE “WHERE IS IT?”)
+Create:
+- system_docs: id, doc_type, content_markdown, generated_at
+Implement job type: GENERATE_SYSTEM_DOCS
+- It must auto-generate:
+  - Current schema summary (from information_schema)
+  - Endpoint inventory (from Express routes list)
+  - Current phase + DoD summary (from replit.md if exists)
+- Store markdown in system_docs
+
+UI:
+- /system (admin-only)
+  Tabs:
+  1) Ops: batches, jobs, exports, alerts
+  2) Docs: render system_docs + show replit.md content
+  3) Agents: list agent_definitions, versions, last runs, council reviews
+
+H5 DoD (SELF-VERIFY):
+- Register 1 agent (CommitteeBriefAgent) in registry
+- Run it on 1 initiative:
+  - must create agent_run record
+  - must include evidence_refs
+  - must create council_reviews (even if auditors are BLOCKED due to missing keys)
+- Generate system docs:
+  - must create system_docs rows
+  - /system/docs must display content
+- Report in Spanish with proof outputs.
+STOP after H5.
+
+END.
