@@ -4,6 +4,28 @@
 A Project Management Office (PMO) dashboard for managing continuous improvement projects. The platform provides a centralized view of project status, performance, and key metrics. It features deterministic Excel data parsing, PostgreSQL persistence, role-based authentication, and a fact-based conversational AI assistant. The system aims to enhance project oversight, facilitate data-driven decision-making, and streamline continuous improvement initiatives within an organization.
 
 ## Recent Changes (Dec 2025)
+- **Phase H5 Agent Subsystem Completed**: AI agent infrastructure with council reviews
+  - Added H5 schema tables: agent_definitions, agent_versions, agent_runs, council_reviews, system_docs
+  - Evidence Pack Service (server/services/evidencePack.ts): DB-grounded RAG-lite for agents
+    - Builds evidence from initiatives, snapshots, deltas, alerts, status updates
+    - Tracks provenance (batchIds, snapshotIds, alertIds, deltaIds)
+    - Formats evidence for LLM prompts in Spanish
+  - Agent Runner (server/services/agentRunner.ts): Executes agents with council reviews
+    - GPT-5 model with strict zero-hallucination system prompt
+    - Council reviews: CHAIRMAN (auto-approve), CRITIC (Anthropic), QUANT (Google)
+    - Status tracking: RUNNING → SUCCEEDED/BLOCKED/FAILED
+  - Agent Fleet (server/services/agentFleet.ts): 9 agent definitions
+    - CommitteeBriefAgent (enabled): Executive summaries for committee
+    - IntakeAgent, CharterAgent, RequirementsAgent, ProcessAgent, PrioritizationAgent, TechAdvisorAgent, BenefitsAgent, RiskExplainerAgent (scaffolds, disabled)
+  - System Docs Generator (server/services/systemDocsGenerator.ts): 4 document types
+    - CHANGELOG, ARCHITECTURE, DATA_DICTIONARY, API_REFERENCE
+  - System UI (/system): 3-tab interface
+    - Operaciones: Worker status, recent jobs list
+    - Documentación: Auto-generated system docs, regenerate button
+    - Agentes: Agent fleet status, seed button
+  - API endpoints: GET /api/agents, POST /api/agents/seed, GET /api/system/docs, POST /api/system/docs/run, POST /api/agents/:name/run/:initiativeId
+  - Added GENERATE_SYSTEM_DOCS job type to workerLoop.ts
+
 - **Phase H4 DB-Backed Autonomy & Excel Export Completed**: Job queue system and official exports
   - Job Queue System (DB-backed, no cron): jobs table with status/locking/retry, job_runs for history
   - Worker Loop (server/services/workerLoop.ts): Polls QUEUED jobs, SELECT FOR UPDATE locking, stale lock detection (10 min TTL)
