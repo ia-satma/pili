@@ -3,6 +3,7 @@ import { generateExportExcel } from "./exportEngine";
 import { generateCommitteePacket } from "./committeePacketGenerator";
 import { generateChaserDrafts } from "./chaserDraftGenerator";
 import { runBatchIndependentLimboDetection } from "./limboDetector";
+import { generateSystemDocs } from "./systemDocsGenerator";
 import type { Job, InsertJobRun } from "@shared/schema";
 import { hostname } from "os";
 
@@ -10,7 +11,7 @@ const POLL_INTERVAL_MS = 5000;
 const STALE_LOCK_MINUTES = 10;
 const BACKOFF_BASE_MS = 60000;
 
-type JobType = "GENERATE_EXPORT_EXCEL" | "GENERATE_COMMITTEE_PACKET" | "DETECT_LIMBO" | "DRAFT_CHASERS";
+type JobType = "GENERATE_EXPORT_EXCEL" | "GENERATE_COMMITTEE_PACKET" | "DETECT_LIMBO" | "DRAFT_CHASERS" | "GENERATE_SYSTEM_DOCS";
 
 interface JobHandler {
   (job: Job): Promise<Record<string, unknown>>;
@@ -65,6 +66,14 @@ const jobHandlers: Record<JobType, JobHandler> = {
     return {
       draftsCreated: result.draftsCreated,
       initiativesProcessed: result.initiativesProcessed,
+    };
+  },
+
+  GENERATE_SYSTEM_DOCS: async () => {
+    const result = await generateSystemDocs();
+    return {
+      docsCreated: result.docsCreated,
+      docTypes: result.docTypes,
     };
   },
 };

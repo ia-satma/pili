@@ -25,6 +25,7 @@ import Exports from "@/pages/exports";
 import Committee from "@/pages/committee";
 import CommitteeDetail from "@/pages/committee-detail";
 import Chasers from "@/pages/chasers";
+import System from "@/pages/system";
 
 function ProtectedRouter() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -57,6 +58,7 @@ function ProtectedRouter() {
       <Route path="/committee" component={Committee} />
       <Route path="/committee/:id" component={CommitteeDetail} />
       <Route path="/chasers" component={Chasers} />
+      <Route path="/system" component={System} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route component={NotFound} />
     </Switch>

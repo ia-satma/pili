@@ -1957,6 +1957,17 @@ export async function registerRoutes(
 
   // ===== H4 JOB STATUS =====
 
+  // GET /api/jobs/recent - Get recent jobs for system status page
+  app.get("/api/jobs/recent", isAuthenticated, async (req, res) => {
+    try {
+      const recentJobs = await storage.getRecentJobs(20);
+      res.json({ jobs: recentJobs });
+    } catch (error) {
+      console.error("[Jobs] Error fetching recent jobs:", error);
+      res.status(500).json({ message: "Error al obtener trabajos recientes" });
+    }
+  });
+
   // POST /api/jobs/enqueue-detect-limbo - Enqueue DETECT_LIMBO job
   app.post("/api/jobs/enqueue-detect-limbo", isAuthenticated, isEditor, async (req, res) => {
     try {
@@ -1995,6 +2006,118 @@ export async function registerRoutes(
     } catch (error) {
       console.error("[Jobs] Error fetching job status:", error);
       res.status(500).json({ message: "Error al obtener estado del trabajo" });
+    }
+  });
+
+  // ===== H5 Agent Routes =====
+  
+  // Get all agent definitions
+  app.get("/api/agents", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { getAgentFleetStatus } = await import("./services/agentFleet");
+      const status = await getAgentFleetStatus();
+      res.json(status.agents);
+    } catch (error) {
+      console.error("[Agents] Error fetching agents:", error);
+      res.status(500).json({ message: "Error al obtener agentes" });
+    }
+  });
+
+  // Seed agent fleet
+  app.post("/api/agents/seed", isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { seedAgentFleet } = await import("./services/agentFleet");
+      const result = await seedAgentFleet();
+      res.json(result);
+    } catch (error) {
+      console.error("[Agents] Error seeding agents:", error);
+      res.status(500).json({ message: "Error al inicializar agentes" });
+    }
+  });
+
+  // Run an agent on an initiative
+  app.post("/api/agents/:name/run", isEditor, async (req: Request, res: Response) => {
+    try {
+      const { name } = req.params;
+      const { initiativeId } = req.body;
+
+      if (!initiativeId || typeof initiativeId !== "number") {
+        return res.status(400).json({ message: "initiativeId es requerido" });
+      }
+
+      const { runAgent } = await import("./services/agentRunner");
+      const result = await runAgent(name, initiativeId);
+      res.json(result);
+    } catch (error) {
+      console.error("[Agents] Error running agent:", error);
+      const message = error instanceof Error ? error.message : "Error al ejecutar agente";
+      res.status(500).json({ message });
+    }
+  });
+
+  // Get agent run details
+  app.get("/api/agents/runs/:id", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const { getAgentRunWithReviews } = await import("./services/agentRunner");
+      const result = await getAgentRunWithReviews(id);
+      
+      if (!result.run) {
+        return res.status(404).json({ message: "Ejecución no encontrada" });
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error("[Agents] Error fetching run:", error);
+      res.status(500).json({ message: "Error al obtener ejecución" });
+    }
+  });
+
+  // ===== H5 System Docs Routes =====
+
+  // Get system docs
+  app.get("/api/system/docs", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const docs = await storage.getSystemDocs();
+      res.json(docs);
+    } catch (error) {
+      console.error("[SystemDocs] Error fetching docs:", error);
+      res.status(500).json({ message: "Error al obtener documentación" });
+    }
+  });
+
+  // Get single system doc
+  app.get("/api/system/docs/:id", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const doc = await storage.getSystemDoc(id);
+      if (!doc) {
+        return res.status(404).json({ message: "Documento no encontrado" });
+      }
+
+      res.json(doc);
+    } catch (error) {
+      console.error("[SystemDocs] Error fetching doc:", error);
+      res.status(500).json({ message: "Error al obtener documento" });
+    }
+  });
+
+  // Generate system docs (enqueue job)
+  app.post("/api/system/docs/run", isAdmin, async (req: Request, res: Response) => {
+    try {
+      const jobId = await enqueueJob("GENERATE_SYSTEM_DOCS" as any, {});
+      res.json({ jobId, message: "Generación de documentación encolada" });
+    } catch (error) {
+      console.error("[SystemDocs] Error enqueuing job:", error);
+      res.status(500).json({ message: "Error al encolar generación" });
     }
   });
 

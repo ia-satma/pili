@@ -150,6 +150,7 @@ export interface IStorage {
 
   // H3 - Status Updates
   getLastStatusUpdate(initiativeId: number): Promise<StatusUpdate | undefined>;
+  getRecentStatusUpdates(initiativeId: number, limit: number): Promise<StatusUpdate[]>;
   getRecentSnapshots(initiativeId: number, limit: number): Promise<InitiativeSnapshot[]>;
 
   // H4 - Jobs
@@ -159,6 +160,7 @@ export interface IStorage {
   updateJob(id: number, data: Partial<Job>): Promise<void>;
   getStaleRunningJobs(staleMinutes: number): Promise<Job[]>;
   hasPendingJobByType(jobType: string): Promise<boolean>;
+  getRecentJobs(limit?: number): Promise<Job[]>;
 
   // H4 - Limbo Detection
   getInitiativesForLimboCheck(): Promise<{ initiative: Initiative; latestSnapshot: InitiativeSnapshot | null; latestStatusUpdate: StatusUpdate | null }[]>;
@@ -822,6 +824,14 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async getRecentStatusUpdates(initiativeId: number, limit: number): Promise<StatusUpdate[]> {
+    return db.select()
+      .from(statusUpdates)
+      .where(eq(statusUpdates.initiativeId, initiativeId))
+      .orderBy(desc(statusUpdates.createdAt))
+      .limit(limit);
+  }
+
   async getRecentSnapshots(initiativeId: number, limit: number): Promise<InitiativeSnapshot[]> {
     return db.select()
       .from(initiativeSnapshots)
@@ -899,6 +909,13 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return (result?.cnt || 0) > 0;
+  }
+
+  async getRecentJobs(limit: number = 20): Promise<Job[]> {
+    return db.select()
+      .from(jobs)
+      .orderBy(desc(jobs.createdAt))
+      .limit(limit);
   }
 
   async getInitiativesForLimboCheck(): Promise<{ initiative: Initiative; latestSnapshot: InitiativeSnapshot | null; latestStatusUpdate: StatusUpdate | null }[]> {

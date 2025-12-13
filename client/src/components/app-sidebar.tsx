@@ -16,6 +16,7 @@ import {
   FileSpreadsheet,
   UsersRound,
   Mail,
+  Settings,
 } from "lucide-react";
 import {
   Sidebar,
@@ -108,6 +109,11 @@ const adminItems = [
     title: "Usuarios",
     url: "/admin/users",
     icon: Users,
+  },
+  {
+    title: "Sistema",
+    url: "/system",
+    icon: Settings,
   },
 ];
 
