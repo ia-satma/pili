@@ -1,0 +1,147 @@
+✅ PHASE H4 — DB-BACKED AUTONOMY + OFFICIAL EXCEL EXPORT (BYTEA) + COMMITTEE PACKETS
+⛔ NO avances a H5. Al terminar H4 DETENTE y entrega reporte con evidencia (sin pedir al usuario que valide).
+
+REGLAS NO NEGOCIABLES:
+1) DB-backed autonomy: NO node-cron como mecanismo crítico. Jobs en DB + workerLoop con locking.
+2) Artifacts-in-DB: exports guardados en Postgres BYTEA (export_artifacts.file_content).
+3) Idempotencia: export job no debe generar duplicados innecesarios (si se corre 2 veces sin cambios, debe producir el mismo resultado o registrar NOOP).
+4) No silent failures: cualquier fallo del worker o export crea registro de job_run FAILED con last_error y (si aplica) una governance_alert.
+
+====================================================
+H4.1 — JOB RUNNER (core)
+====================================================
+Implementar worker loop robusto:
+- Poll jobs table por status QUEUED y run_at <= now()
+- Adquirir lock con SELECT ... FOR UPDATE SKIP LOCKED
+- Marcar job RUNNING + locked_by/locked_at
+- Ejecutar handler según job.type
+- Registrar job_runs (started_at, finished_at, status, metrics_json)
+- En error: marcar FAILED/RETRYING con backoff (attempts++), guardar last_error
+
+Requisitos:
+- Debe ser seguro ante reinicios de Replit:
+  - Si hay jobs RUNNING con locked_at muy viejo (stale lock), permitir requeue (definir TTL, p.ej. 10 min)
+- Concurrency control:
+  - 1 worker por proceso, pero que no ejecute el mismo job dos veces (locking evita duplicados)
+
+JOB TYPES mínimos en H4:
+1) GENERATE_EXPORT_EXCEL
+2) GENERATE_COMMITTEE_PACKET
+3) DETECT_LIMBO (puede reusar signalDetector)
+4) DRAFT_CHASERS (solo borradores; NO enviar emails todavía)
+
+====================================================
+H4.2 — OFFICIAL EXCEL EXPORT ENGINE (VERSIONED)
+====================================================
+Objetivo:
+Generar un Excel oficial desde la DB (latest snapshots) con layout consistente.
+- No necesitamos replicar el Excel original perfecto aún; necesitamos export funcional, versionado y reproducible.
+
+Implementación:
+A) export_batches:
+- Crear un registro export_batch al iniciar job (status RUNNING)
+- Seleccionar “current snapshot” por initiative:
+  - el snapshot más reciente por initiative (captured_at DESC)
+B) Generar workbook con al menos una hoja:
+- Columnas mínimas:
+  - initiative title
+  - type
+  - business_unit
+  - current_stage_gate
+  - calculated_total_value / effort / score
+  - status fields relevantes (si existen)
+  - last detected alerts count (open)
+  - last update timestamp (si existe status_updates)
+C) Guardar export en export_artifacts como BYTEA:
+- file_name: "PILAR_export_<YYYYMMDD_HHMM>.xlsx"
+- mime_type correcto
+- content_sha256 y content_size_bytes calculados
+- file_content BYTEA
+
+D) Links:
+- (si existe tabla export_snapshot_links, úsala; si no, agrega en H4 o guarda snapshot ids en export_batch.summary_json)
+
+E) Endpoints:
+- POST /api/exports/run   => encola job GENERATE_EXPORT_EXCEL (QUEUED)
+- GET /api/exports        => lista export_batches con latest artifact
+- GET /api/exports/:id/download => descarga export_artifacts BYTEA (Content-Disposition)
+
+Idempotencia export:
+- Si se corre dos veces seguidas sin cambios, permite generar otro export (versionado), pero:
+  - debe registrar en metrics_json si el hash es idéntico al export anterior
+  - NO duplicar artifacts por error de job retry (usar guardrail para retries)
+
+====================================================
+H4.3 — COMMITTEE PACKET GENERATOR (semana)
+====================================================
+Generar un “packet” para comité como JSON (no PDF aún):
+- Para cada initiative, incluir:
+  - resumen (title, type, BU, gate)
+  - scores (value/effort/total)
+  - top deltas recientes (últimos 5)
+  - alertas OPEN
+  - data_quality_score (si existe)
+  - recommended_action: APPROVE/DEFER/REQUEST_INFO (regla simple por ahora; sin LLM)
+
+Persistencia:
+- committee_packets.summary_json
+Endpoints:
+- POST /api/committee/run => encola job GENERATE_COMMITTEE_PACKET
+- GET /api/committee/packets
+- GET /api/committee/packets/:id
+
+UI mínima:
+- /committee (lista packets)
+- /committee/:id (ver JSON renderizado)
+
+====================================================
+H4.4 — CHASER DRAFTS (sin enviar)
+====================================================
+Implementar job DRAFT_CHASERS:
+- Para iniciativas con alertas OPEN severidad HIGH o ZOMBI:
+  - generar borrador de mensaje (subject/body) y guardarlo en una tabla:
+    - chaser_drafts (initiative_id, created_at, subject, body, status DRAFT)
+- NO integrar email provider aún.
+
+UI mínima:
+- Sección en /initiatives/:id para ver chaser drafts
+- Pantalla /chasers para listar drafts
+
+====================================================
+H4 DoD — AUTO-VERIFICACIÓN (tú lo pruebas y pegas resultados)
+====================================================
+Debes entregar evidencia en tu reporte final:
+
+A) Job runner funciona:
+- Encolas 2 jobs (export + committee)
+- Se procesan, cambian a SUCCEEDED
+- job_runs registra started/finished y metrics_json
+
+B) Export funciona:
+- Se genera export_batch + export_artifact con BYTEA
+- Descarga abre el Excel
+- Se reporta content_size_bytes y content_sha256
+
+C) Reinicio-safe:
+- Simula reinicio (restart app) con un job QUEUED
+- Al volver, worker lo procesa
+- No hay doble ejecución del mismo job (locking)
+
+D) No silent failures:
+- Provoca un error controlado (p. ej. export con 0 snapshots) y demuestra:
+  - job_run FAILED con last_error
+  - export_batch marcado FAILED (si aplica)
+  - NO se “traga” el error
+
+====================================================
+STOP
+====================================================
+Al terminar H4:
+- STOP. No avances a H5.
+- Reporte final en español con:
+  1) Archivos cambiados
+  2) Migraciones aplicadas
+  3) Endpoints y pantallas nuevas
+  4) Evidencia de DoD (outputs y explicación)
+  5) Riesgos/TODOs
+No preguntas al usuario.

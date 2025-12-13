@@ -21,6 +21,10 @@ import Login from "@/pages/login";
 import Initiatives from "@/pages/initiatives";
 import InitiativeDetail from "@/pages/initiative-detail";
 import Alerts from "@/pages/alerts";
+import Exports from "@/pages/exports";
+import Committee from "@/pages/committee";
+import CommitteeDetail from "@/pages/committee-detail";
+import Chasers from "@/pages/chasers";
 
 function ProtectedRouter() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -49,6 +53,10 @@ function ProtectedRouter() {
       <Route path="/initiatives" component={Initiatives} />
       <Route path="/initiatives/:id" component={InitiativeDetail} />
       <Route path="/alerts" component={Alerts} />
+      <Route path="/exports" component={Exports} />
+      <Route path="/committee" component={Committee} />
+      <Route path="/committee/:id" component={CommitteeDetail} />
+      <Route path="/chasers" component={Chasers} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route component={NotFound} />
     </Switch>

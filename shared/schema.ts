@@ -271,30 +271,77 @@ export const exportArtifacts = pgTable("export_artifacts", {
   fileName: text("file_name").notNull(),
   fileSize: integer("file_size").notNull(),
   mimeType: text("mime_type").notNull(),
+  contentSha256: text("content_sha256"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Jobs - scheduled background tasks
+// ===== H4 Job Queue System (DB-backed autonomy) =====
+
+// Jobs - queue-based background tasks with locking
 export const jobs = pgTable("jobs", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  name: text("name").notNull().unique(),
-  jobType: text("job_type").notNull(),
-  cronExpression: text("cron_expression"),
-  isEnabled: boolean("is_enabled").default(true),
-  lastRunAt: timestamp("last_run_at"),
-  nextRunAt: timestamp("next_run_at"),
+  jobType: text("job_type").notNull(), // GENERATE_EXPORT_EXCEL, GENERATE_COMMITTEE_PACKET, DETECT_LIMBO, DRAFT_CHASERS
+  status: text("status").notNull().default("QUEUED"), // QUEUED, RUNNING, SUCCEEDED, FAILED, RETRYING
+  payload: jsonb("payload").$type<Record<string, unknown>>().default({}),
+  runAt: timestamp("run_at").defaultNow().notNull(),
+  lockedBy: text("locked_by"),
+  lockedAt: timestamp("locked_at"),
+  attempts: integer("attempts").default(0).notNull(),
+  maxAttempts: integer("max_attempts").default(3).notNull(),
+  lastError: text("last_error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("jobs_status_run_at_idx").on(table.status, table.runAt),
+]);
 
-// Job runs - execution history for scheduled jobs
+// Job runs - execution history for each attempt
 export const jobRuns = pgTable("job_runs", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   jobId: integer("job_id").references(() => jobs.id).notNull(),
-  status: text("status").notNull(), // pending, running, completed, failed
+  status: text("status").notNull(), // RUNNING, SUCCEEDED, FAILED
   startedAt: timestamp("started_at").defaultNow().notNull(),
-  completedAt: timestamp("completed_at"),
+  finishedAt: timestamp("finished_at"),
+  metricsJson: jsonb("metrics_json").$type<Record<string, unknown>>(),
   errorMessage: text("error_message"),
-  resultSummary: jsonb("result_summary").$type<Record<string, unknown>>(),
+});
+
+// ===== H4 Committee Packets =====
+
+export const committeePackets = pgTable("committee_packets", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  jobId: integer("job_id").references(() => jobs.id),
+  status: text("status").notNull().default("PENDING"), // PENDING, COMPLETED, FAILED
+  summaryJson: jsonb("summary_json").$type<{
+    generatedAt: string;
+    initiativeCount: number;
+    initiatives: Array<{
+      id: number;
+      title: string;
+      type: string | null;
+      businessUnit: string | null;
+      gate: string | null;
+      scores: { value: number | null; effort: number | null; total: number | null };
+      recentDeltas: Array<{ fieldPath: string; oldValue: string | null; newValue: string | null }>;
+      openAlerts: Array<{ signalCode: string; severity: string; rationale: string }>;
+      dataQualityScore: number | null;
+      recommendedAction: string;
+    }>;
+  }>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ===== H4 Chaser Drafts =====
+
+export const chaserDrafts = pgTable("chaser_drafts", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  initiativeId: integer("initiative_id").references(() => initiatives.id).notNull(),
+  alertId: integer("alert_id").references(() => governanceAlerts.id),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  status: text("status").notNull().default("DRAFT"), // DRAFT, SENT, CANCELLED
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  sentAt: timestamp("sent_at"),
 });
 
 // ===== H2 Canonical Domain Model Tables =====
@@ -724,6 +771,10 @@ export const insertActionItemSchema = createInsertSchema(actionItems).omit({ id:
 export const insertDeltaEventSchema = createInsertSchema(deltaEvents).omit({ id: true, detectedAt: true } as Record<string, true>);
 export const insertGovernanceAlertSchema = createInsertSchema(governanceAlerts).omit({ id: true, detectedAt: true } as Record<string, true>);
 
+// H4 Job Queue Insert Schemas
+export const insertCommitteePacketSchema = createInsertSchema(committeePackets).omit({ id: true, createdAt: true } as Record<string, true>);
+export const insertChaserDraftSchema = createInsertSchema(chaserDrafts).omit({ id: true, createdAt: true } as Record<string, true>);
+
 // Types
 export type ExcelVersion = typeof excelVersions.$inferSelect;
 export type InsertExcelVersion = z.infer<typeof insertExcelVersionSchema>;
@@ -787,6 +838,12 @@ export type DeltaEvent = typeof deltaEvents.$inferSelect;
 export type InsertDeltaEvent = z.infer<typeof insertDeltaEventSchema>;
 export type GovernanceAlert = typeof governanceAlerts.$inferSelect;
 export type InsertGovernanceAlert = z.infer<typeof insertGovernanceAlertSchema>;
+
+// H4 Job Queue Types
+export type CommitteePacket = typeof committeePackets.$inferSelect;
+export type InsertCommitteePacket = z.infer<typeof insertCommitteePacketSchema>;
+export type ChaserDraft = typeof chaserDrafts.$inferSelect;
+export type InsertChaserDraft = z.infer<typeof insertChaserDraftSchema>;
 
 // Traffic light status enum for frontend
 export type TrafficLightStatus = 'green' | 'yellow' | 'red' | 'gray';

@@ -3,7 +3,7 @@ import {
   excelVersions, projects, departments, milestones, projectUpdates, 
   changeLogs, kpiValues, chatMessages, filterPresets, users,
   ingestionBatches, rawArtifacts, validationIssues, templateVersions,
-  exportBatches, exportArtifacts, jobs, jobRuns,
+  exportBatches, exportArtifacts, jobs, jobRuns, committeePackets, chaserDrafts,
   initiatives, initiativeSnapshots, deltaEvents, governanceAlerts, statusUpdates,
   type ExcelVersion, type InsertExcelVersion,
   type Project, type InsertProject,
@@ -23,9 +23,15 @@ import {
   type DeltaEvent, type InsertDeltaEvent,
   type GovernanceAlert, type InsertGovernanceAlert,
   type StatusUpdate,
+  type Job, type InsertJob,
+  type JobRun, type InsertJobRun,
+  type ExportBatch, type InsertExportBatch,
+  type ExportArtifact, type InsertExportArtifact,
+  type CommitteePacket, type InsertCommitteePacket,
+  type ChaserDraft, type InsertChaserDraft,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sql, inArray, count, lt } from "drizzle-orm";
+import { eq, desc, and, sql, inArray, count, lt, lte, or, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // User operations - email/password auth
@@ -139,6 +145,43 @@ export interface IStorage {
   // H3 - Status Updates
   getLastStatusUpdate(initiativeId: number): Promise<StatusUpdate | undefined>;
   getRecentSnapshots(initiativeId: number, limit: number): Promise<InitiativeSnapshot[]>;
+
+  // H4 - Jobs
+  createJob(data: InsertJob): Promise<Job>;
+  getQueuedJobs(limit?: number): Promise<Job[]>;
+  lockJob(jobId: number, lockedBy: string): Promise<Job | undefined>;
+  updateJob(id: number, data: Partial<Job>): Promise<void>;
+  getStaleRunningJobs(staleMinutes: number): Promise<Job[]>;
+
+  // H4 - Job Runs
+  createJobRun(data: InsertJobRun): Promise<JobRun>;
+  updateJobRun(id: number, data: Partial<JobRun>): Promise<void>;
+
+  // H4 - Export Batches
+  createExportBatch(data: InsertExportBatch): Promise<ExportBatch>;
+  updateExportBatch(id: number, data: Partial<ExportBatch>): Promise<void>;
+  getExportBatch(id: number): Promise<ExportBatch | undefined>;
+
+  // H4 - Export Artifacts
+  createExportArtifact(data: InsertExportArtifact): Promise<ExportArtifact>;
+  getExportArtifact(id: number): Promise<ExportArtifact | undefined>;
+  getExportArtifactsByBatchId(batchId: number): Promise<ExportArtifact[]>;
+
+  // H4 - Committee Packets
+  createCommitteePacket(data: InsertCommitteePacket): Promise<CommitteePacket>;
+  getCommitteePackets(): Promise<CommitteePacket[]>;
+  getCommitteePacket(id: number): Promise<CommitteePacket | undefined>;
+  updateCommitteePacket(id: number, data: Partial<CommitteePacket>): Promise<void>;
+
+  // H4 - Chaser Drafts
+  createChaserDraft(data: InsertChaserDraft): Promise<ChaserDraft>;
+  getChaserDrafts(): Promise<ChaserDraft[]>;
+  getChaserDraftsByInitiative(initiativeId: number): Promise<ChaserDraft[]>;
+  updateChaserDraft(id: number, data: Partial<ChaserDraft>): Promise<void>;
+
+  // H4 - Latest snapshots for export
+  getLatestSnapshotPerInitiative(): Promise<InitiativeSnapshot[]>;
+  getAlertCountByInitiative(): Promise<Map<number, number>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -747,6 +790,222 @@ export class DatabaseStorage implements IStorage {
       .where(eq(initiativeSnapshots.initiativeId, initiativeId))
       .orderBy(desc(initiativeSnapshots.createdAt))
       .limit(limit);
+  }
+
+  // H4 - Jobs
+  async createJob(data: InsertJob): Promise<Job> {
+    const [result] = await db.insert(jobs).values(data).returning();
+    return result;
+  }
+
+  async getQueuedJobs(limit: number = 10): Promise<Job[]> {
+    return db.select()
+      .from(jobs)
+      .where(
+        and(
+          eq(jobs.status, "QUEUED"),
+          lte(jobs.runAt, new Date())
+        )
+      )
+      .orderBy(jobs.runAt)
+      .limit(limit);
+  }
+
+  async lockJob(jobId: number, lockedBy: string): Promise<Job | undefined> {
+    const [result] = await db.update(jobs)
+      .set({
+        status: "RUNNING",
+        lockedBy,
+        lockedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(jobs.id, jobId),
+          eq(jobs.status, "QUEUED")
+        )
+      )
+      .returning();
+    return result;
+  }
+
+  async updateJob(id: number, data: Partial<Job>): Promise<void> {
+    await db.update(jobs)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(jobs.id, id));
+  }
+
+  async getStaleRunningJobs(staleMinutes: number): Promise<Job[]> {
+    const staleThreshold = new Date(Date.now() - staleMinutes * 60 * 1000);
+    return db.select()
+      .from(jobs)
+      .where(
+        and(
+          eq(jobs.status, "RUNNING"),
+          lt(jobs.lockedAt, staleThreshold)
+        )
+      );
+  }
+
+  // H4 - Job Runs
+  async createJobRun(data: InsertJobRun): Promise<JobRun> {
+    const [result] = await db.insert(jobRuns).values(data).returning();
+    return result;
+  }
+
+  async updateJobRun(id: number, data: Partial<JobRun>): Promise<void> {
+    await db.update(jobRuns)
+      .set(data)
+      .where(eq(jobRuns.id, id));
+  }
+
+  // H4 - Export Batches
+  async createExportBatch(data: InsertExportBatch): Promise<ExportBatch> {
+    const [result] = await db.insert(exportBatches).values(data).returning();
+    return result;
+  }
+
+  async updateExportBatch(id: number, data: Partial<ExportBatch>): Promise<void> {
+    await db.update(exportBatches)
+      .set(data)
+      .where(eq(exportBatches.id, id));
+  }
+
+  async getExportBatch(id: number): Promise<ExportBatch | undefined> {
+    const [result] = await db.select().from(exportBatches).where(eq(exportBatches.id, id));
+    return result;
+  }
+
+  // H4 - Export Artifacts
+  async createExportArtifact(data: InsertExportArtifact): Promise<ExportArtifact> {
+    const [result] = await db.insert(exportArtifacts).values(data).returning();
+    return result;
+  }
+
+  async getExportArtifact(id: number): Promise<ExportArtifact | undefined> {
+    const [result] = await db.select().from(exportArtifacts).where(eq(exportArtifacts.id, id));
+    return result;
+  }
+
+  async getExportArtifactsByBatchId(batchId: number): Promise<ExportArtifact[]> {
+    return db.select()
+      .from(exportArtifacts)
+      .where(eq(exportArtifacts.batchId, batchId));
+  }
+
+  // H4 - Committee Packets
+  async createCommitteePacket(data: InsertCommitteePacket): Promise<CommitteePacket> {
+    const [result] = await db.insert(committeePackets).values(data).returning();
+    return result;
+  }
+
+  async getCommitteePackets(): Promise<CommitteePacket[]> {
+    return db.select()
+      .from(committeePackets)
+      .orderBy(desc(committeePackets.createdAt));
+  }
+
+  async getCommitteePacket(id: number): Promise<CommitteePacket | undefined> {
+    const [result] = await db.select().from(committeePackets).where(eq(committeePackets.id, id));
+    return result;
+  }
+
+  async updateCommitteePacket(id: number, data: Partial<CommitteePacket>): Promise<void> {
+    await db.update(committeePackets)
+      .set(data)
+      .where(eq(committeePackets.id, id));
+  }
+
+  // H4 - Chaser Drafts
+  async createChaserDraft(data: InsertChaserDraft): Promise<ChaserDraft> {
+    const [result] = await db.insert(chaserDrafts).values(data).returning();
+    return result;
+  }
+
+  async getChaserDrafts(): Promise<ChaserDraft[]> {
+    return db.select()
+      .from(chaserDrafts)
+      .orderBy(desc(chaserDrafts.createdAt));
+  }
+
+  async getChaserDraftsByInitiative(initiativeId: number): Promise<ChaserDraft[]> {
+    return db.select()
+      .from(chaserDrafts)
+      .where(eq(chaserDrafts.initiativeId, initiativeId))
+      .orderBy(desc(chaserDrafts.createdAt));
+  }
+
+  async updateChaserDraft(id: number, data: Partial<ChaserDraft>): Promise<void> {
+    await db.update(chaserDrafts)
+      .set(data)
+      .where(eq(chaserDrafts.id, id));
+  }
+
+  // H4 - Latest snapshots for export
+  async getLatestSnapshotPerInitiative(): Promise<InitiativeSnapshot[]> {
+    const subquery = db
+      .select({
+        initiativeId: initiativeSnapshots.initiativeId,
+        maxCreatedAt: sql`MAX(${initiativeSnapshots.createdAt})`.as('max_created_at'),
+      })
+      .from(initiativeSnapshots)
+      .groupBy(initiativeSnapshots.initiativeId)
+      .as('latest');
+
+    return db
+      .select({
+        id: initiativeSnapshots.id,
+        initiativeId: initiativeSnapshots.initiativeId,
+        batchId: initiativeSnapshots.batchId,
+        title: initiativeSnapshots.title,
+        description: initiativeSnapshots.description,
+        owner: initiativeSnapshots.owner,
+        sponsor: initiativeSnapshots.sponsor,
+        departmentName: initiativeSnapshots.departmentName,
+        status: initiativeSnapshots.status,
+        estatusAlDia: initiativeSnapshots.estatusAlDia,
+        priority: initiativeSnapshots.priority,
+        category: initiativeSnapshots.category,
+        projectType: initiativeSnapshots.projectType,
+        startDate: initiativeSnapshots.startDate,
+        endDateEstimated: initiativeSnapshots.endDateEstimated,
+        endDateActual: initiativeSnapshots.endDateActual,
+        percentComplete: initiativeSnapshots.percentComplete,
+        totalValor: initiativeSnapshots.totalValor,
+        totalEsfuerzo: initiativeSnapshots.totalEsfuerzo,
+        puntajeTotal: initiativeSnapshots.puntajeTotal,
+        ranking: initiativeSnapshots.ranking,
+        excelTotalValor: initiativeSnapshots.excelTotalValor,
+        excelTotalEsfuerzo: initiativeSnapshots.excelTotalEsfuerzo,
+        excelPuntajeTotal: initiativeSnapshots.excelPuntajeTotal,
+        rawExcelRow: initiativeSnapshots.rawExcelRow,
+        createdAt: initiativeSnapshots.createdAt,
+      })
+      .from(initiativeSnapshots)
+      .innerJoin(
+        subquery,
+        and(
+          eq(initiativeSnapshots.initiativeId, subquery.initiativeId),
+          eq(initiativeSnapshots.createdAt, subquery.maxCreatedAt)
+        )
+      );
+  }
+
+  async getAlertCountByInitiative(): Promise<Map<number, number>> {
+    const results = await db
+      .select({
+        initiativeId: governanceAlerts.initiativeId,
+        alertCount: count(),
+      })
+      .from(governanceAlerts)
+      .where(eq(governanceAlerts.status, "OPEN"))
+      .groupBy(governanceAlerts.initiativeId);
+    
+    const alertMap = new Map<number, number>();
+    for (const r of results) {
+      alertMap.set(r.initiativeId, r.alertCount);
+    }
+    return alertMap;
   }
 }
 

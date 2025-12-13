@@ -13,6 +13,9 @@ import {
   LogOut,
   Layers,
   AlertTriangle,
+  FileSpreadsheet,
+  UsersRound,
+  Mail,
 } from "lucide-react";
 import {
   Sidebar,
@@ -73,6 +76,24 @@ const managementItems = [
     url: "/upload",
     icon: Upload,
     requiredRole: "editor" as const,
+  },
+  {
+    title: "Exportar",
+    url: "/exports",
+    icon: FileSpreadsheet,
+    requiredRole: null,
+  },
+  {
+    title: "Comité",
+    url: "/committee",
+    icon: UsersRound,
+    requiredRole: null,
+  },
+  {
+    title: "Chasers",
+    url: "/chasers",
+    icon: Mail,
+    requiredRole: null,
   },
   {
     title: "PMO Bot",

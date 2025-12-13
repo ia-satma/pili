@@ -5,9 +5,12 @@ import crypto from "crypto";
 import { z } from "zod";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
+import { db } from "./db";
+import { desc, eq } from "drizzle-orm";
 import { parseExcelBuffer, type ParsedProject } from "./excel-parser";
 import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./openai";
 import type { InsertChangeLog, InsertKpiValue, Project, InsertProject, InsertValidationIssue } from "@shared/schema";
+import { exportBatches, jobs, jobRuns } from "@shared/schema";
 import { setupAuth, isAuthenticated, isAdmin, isEditor, isViewer, seedAdminUsers } from "./replitAuth";
 
 // Validation schemas
@@ -1761,6 +1764,220 @@ export async function registerRoutes(
     } catch (error) {
       console.error("[Alerts] Error fetching alerts:", error);
       res.status(500).json({ message: "Error al obtener alertas" });
+    }
+  });
+
+  // ===== H4 EXPORTS =====
+
+  // POST /api/exports/run - Enqueue GENERATE_EXPORT_EXCEL job
+  app.post("/api/exports/run", isAuthenticated, isEditor, async (req, res) => {
+    try {
+      const user = req.user as Express.User;
+      const filterCriteria = req.body.filterCriteria || {};
+
+      const job = await storage.createJob({
+        jobType: "GENERATE_EXPORT_EXCEL",
+        payload: {
+          requestedBy: user.id,
+          filterCriteria,
+        },
+      });
+
+      res.status(201).json({ 
+        jobId: job.id,
+        message: "Exportación encolada correctamente"
+      });
+    } catch (error) {
+      console.error("[Exports] Error enqueuing export job:", error);
+      res.status(500).json({ message: "Error al encolar exportación" });
+    }
+  });
+
+  // GET /api/exports - List export batches with latest artifact info
+  app.get("/api/exports", isAuthenticated, async (req, res) => {
+    try {
+      const batches = await db.select()
+        .from(exportBatches)
+        .orderBy(desc(exportBatches.createdAt))
+        .limit(50);
+
+      const enrichedBatches = await Promise.all(
+        batches.map(async (batch) => {
+          const artifacts = await storage.getExportArtifactsByBatchId(batch.id);
+          const latestArtifact = artifacts[0];
+          return {
+            ...batch,
+            artifact: latestArtifact ? {
+              id: latestArtifact.id,
+              fileName: latestArtifact.fileName,
+              fileSize: latestArtifact.fileSize,
+              createdAt: latestArtifact.createdAt,
+            } : null,
+          };
+        })
+      );
+
+      res.json({ exports: enrichedBatches });
+    } catch (error) {
+      console.error("[Exports] Error fetching exports:", error);
+      res.status(500).json({ message: "Error al obtener exportaciones" });
+    }
+  });
+
+  // GET /api/exports/:id/download - Download export artifact
+  app.get("/api/exports/:id/download", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const artifact = await storage.getExportArtifact(id);
+      if (!artifact) {
+        return res.status(404).json({ message: "Archivo no encontrado" });
+      }
+
+      res.setHeader("Content-Type", artifact.mimeType);
+      res.setHeader("Content-Disposition", `attachment; filename="${artifact.fileName}"`);
+      res.setHeader("Content-Length", artifact.fileSize);
+      res.send(artifact.fileContent);
+    } catch (error) {
+      console.error("[Exports] Error downloading export:", error);
+      res.status(500).json({ message: "Error al descargar archivo" });
+    }
+  });
+
+  // ===== H4 COMMITTEE PACKETS =====
+
+  // POST /api/committee/run - Enqueue GENERATE_COMMITTEE_PACKET job
+  app.post("/api/committee/run", isAuthenticated, isEditor, async (req, res) => {
+    try {
+      const job = await storage.createJob({
+        jobType: "GENERATE_COMMITTEE_PACKET",
+        payload: {},
+      });
+
+      res.status(201).json({ 
+        jobId: job.id,
+        message: "Generación de paquete de comité encolada"
+      });
+    } catch (error) {
+      console.error("[Committee] Error enqueuing committee packet job:", error);
+      res.status(500).json({ message: "Error al encolar generación de paquete" });
+    }
+  });
+
+  // GET /api/committee/packets - List committee packets
+  app.get("/api/committee/packets", isAuthenticated, async (req, res) => {
+    try {
+      const packets = await storage.getCommitteePackets();
+      
+      const enrichedPackets = packets.map(packet => ({
+        ...packet,
+        initiativeCount: packet.summaryJson?.initiativeCount || 0,
+      }));
+
+      res.json({ packets: enrichedPackets });
+    } catch (error) {
+      console.error("[Committee] Error fetching packets:", error);
+      res.status(500).json({ message: "Error al obtener paquetes de comité" });
+    }
+  });
+
+  // GET /api/committee/packets/:id - Get single packet with full summaryJson
+  app.get("/api/committee/packets/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const packet = await storage.getCommitteePacket(id);
+      if (!packet) {
+        return res.status(404).json({ message: "Paquete no encontrado" });
+      }
+
+      res.json({ packet });
+    } catch (error) {
+      console.error("[Committee] Error fetching packet:", error);
+      res.status(500).json({ message: "Error al obtener paquete de comité" });
+    }
+  });
+
+  // ===== H4 CHASER DRAFTS =====
+
+  // GET /api/chasers - List all chaser drafts
+  app.get("/api/chasers", isAuthenticated, async (req, res) => {
+    try {
+      const drafts = await storage.getChaserDrafts();
+      
+      // Enrich with initiative titles
+      const enrichedDrafts = await Promise.all(
+        drafts.map(async (draft) => {
+          const initiative = await storage.getInitiative(draft.initiativeId);
+          return {
+            ...draft,
+            initiativeTitle: initiative?.title || "Iniciativa desconocida",
+          };
+        })
+      );
+
+      res.json({ chasers: enrichedDrafts });
+    } catch (error) {
+      console.error("[Chasers] Error fetching chasers:", error);
+      res.status(500).json({ message: "Error al obtener borradores de seguimiento" });
+    }
+  });
+
+  // GET /api/initiatives/:id/chasers - Get chasers for specific initiative
+  app.get("/api/initiatives/:id/chasers", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const initiative = await storage.getInitiative(id);
+      if (!initiative) {
+        return res.status(404).json({ message: "Iniciativa no encontrada" });
+      }
+
+      const chasers = await storage.getChaserDraftsByInitiative(id);
+
+      res.json({ 
+        initiative: { id: initiative.id, title: initiative.title },
+        chasers 
+      });
+    } catch (error) {
+      console.error("[Chasers] Error fetching initiative chasers:", error);
+      res.status(500).json({ message: "Error al obtener borradores de seguimiento" });
+    }
+  });
+
+  // ===== H4 JOB STATUS =====
+
+  // GET /api/jobs/:id - Get job status and runs for polling
+  app.get("/api/jobs/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const [job] = await db.select().from(jobs).where(eq(jobs.id, id));
+      if (!job) {
+        return res.status(404).json({ message: "Trabajo no encontrado" });
+      }
+
+      const runs = await db.select()
+        .from(jobRuns)
+        .where(eq(jobRuns.jobId, id))
+        .orderBy(desc(jobRuns.startedAt));
+
+      res.json({ job, runs });
+    } catch (error) {
+      console.error("[Jobs] Error fetching job status:", error);
+      res.status(500).json({ message: "Error al obtener estado del trabajo" });
     }
   });
 

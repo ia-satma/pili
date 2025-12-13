@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { startWorker } from "./services/workerLoop";
 
 const app = express();
 const httpServer = createServer(app);
@@ -93,6 +94,10 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
+      
+      // Start the H4 job worker loop
+      startWorker();
+      log("H4 Job Worker started", "worker");
     },
   );
 })();
