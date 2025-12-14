@@ -1,0 +1,132 @@
+# PILAR V2 — CONSISTENCY PATCH (SINGLE SOURCE OF TRUTH) — COPY/PASTE
+
+ROLE: Lead Engineer (Data Consistency)
+RULES:
+1) Do NOT ask the user to review code or run SQL. You must self-verify and paste evidence.
+2) Goal is to remove inconsistencies between Dashboard, PMO Bot, and Agents Smoke Test.
+3) We must converge to ONE operational dataset for reporting + bot queries.
+
+========================================
+TASK 1 — FIX SMOKE TEST: NEVER 400 NO_DATA
+========================================
+Current: /api/agents/smoke-test returns 400 NO_DATA when no initiatives exist.
+Required behavior:
+- Smoke test must always return 200 with a runnable scenario.
+
+Implementation:
+A) If initiatives count == 0:
+   1) Check if legacy projects table has data.
+   2) If legacy projects exist: perform ONE-TIME backfill into initiatives + snapshots:
+      - Create initiatives from legacy projects (use stable keys: legacy id/title)
+      - Create one snapshot per initiative with status/dates/financials filled as available
+      - Normalize owner/analyst name into display + key (see Task 2)
+   3) If legacy projects also empty: create a SEED initiative + snapshot + status_update inside transaction.
+B) After ensuring at least 1 initiative exists:
+   - Run CommitteeBriefAgent using evidencePack
+   - Return: { ok:true, initiative_id, agent_run_id, status }
+
+DoD proof (paste in report):
+- Call smoke-test with empty DB -> returns 200 and creates seed/backfill
+- Call smoke-test again -> returns 200 and does NOT duplicate initiatives
+
+========================================
+TASK 2 — NAME NORMALIZATION: ACCENTS/VARIANTS MUST NOT BREAK FILTERS
+========================================
+Problem: "Marina Dávila" vs "Marina Davila" yields different results.
+Implement a shared normalizeKey() utility:
+- lower
+- trim
+- collapse spaces
+- remove accents/diacritics
+- remove punctuation (optional)
+Example: "Marina Dávila" => "marina davila"
+
+Persist BOTH:
+- display_name (original)
+- normalized_key (computed)
+
+Where to apply:
+A) In canonical model:
+- Add columns to initiatives or snapshots (choose one consistent place):
+  - owner_display_name, owner_key
+  - department_display_name, department_key
+  - analyst_display_name, analyst_key (if analyst exists)
+B) In ingestion/backfill:
+- Always compute keys
+C) In filters:
+- UI dropdown can show display_name but the filter param sent to backend MUST be the key.
+- Backend filtering MUST be by key (not by display_name).
+
+DoD proof:
+- With same person stored as "Marina Dávila" and query filter "marina davila", results match.
+- Dashboard filtering works regardless of accent.
+
+========================================
+TASK 3 — DASHBOARD KPI CONSISTENCY: CACHE + QUERY KEYS + BACKEND FILTERING
+========================================
+Problem: dashboard shows "Mostrando datos filtrados" but totals remain global (60).
+Fix required:
+A) Frontend:
+- Ensure TanStack Query keys include ALL filters:
+  - analyst_key, department_key, status, search text, etc.
+- Ensure query invalidation/refetch happens on every filter change.
+B) Backend:
+- Ensure KPI endpoints accept filter params and apply them consistently.
+- KPI response must be computed from ONE dataset (see Task 4).
+
+DoD proof:
+- Toggle analyst filter -> totals change deterministically without reload
+- Show 2 screenshots/log outputs in report OR paste the API responses:
+  - global totals
+  - filtered totals for same endpoint
+
+========================================
+TASK 4 — SINGLE SOURCE OF TRUTH FOR REPORTING (NO TWO DATA PLANES)
+========================================
+Right now, PMO Bot and Dashboard appear to read from legacy projects, while agents use initiatives/snapshots.
+We must unify.
+
+Decision:
+- Canonical truth = initiatives + latest snapshot per initiative.
+- Dashboard and PMO Bot must read from this canonical view.
+
+Implementation:
+A) Create a service "currentPortfolioView" that returns a list shaped like the old "projects" UI needs, but sourced from:
+  - initiatives
+  - latest initiative_snapshots
+  - alerts (open)
+  - status_updates (latest)
+B) Update Dashboard KPI endpoints to use currentPortfolioView.
+C) Update PMO Bot retrieval to use the same view (or evidencePack that is based on it).
+
+DoD proof:
+- PMO Bot answer for "Marina" matches dashboard filter results for the same person.
+- Agents smoke test uses the same initiative_id dataset.
+
+========================================
+TASK 5 — STATUS MAPPING CONSISTENCY
+========================================
+Problem: PMO Bot says "Terminado" but dashboard shows closed=0 / status donut mismatched.
+Fix:
+- Define a single lifecycle mapping table/function:
+  - raw_status -> canonical_status (e.g., TERMINADO = CLOSED)
+  - unknown -> SIN_ESTADO
+- Use same mapping in:
+  - KPI counts
+  - status charts
+  - bot responses
+
+DoD proof:
+- A "Terminado" item counts as closed consistently across dashboard + bot.
+
+========================================
+FINAL REPORT (MANDATORY) — NO USER VALIDATION
+========================================
+Stop after patch and deliver in Spanish:
+1) What you changed (files list)
+2) Smoke test evidence (200 OK, seed/backfill, no duplicates)
+3) Dashboard filtering evidence (global vs filtered response)
+4) PMO Bot vs Dashboard consistency proof for one person (Marina)
+5) Notes: any remaining risks
+
+No questions to the user.

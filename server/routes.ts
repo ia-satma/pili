@@ -2123,7 +2123,7 @@ export async function registerRoutes(
         status: result.status,
         duration,
         initiativeId: initiative.id,
-        initiativeName: initiative.name,
+        initiativeName: initiative.title,
         blockedReason: result.blockedReason,
       });
     } catch (error) {
