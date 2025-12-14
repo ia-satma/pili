@@ -601,6 +601,50 @@ export const downloadAudit = pgTable("download_audit", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ===== H7 Telemetry Tables =====
+
+// API Telemetry - tracks HTTP API request metrics
+export const apiTelemetry = pgTable("api_telemetry", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  endpoint: text("endpoint").notNull(),
+  method: text("method").notNull(),
+  statusCode: integer("status_code").notNull(),
+  durationMs: integer("duration_ms").notNull(),
+  userId: text("user_id"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+}, (table) => [
+  index("idx_api_telemetry_endpoint").on(table.endpoint),
+  index("idx_api_telemetry_timestamp").on(table.timestamp),
+]);
+
+// Agent Telemetry - tracks agent run metrics
+export const agentTelemetry = pgTable("agent_telemetry", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  agentName: text("agent_name").notNull(),
+  agentRunId: integer("agent_run_id").references(() => agentRuns.id),
+  tokensUsed: integer("tokens_used"),
+  costUsd: text("cost_usd"), // Stored as text to preserve precision
+  durationMs: integer("duration_ms").notNull(),
+  status: text("status").notNull(), // SUCCEEDED, FAILED, BLOCKED
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+}, (table) => [
+  index("idx_agent_telemetry_agent_name").on(table.agentName),
+  index("idx_agent_telemetry_timestamp").on(table.timestamp),
+]);
+
+// Job Telemetry - tracks background job metrics
+export const jobTelemetry = pgTable("job_telemetry", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  jobId: integer("job_id").references(() => jobs.id),
+  jobType: text("job_type").notNull(),
+  durationMs: integer("duration_ms").notNull(),
+  status: text("status").notNull(), // SUCCEEDED, FAILED
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+}, (table) => [
+  index("idx_job_telemetry_job_type").on(table.jobType),
+  index("idx_job_telemetry_timestamp").on(table.timestamp),
+]);
+
 // ===== H6.4 Eval Runs Table =====
 export const evalRuns = pgTable("eval_runs", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -883,6 +927,11 @@ export const insertDownloadAuditSchema = createInsertSchema(downloadAudit).omit(
 // H6.4 Eval Runs
 export const insertEvalRunSchema = createInsertSchema(evalRuns).omit({ id: true } as Record<string, true>);
 
+// H7 Telemetry Insert Schemas
+export const insertApiTelemetrySchema = createInsertSchema(apiTelemetry).omit({ id: true, timestamp: true } as Record<string, true>);
+export const insertAgentTelemetrySchema = createInsertSchema(agentTelemetry).omit({ id: true, timestamp: true } as Record<string, true>);
+export const insertJobTelemetrySchema = createInsertSchema(jobTelemetry).omit({ id: true, timestamp: true } as Record<string, true>);
+
 // Types
 export type ExcelVersion = typeof excelVersions.$inferSelect;
 export type InsertExcelVersion = z.infer<typeof insertExcelVersionSchema>;
@@ -972,6 +1021,14 @@ export type InsertDownloadAudit = z.infer<typeof insertDownloadAuditSchema>;
 // H6.4 Eval Runs Types
 export type EvalRun = typeof evalRuns.$inferSelect;
 export type InsertEvalRun = z.infer<typeof insertEvalRunSchema>;
+
+// H7 Telemetry Types
+export type ApiTelemetry = typeof apiTelemetry.$inferSelect;
+export type InsertApiTelemetry = z.infer<typeof insertApiTelemetrySchema>;
+export type AgentTelemetry = typeof agentTelemetry.$inferSelect;
+export type InsertAgentTelemetry = z.infer<typeof insertAgentTelemetrySchema>;
+export type JobTelemetry = typeof jobTelemetry.$inferSelect;
+export type InsertJobTelemetry = z.infer<typeof insertJobTelemetrySchema>;
 
 // Traffic light status enum for frontend
 export type TrafficLightStatus = 'green' | 'yellow' | 'red' | 'gray';

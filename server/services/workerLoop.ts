@@ -113,12 +113,14 @@ async function processJob(job: Job): Promise<void> {
     const metrics = await handler(lockedJob);
     const finishedAt = new Date();
 
+    const durationMs = Date.now() - startTime;
+    
     await storage.updateJobRun(jobRun.id, {
       status: "SUCCEEDED",
       finishedAt,
       metricsJson: {
         ...metrics,
-        durationMs: Date.now() - startTime,
+        durationMs,
       },
     });
 
@@ -127,21 +129,38 @@ async function processJob(job: Job): Promise<void> {
       lastError: null,
     });
 
+    // Record job telemetry
+    await storage.createJobTelemetry({
+      jobId: job.id,
+      jobType: job.jobType,
+      durationMs,
+      status: "SUCCEEDED",
+    }).catch((err) => console.error("[Telemetry] Job telemetry error:", err));
+
     console.log(`[Worker] Job ${job.id} (${job.jobType}) completed successfully`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const finishedAt = new Date();
     const newAttempts = (job.attempts || 0) + 1;
+    const durationMs = Date.now() - startTime;
 
     await storage.updateJobRun(jobRun.id, {
       status: "FAILED",
       finishedAt,
       errorMessage,
       metricsJson: {
-        durationMs: Date.now() - startTime,
+        durationMs,
         error: errorMessage,
       },
     });
+
+    // Record job telemetry for failed jobs
+    await storage.createJobTelemetry({
+      jobId: job.id,
+      jobType: job.jobType,
+      durationMs,
+      status: "FAILED",
+    }).catch((err) => console.error("[Telemetry] Job telemetry error:", err));
 
     if (newAttempts >= job.maxAttempts) {
       await storage.updateJob(job.id, {

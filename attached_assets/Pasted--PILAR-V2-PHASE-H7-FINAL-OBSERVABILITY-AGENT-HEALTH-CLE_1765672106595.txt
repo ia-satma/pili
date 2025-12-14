@@ -1,0 +1,197 @@
+# PILAR V2 — PHASE H7 (FINAL): OBSERVABILITY + AGENT HEALTH + CLEAN START (COPY/PASTE)
+
+ROLE: Lead Engineer (Production Readiness)
+ENV: Replit
+STACK: Node/Express + TS + Drizzle + Postgres + React
+
+ABSOLUTE RULES
+1) Do NOT ask the user to review code, run SQL, or validate manually.
+2) You must self-verify and paste concrete evidence outputs in your final report.
+3) Do NOT proceed beyond H7. STOP and report.
+4) If any agent cannot run, you must surface EXACT cause (disabled flag, missing keys, insufficient evidence, RBAC, etc.) and provide a minimal fix.
+
+MISSION
+H7 finalizes PILAR V2 as production-grade by adding:
+A) Observability (cost, latency, errors, quality)
+B) Agent Health (prove agents run, show blockers, smoke test)
+C) Controlled “Soft Data Reset” so we can load the first real Excel cleanly.
+
+====================================================
+H7.1 — OBSERVABILITY: TELEMETRY TABLES + CAPTURE
+====================================================
+Goal: know what happens, how much it costs, and what fails.
+
+A) DB schema (Drizzle + migrations)
+Create:
+1) api_telemetry
+- id uuid PK
+- route text
+- method text
+- status_code int
+- latency_ms int
+- user_id uuid nullable
+- error_code text nullable
+- created_at timestamp
+
+2) agent_telemetry
+- id uuid PK
+- agent_run_id uuid FK agent_runs
+- agent_name text
+- latency_ms int
+- tokens_json jsonb nullable
+- cost_json jsonb nullable
+- status text
+- error_message text nullable
+- created_at timestamp
+
+3) job_telemetry
+- id uuid PK
+- job_id uuid/int (match your schema)
+- job_type text
+- latency_ms int
+- status text
+- error_message text nullable
+- created_at timestamp
+
+B) Instrumentation (server)
+1) Middleware: capture all API requests to api_telemetry (route, status, latency).
+2) Agent Runner: write agent_telemetry each run (even if BLOCKED).
+3) Worker loop: write job_telemetry per job_run.
+
+DoD proof:
+- In final report, show telemetry rows exist for:
+  - at least 1 API call
+  - at least 1 agent run
+  - at least 1 job run
+
+====================================================
+H7.2 — AGENT HEALTH: “WHY AGENTS ARE NOT WORKING” MADE VISIBLE
+====================================================
+Goal: eliminate ambiguity. If agents “don’t work”, the system must explain why.
+
+A) Backend endpoints
+1) GET /api/agents/health
+Return JSON:
+{
+  "keys": { "OPENAI": true/false, "ANTHROPIC": true/false, "GOOGLE": true/false },
+  "agents": [
+    { "name": "...", "enabled": true/false, "latest_run": {...}, "latest_review": {...}, "last_error": "...", "status": "OK|DISABLED|BLOCKED|ERROR" }
+  ],
+  "notes": []
+}
+
+2) POST /api/agents/smoke-test
+Behavior:
+- Select 1 existing initiative (if none, create a minimal seed initiative automatically)
+- Run CommitteeBriefAgent (enabled) with evidence pack
+- Return summary + agent_run_id
+- This must NOT require manual user actions.
+
+3) Update /api/agents list responses to include:
+- enabled flag
+- last run status
+- last council review status (critic/quant)
+
+B) Frontend: System → Agentes tab (upgrade)
+Add visible elements:
+- Global health banner: keys present/missing + what that means
+- Per-agent status badge:
+  - ENABLED / DISABLED
+  - LAST RUN: SUCCEEDED / BLOCKED / FAILED
+  - If BLOCKED: show reason (missing evidence vs missing keys vs RBAC)
+- Add button: “Ejecutar Smoke Test” (calls /api/agents/smoke-test) and displays result.
+
+C) Fix the “Initialize Agents” button behavior (if needed)
+- Ensure it seeds agent_definitions/versions without overriding enabled flags unexpectedly.
+- Must be idempotent (pressing twice doesn’t duplicate definitions).
+
+DoD proof:
+- Final report must include:
+  - Output JSON of GET /api/agents/health
+  - Smoke test run result (agent_run_id + status)
+  - Screenshot-free acceptable: paste sample API response(s) and logs.
+
+====================================================
+H7.3 — QUALITY GATES: SCHEDULED EVALS + REGRESSION ALERT
+====================================================
+Goal: ensure quality doesn’t degrade silently.
+
+A) Create job type RUN_EVALS_DAILY (DB-backed, no cron dependency)
+- If a scheduled job already exists, do not duplicate.
+- On success, store results in eval_runs (already exists).
+
+B) Create a simple regression rule:
+- If >20% fixtures fail vs last run => create governance_alert "EVAL_REGRESSION" HIGH
+
+C) Update /system/docs generation to include:
+- latest eval summary (pass rate, failures)
+- latest telemetry summary (p95 latency for key endpoints, last 24h)
+
+DoD proof:
+- Provide last eval_runs row summary + whether regression alert triggered.
+
+====================================================
+H7.4 — COST & LOAD CONTROLS (GUARDRAILS)
+====================================================
+Goal: prevent runaway usage.
+
+A) Add a monthly cost guardrail (soft):
+- If agent_telemetry cost_json total in last 30d exceeds a configurable threshold -> governance_alert "COST_THRESHOLD" MEDIUM
+
+B) Add p95 latency guardrail (soft):
+- If /api/orchestrator/bounce p95 latency > threshold -> governance_alert "LATENCY_P95" MEDIUM
+
+DoD proof:
+- Show guardrail logic is present and can compute totals (even if 0).
+
+====================================================
+H7.5 — FINAL STEP: SOFT DATA RESET (CLEAN START FOR FIRST REAL EXCEL)
+====================================================
+We want a clean operational start. We KEEP configuration and schema. We WIPE operational data.
+
+A) Implement admin-only endpoint:
+POST /api/admin/reset-data (RBAC Admin only)
+Behavior: TRUNCATE (RESTART IDENTITY CASCADE) ONLY operational tables, KEEP:
+- users/auth tables
+- agent_definitions, agent_versions (keep fleet config)
+- template_versions (keep parser config)  [keep]
+- scoring_models/scoring_criteria/scoring_options (keep scoring config) [keep]
+Optionally wipe system_docs (OK either way, but recommend wipe so it regenerates clean).
+
+Tables to WIPE (adjust to exact names in your schema):
+- ingestion_batches, raw_artifacts, validation_issues, raw_rows (if exists)
+- initiatives, projects
+- initiative_snapshots, assessment_entries, benefit_records
+- delta_events, governance_alerts
+- status_updates, action_items
+- export_batches, export_artifacts, committee_packets, committee_decisions, gate_transitions
+- jobs, job_runs, job_telemetry
+- chaser_drafts
+- download_audit
+- eval_runs
+- api_telemetry, agent_telemetry
+- system_docs (optional wipe; recommended)
+
+B) Add UI button in /system → Operaciones (Admin only):
+“Reset de Datos (modo configuración)”
+- calls /api/admin/reset-data
+- shows success message with counts wiped
+
+DoD proof:
+- In final report, show the reset ran successfully and that:
+  - operational tables are empty
+  - configuration tables (agent_definitions/versions, template_versions, scoring_models/criteria) remain populated
+
+====================================================
+STOP + FINAL REPORT (SPANISH)
+====================================================
+After H7:
+- STOP. No more phases.
+- Provide final Spanish report with:
+  1) Files changed
+  2) Migrations applied
+  3) Agent Health outputs (keys + agent statuses + smoke test result)
+  4) Telemetry evidence (api_telemetry + agent_telemetry + job_telemetry rows created)
+  5) Evals scheduling evidence + regression rule
+  6) Reset-data execution proof (what was wiped, what was preserved)
+No questions to the user. No manual validation requests.

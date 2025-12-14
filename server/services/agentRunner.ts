@@ -27,6 +27,8 @@ export async function runAgent(
   agentName: string,
   initiativeId: number
 ): Promise<AgentRunResult> {
+  const startTime = Date.now();
+  
   const agentDef = await storage.getAgentDefinitionByName(agentName);
   if (!agentDef) {
     throw new Error(`Agente no encontrado: ${agentName}`);
@@ -46,6 +48,16 @@ export async function runAgent(
       outputJson: null,
       errorMessage: `Agente '${agentName}' está deshabilitado`,
     });
+
+    // Record telemetry for blocked agent
+    await storage.createAgentTelemetry({
+      agentName,
+      agentRunId: run.id,
+      tokensUsed: 0,
+      costUsd: "0",
+      durationMs: Date.now() - startTime,
+      status: "BLOCKED",
+    }).catch((err) => console.error("[Telemetry] Agent telemetry error:", err));
 
     return {
       runId: run.id,
@@ -152,6 +164,16 @@ REGLAS ESTRICTAS:
     status: finalStatus,
     finishedAt: new Date(),
   });
+
+  // Record agent telemetry
+  await storage.createAgentTelemetry({
+    agentName,
+    agentRunId: run.id,
+    tokensUsed: null,
+    costUsd: null,
+    durationMs: Date.now() - startTime,
+    status: finalStatus,
+  }).catch((err) => console.error("[Telemetry] Agent telemetry error:", err));
 
   return {
     runId: run.id,

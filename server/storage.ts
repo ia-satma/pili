@@ -6,7 +6,7 @@ import {
   exportBatches, exportArtifacts, jobs, jobRuns, committeePackets, chaserDrafts,
   initiatives, initiativeSnapshots, deltaEvents, governanceAlerts, statusUpdates,
   agentDefinitions, agentVersions, agentRuns, councilReviews, systemDocs,
-  downloadAudit, evalRuns,
+  downloadAudit, evalRuns, apiTelemetry, agentTelemetry, jobTelemetry,
   type ExcelVersion, type InsertExcelVersion,
   type Project, type InsertProject,
   type Department, type InsertDepartment,
@@ -38,6 +38,9 @@ import {
   type SystemDoc, type InsertSystemDoc,
   type DownloadAudit, type InsertDownloadAudit,
   type EvalRun, type InsertEvalRun,
+  type ApiTelemetry, type InsertApiTelemetry,
+  type AgentTelemetry, type InsertAgentTelemetry,
+  type JobTelemetry, type InsertJobTelemetry,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray, count, lt, lte, or, isNull } from "drizzle-orm";
@@ -232,6 +235,11 @@ export interface IStorage {
   // H6.4 - Eval Runs
   createEvalRun(data: InsertEvalRun): Promise<EvalRun>;
   getRecentEvalRuns(limit?: number): Promise<EvalRun[]>;
+
+  // H7 - Telemetry
+  createApiTelemetry(data: InsertApiTelemetry): Promise<ApiTelemetry>;
+  createAgentTelemetry(data: InsertAgentTelemetry): Promise<AgentTelemetry>;
+  createJobTelemetry(data: InsertJobTelemetry): Promise<JobTelemetry>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1244,6 +1252,22 @@ export class DatabaseStorage implements IStorage {
       .from(evalRuns)
       .orderBy(desc(evalRuns.startedAt))
       .limit(limit);
+  }
+
+  // H7 - Telemetry
+  async createApiTelemetry(data: InsertApiTelemetry): Promise<ApiTelemetry> {
+    const [result] = await db.insert(apiTelemetry).values(data).returning();
+    return result;
+  }
+
+  async createAgentTelemetry(data: InsertAgentTelemetry): Promise<AgentTelemetry> {
+    const [result] = await db.insert(agentTelemetry).values(data).returning();
+    return result;
+  }
+
+  async createJobTelemetry(data: InsertJobTelemetry): Promise<JobTelemetry> {
+    const [result] = await db.insert(jobTelemetry).values(data).returning();
+    return result;
   }
 }
 

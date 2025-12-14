@@ -14,6 +14,7 @@ import { exportBatches, jobs, jobRuns } from "@shared/schema";
 import { setupAuth, isAuthenticated, isAdmin, isEditor, isViewer, seedAdminUsers } from "./replitAuth";
 import { enqueueJob } from "./services/workerLoop";
 import { agentRateLimit, exportRateLimit, uploadRateLimit, systemDocsRateLimit } from "./middleware/rateLimiter";
+import { telemetryMiddleware } from "./middleware/telemetryMiddleware";
 import { runOrchestrator } from "./services/orchestrator";
 
 // Validation schemas
@@ -337,6 +338,9 @@ export async function registerRoutes(
   // ===== AUTH SETUP =====
   await setupAuth(app);
   await seedAdminUsers();
+
+  // ===== TELEMETRY MIDDLEWARE =====
+  app.use("/api", telemetryMiddleware);
 
   // ===== AUTH ROUTES =====
   app.get("/api/auth/user", async (req: Request, res: Response) => {
@@ -2041,6 +2045,93 @@ export async function registerRoutes(
   });
 
   // ===== H5 Agent Routes =====
+
+  // Get agent health status
+  app.get("/api/agents/health", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      // Check API keys
+      const openaiKey = !!process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+      const anthropicKey = !!process.env.ANTHROPIC_API_KEY;
+      const googleKey = !!process.env.GOOGLE_API_KEY;
+
+      const keys = {
+        openai: { name: "OpenAI (GPT)", configured: openaiKey },
+        anthropic: { name: "Anthropic (Claude)", configured: anthropicKey },
+        google: { name: "Google (Gemini)", configured: googleKey },
+      };
+
+      // Get all agent definitions
+      const agentDefs = await storage.getAgentDefinitions();
+      const agents = agentDefs.map(a => ({
+        name: a.name,
+        enabled: a.enabled,
+        purpose: a.purpose,
+      }));
+
+      // Calculate overall health
+      // healthy = OpenAI configured (required) and at least 1 agent enabled
+      // degraded = OpenAI configured but missing secondary keys or no agents
+      // unhealthy = OpenAI not configured
+      let overall: "healthy" | "degraded" | "unhealthy";
+      const enabledAgents = agents.filter(a => a.enabled).length;
+
+      if (!openaiKey) {
+        overall = "unhealthy";
+      } else if (!anthropicKey || !googleKey || enabledAgents === 0) {
+        overall = "degraded";
+      } else {
+        overall = "healthy";
+      }
+
+      res.json({
+        overall,
+        keys,
+        agents,
+        enabledCount: enabledAgents,
+        totalCount: agents.length,
+      });
+    } catch (error) {
+      console.error("[Agents] Error fetching health:", error);
+      res.status(500).json({ message: "Error al obtener estado de salud" });
+    }
+  });
+
+  // Smoke test - run CommitteeBriefAgent on first initiative
+  app.post("/api/agents/smoke-test", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const startTime = Date.now();
+
+      // Find first initiative
+      const initiatives = await storage.getInitiatives();
+      if (initiatives.length === 0) {
+        return res.status(400).json({
+          message: "No hay iniciativas disponibles para prueba",
+          status: "NO_DATA",
+        });
+      }
+
+      const initiative = initiatives[0];
+
+      // Run CommitteeBriefAgent
+      const { runAgent } = await import("./services/agentRunner");
+      const result = await runAgent("CommitteeBriefAgent", initiative.id);
+
+      const duration = Date.now() - startTime;
+
+      res.json({
+        runId: result.runId,
+        status: result.status,
+        duration,
+        initiativeId: initiative.id,
+        initiativeName: initiative.name,
+        blockedReason: result.blockedReason,
+      });
+    } catch (error) {
+      console.error("[Agents] Smoke test error:", error);
+      const message = error instanceof Error ? error.message : "Error en smoke test";
+      res.status(500).json({ message, status: "ERROR" });
+    }
+  });
   
   // Get all agent definitions
   app.get("/api/agents", isAuthenticated, isEditor, async (req: Request, res: Response) => {

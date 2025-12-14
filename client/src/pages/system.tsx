@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Settings, FileText, Bot, Play, RefreshCw, CheckCircle, XCircle, Clock, Loader2 } from "lucide-react";
+import { Settings, FileText, Bot, Play, RefreshCw, CheckCircle, XCircle, Clock, Loader2, AlertTriangle, Zap, Key } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +35,27 @@ interface Agent {
   purpose: string | null;
   enabled: boolean;
   activeVersion: string | null;
+}
+
+interface AgentHealth {
+  overall: "healthy" | "degraded" | "unhealthy";
+  keys: {
+    openai: { name: string; configured: boolean };
+    anthropic: { name: string; configured: boolean };
+    google: { name: string; configured: boolean };
+  };
+  agents: { name: string; enabled: boolean; purpose: string | null }[];
+  enabledCount: number;
+  totalCount: number;
+}
+
+interface SmokeTestResult {
+  runId: number;
+  status: string;
+  duration: number;
+  initiativeId: number;
+  initiativeName: string;
+  blockedReason?: string;
 }
 
 function getJobStatusBadge(status: string) {
@@ -250,6 +271,11 @@ function AgentsTab() {
     queryKey: ["/api/agents"],
   });
 
+  const { data: healthData, isLoading: healthLoading } = useQuery<AgentHealth>({
+    queryKey: ["/api/agents/health"],
+    refetchInterval: 30000,
+  });
+
   const seedMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/agents/seed");
@@ -261,6 +287,7 @@ function AgentsTab() {
         description: `Creados: ${data.created.length}, Omitidos: ${data.skipped.length}`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/agents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/agents/health"] });
     },
     onError: (error) => {
       toast({
@@ -271,10 +298,117 @@ function AgentsTab() {
     },
   });
 
+  const smokeTestMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/agents/smoke-test");
+      return res.json();
+    },
+    onSuccess: (data: SmokeTestResult) => {
+      const statusLabel = data.status === "SUCCEEDED" ? "exitoso" : 
+                          data.status === "BLOCKED" ? "bloqueado" : 
+                          data.status === "FAILED" ? "fallido" : data.status;
+      toast({
+        title: `Smoke Test ${statusLabel}`,
+        description: `Run ID: ${data.runId} | Duración: ${data.duration}ms | Iniciativa: ${data.initiativeName}`,
+        variant: data.status === "SUCCEEDED" ? "default" : "destructive",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error en Smoke Test",
+        description: error instanceof Error ? error.message : "Error al ejecutar smoke test",
+        variant: "destructive",
+      });
+    },
+  });
+
   const agents = agentsData || [];
+
+  const getHealthBadge = (overall: string) => {
+    switch (overall) {
+      case "healthy":
+        return <Badge variant="default" className="gap-1"><CheckCircle className="h-3 w-3" />Saludable</Badge>;
+      case "degraded":
+        return <Badge variant="secondary" className="gap-1 bg-yellow-500/20 text-yellow-700 dark:text-yellow-400"><AlertTriangle className="h-3 w-3" />Degradado</Badge>;
+      case "unhealthy":
+        return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />No Saludable</Badge>;
+      default:
+        return <Badge variant="outline">{overall}</Badge>;
+    }
+  };
+
+  const getKeyIndicator = (configured: boolean) => {
+    return configured ? (
+      <div className="h-3 w-3 rounded-full bg-green-500" title="Configurada" />
+    ) : (
+      <div className="h-3 w-3 rounded-full bg-red-500" title="No configurada" />
+    );
+  };
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5" />
+              Estado de Salud del Sistema
+            </CardTitle>
+            <CardDescription>
+              Estado de las claves API y disponibilidad de agentes
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            {healthData && getHealthBadge(healthData.overall)}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {healthLoading ? (
+            <Skeleton className="h-16 w-full" />
+          ) : healthData ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-6">
+                <div className="flex items-center gap-2" data-testid="status-openai">
+                  {getKeyIndicator(healthData.keys.openai.configured)}
+                  <span className="text-sm">{healthData.keys.openai.name}</span>
+                </div>
+                <div className="flex items-center gap-2" data-testid="status-anthropic">
+                  {getKeyIndicator(healthData.keys.anthropic.configured)}
+                  <span className="text-sm">{healthData.keys.anthropic.name}</span>
+                </div>
+                <div className="flex items-center gap-2" data-testid="status-google">
+                  {getKeyIndicator(healthData.keys.google.configured)}
+                  <span className="text-sm">{healthData.keys.google.name}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4 pt-2 border-t">
+                <div className="text-sm text-muted-foreground">
+                  Agentes habilitados: {healthData.enabledCount} / {healthData.totalCount}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => smokeTestMutation.mutate()}
+                  disabled={smokeTestMutation.isPending}
+                  data-testid="button-smoke-test"
+                >
+                  {smokeTestMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Zap className="h-4 w-4 mr-2" />
+                  )}
+                  Smoke Test
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-4 text-muted-foreground" data-testid="text-no-health">
+              No se pudo obtener el estado de salud
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
           <div>
