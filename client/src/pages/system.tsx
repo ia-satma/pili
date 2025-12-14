@@ -120,6 +120,49 @@ function OperationsTab() {
     },
   });
 
+  const seedInitiativeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/seed-initiative");
+      return res.json();
+    },
+    onSuccess: (data: { success: boolean; created: boolean; message: string; initiative_id: number; initiative_link: string }) => {
+      toast({
+        title: data.created ? "Iniciativa creada" : "Iniciativa existente",
+        description: data.message,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/initiatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/agents/health"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al crear iniciativa de prueba",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const backfillMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/backfill-initiatives");
+      return res.json();
+    },
+    onSuccess: (data: { success: boolean; initiatives_created: number; snapshots_created: number; message: string }) => {
+      toast({
+        title: "Backfill completado",
+        description: data.message,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/initiatives"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al realizar backfill",
+        variant: "destructive",
+      });
+    },
+  });
+
   const jobs = jobsData?.jobs || [];
 
   return (
@@ -188,6 +231,47 @@ function OperationsTab() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Play className="h-5 w-5" />
+            Datos de Prueba
+          </CardTitle>
+          <CardDescription>
+            Crea iniciativas de prueba para validar el funcionamiento de los agentes IA
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={() => seedInitiativeMutation.mutate()}
+              disabled={seedInitiativeMutation.isPending}
+              data-testid="button-seed-initiative"
+            >
+              {seedInitiativeMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4 mr-2" />
+              )}
+              Crear iniciativa de prueba
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => backfillMutation.mutate()}
+              disabled={backfillMutation.isPending}
+              data-testid="button-backfill-initiatives"
+            >
+              {backfillMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Backfill desde proyectos
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

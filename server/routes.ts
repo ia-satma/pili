@@ -2654,7 +2654,14 @@ Responde SOLO con el resumen narrativo, sin agregar información adicional.`;
       }
       
       if (sorted.length === 0) {
-        return res.status(404).json({ message: "No hay iniciativas disponibles" });
+        return res.json({
+          status: "NO_DATA",
+          message_user: "No hay iniciativas cargadas. Sube un Excel o crea una iniciativa de prueba.",
+          next_actions: [
+            { action: "UPLOAD_EXCEL", path: "/upload" },
+            { action: "CREATE_SEED", path: "/system" }
+          ]
+        });
       }
       
       const { runAgent } = await import("./services/agentRunner");
@@ -2684,6 +2691,98 @@ Responde SOLO con el resumen narrativo, sin agregar información adicional.`;
   });
 
   // ===== H7.5 Soft Data Reset Routes =====
+
+  // POST /api/admin/seed-initiative - Create a test initiative (idempotent)
+  app.post("/api/admin/seed-initiative", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const SEED_KEY = "TEST_SEED_INITIATIVE_001";
+      
+      // Check if seed initiative already exists (idempotent)
+      const existing = await storage.findInitiativeByDevopsCardId(SEED_KEY);
+      if (existing) {
+        const snapshots = await storage.getSnapshotsByInitiativeId(existing.id);
+        return res.json({
+          success: true,
+          created: false,
+          message: "La iniciativa de prueba ya existe",
+          initiative_id: existing.id,
+          snapshot_id: snapshots[0]?.id || null,
+          initiative_link: `/initiatives/${existing.id}`,
+        });
+      }
+      
+      // Create seed initiative
+      const initiative = await storage.createInitiative({
+        devopsCardId: SEED_KEY,
+        powerSteeringId: null,
+        title: "Iniciativa de Prueba PMO",
+        description: "Iniciativa creada automáticamente para probar el sistema de agentes",
+        owner: "Administrador",
+        startDate: new Date().toISOString().split("T")[0],
+        targetDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        status: "Abierto",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      
+      // Create initial snapshot
+      const snapshot = await storage.createInitiativeSnapshot({
+        initiativeId: initiative.id,
+        batchId: null,
+        title: initiative.title,
+        description: initiative.description,
+        owner: initiative.owner,
+        status: initiative.status,
+        phase: "Ejecución",
+        percentComplete: 25,
+        targetDate: initiative.targetDate,
+        trafficLight: "green",
+        ranking: 1,
+        valorTotal: 80,
+        esfuerzoTotal: 40,
+        puntajeTotal: 120,
+        capturedAt: new Date(),
+      });
+      
+      console.log(`[Admin] Created seed initiative: ${initiative.id}, snapshot: ${snapshot.id}`);
+      
+      res.json({
+        success: true,
+        created: true,
+        message: "Iniciativa de prueba creada exitosamente",
+        initiative_id: initiative.id,
+        snapshot_id: snapshot.id,
+        initiative_link: `/initiatives/${initiative.id}`,
+      });
+    } catch (error) {
+      console.error("[Admin] Error creating seed initiative:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error al crear iniciativa de prueba",
+      });
+    }
+  });
+
+  // POST /api/admin/backfill-initiatives - Backfill initiatives from legacy projects
+  app.post("/api/admin/backfill-initiatives", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const result = await storage.backfillInitiativesFromProjects();
+      console.log(`[Admin] Backfill completed: ${result.initiativesCreated} initiatives, ${result.snapshotsCreated} snapshots`);
+      
+      res.json({
+        success: true,
+        initiatives_created: result.initiativesCreated,
+        snapshots_created: result.snapshotsCreated,
+        message: `Se crearon ${result.initiativesCreated} iniciativas y ${result.snapshotsCreated} snapshots`,
+      });
+    } catch (error) {
+      console.error("[Admin] Error during backfill:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error al realizar el backfill de iniciativas",
+      });
+    }
+  });
 
   // POST /api/admin/reset-data - Truncate operational tables (admin only)
   app.post("/api/admin/reset-data", isAuthenticated, isAdmin, async (req: Request, res: Response) => {

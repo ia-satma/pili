@@ -155,9 +155,12 @@ export default function Outputs() {
   }
 
   interface BriefResponse {
-    success: boolean;
-    results: BriefResult[];
-    hasBlocked: boolean;
+    success?: boolean;
+    results?: BriefResult[];
+    hasBlocked?: boolean;
+    status?: string;
+    message_user?: string;
+    next_actions?: { action: string; path: string }[];
   }
 
   const [briefResults, setBriefResults] = useState<BriefResponse | null>(null);
@@ -169,7 +172,12 @@ export default function Outputs() {
     },
     onSuccess: (data) => {
       setBriefResults(data);
-      if (data.hasBlocked) {
+      if (data.status === "NO_DATA") {
+        toast({
+          title: "Sin Iniciativas",
+          description: data.message_user || "No hay iniciativas cargadas",
+        });
+      } else if (data.hasBlocked) {
         toast({
           title: "Agente Bloqueado",
           description: "Algunas revisiones del Council están bloqueadas. Verifica la configuración de API keys.",
@@ -178,7 +186,7 @@ export default function Outputs() {
       } else {
         toast({
           title: "Brief IA Generado",
-          description: `Se generaron ${data.results.length} briefs exitosamente`,
+          description: `Se generaron ${data.results?.length || 0} briefs exitosamente`,
         });
       }
     },
@@ -550,12 +558,24 @@ export default function Outputs() {
             <CardContent className="space-y-3">
               {briefResults && (
                 <div className="space-y-2">
-                  {briefResults.hasBlocked ? (
+                  {briefResults.status === "NO_DATA" ? (
+                    <Alert className="py-2">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle className="text-sm">Sin Iniciativas</AlertTitle>
+                      <AlertDescription className="text-xs">
+                        {briefResults.message_user || "No hay iniciativas cargadas. Sube un Excel o crea una iniciativa de prueba."}
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <a href="/upload" className="text-primary underline">Subir Excel</a>
+                          <a href="/system" className="text-primary underline">Crear iniciativa de prueba</a>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  ) : briefResults.hasBlocked ? (
                     <Alert variant="destructive" className="py-2">
                       <AlertCircle className="h-4 w-4" />
                       <AlertTitle className="text-sm">Agente Bloqueado</AlertTitle>
                       <AlertDescription className="text-xs">
-                        {briefResults.results.find(r => r.blockedReason)?.blockedReason || 
+                        {briefResults.results?.find(r => r.blockedReason)?.blockedReason || 
                           "Council reviewers están bloqueados - verifica configuración de API keys"}
                       </AlertDescription>
                     </Alert>
@@ -566,12 +586,12 @@ export default function Outputs() {
                         <span>Brief generado exitosamente</span>
                       </div>
                       <p className="text-xs text-muted-foreground" data-testid="brief-result-count">
-                        {briefResults.results.length} iniciativas procesadas
+                        {briefResults.results?.length || 0} iniciativas procesadas
                       </p>
                     </div>
                   )}
                   <div className="space-y-1">
-                    {briefResults.results.map((result) => (
+                    {(briefResults.results || []).map((result) => (
                       <div 
                         key={result.runId} 
                         className="text-xs p-2 rounded-md bg-muted"
