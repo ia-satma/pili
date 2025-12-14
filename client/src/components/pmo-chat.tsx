@@ -37,6 +37,109 @@ interface ChatResponseMeta {
   messageUser?: string;
 }
 
+interface DelayedProjectInfo {
+  id: number;
+  title: string;
+  status: string | null;
+  department: string | null;
+  end_date: string | null;
+  is_delayed: boolean;
+  delay_reasons: string[];
+}
+
+interface OwnerDelayedProjectsResponse {
+  status: "OK" | "ERROR";
+  mode: "DETERMINISTIC";
+  owner_key: string;
+  count: number;
+  delayed_count: number;
+  projects: DelayedProjectInfo[];
+  evidence_refs: Array<{ type: string; id: number }>;
+  narrative?: string;
+  narrative_error?: { error_code: string; request_id: string };
+}
+
+function tryParseHybridResponse(content: string): OwnerDelayedProjectsResponse | null {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && typeof parsed === 'object' && 'owner_key' in parsed && 'projects' in parsed) {
+      return parsed as OwnerDelayedProjectsResponse;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function HybridProjectsDisplay({ data }: { data: OwnerDelayedProjectsResponse }) {
+  return (
+    <div className="space-y-3" data-testid="hybrid-projects-display">
+      <div className="space-y-1">
+        <p className="text-sm font-medium">
+          Proyectos de <span className="font-semibold">{data.owner_key}</span>
+        </p>
+        <div className="flex gap-2 text-xs">
+          <Badge variant="outline">{data.count} total</Badge>
+          {data.delayed_count > 0 && (
+            <Badge variant="destructive">{data.delayed_count} con demoras</Badge>
+          )}
+        </div>
+      </div>
+      
+      <div className="space-y-2">
+        {data.projects.map((project) => (
+          <div
+            key={project.id}
+            className="p-2 rounded-md bg-background/50 border border-border text-xs space-y-1"
+            data-testid={`project-item-${project.id}`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <span className="font-medium">{project.title}</span>
+              <Badge 
+                variant={project.is_delayed ? "destructive" : "secondary"}
+                className="text-[10px] shrink-0"
+                data-testid={`project-status-${project.id}`}
+              >
+                {project.is_delayed ? "Demorado" : "OK"}
+              </Badge>
+            </div>
+            {project.department && (
+              <p className="text-muted-foreground">Depto: {project.department}</p>
+            )}
+            {project.end_date && (
+              <p className="text-muted-foreground">Fecha límite: {project.end_date}</p>
+            )}
+            {project.is_delayed && project.delay_reasons.length > 0 && (
+              <div className="mt-1 p-1.5 rounded bg-destructive/10 text-destructive text-[10px]">
+                <span className="font-medium">Razones:</span>
+                <ul className="list-disc list-inside mt-0.5">
+                  {project.delay_reasons.map((reason, idx) => (
+                    <li key={idx}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      
+      {data.narrative && (
+        <div className="p-2 rounded-md bg-primary/5 border border-primary/20 text-sm" data-testid="narrative-display">
+          <p className="text-xs font-medium text-muted-foreground mb-1">Resumen IA:</p>
+          <p>{data.narrative}</p>
+        </div>
+      )}
+      
+      {data.narrative_error && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 rounded-md bg-muted/50" data-testid="narrative-error-display">
+          <AlertCircle className="h-3 w-3" />
+          <span>Narrativa IA no disponible, mostrando datos verificados</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ChatResponse {
   message: ChatMessage;
   sourceVersion?: ExcelVersion;
@@ -252,7 +355,11 @@ export function PMOChat() {
                         : "bg-muted"
                     )}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    {message.role === "assistant" && tryParseHybridResponse(message.content) ? (
+                      <HybridProjectsDisplay data={tryParseHybridResponse(message.content)!} />
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    )}
                   </div>
                   
                   {/* Citations */}

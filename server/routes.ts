@@ -19,7 +19,7 @@ import { runOrchestrator } from "./services/orchestrator";
 import { normalizeKey, normalizedEquals, normalizedIncludes } from "./services/normalization";
 import { getCurrentPortfolioView } from "./services/portfolioView";
 import { routePmoQuery, isDeterministicRoute } from "./services/pmoQueryRouter";
-import { generateDeterministicAnswer } from "./services/pmoDeterministicAnswer";
+import { generateDeterministicAnswer, generateOwnerDelayedProjectsAnswer, type OwnerDelayedProjectsAnswer } from "./services/pmoDeterministicAnswer";
 import { isCircuitOpen, recordSuccess, recordFailure, getCircuitStatus, getLlmTimeoutMs, withTimeout } from "./services/circuitBreaker";
 
 // Validation schemas
@@ -1318,8 +1318,65 @@ export async function registerRoutes(
       let responseMode: "DETERMINISTIC" | "LLM" | "ERROR" = "LLM";
       let errorCode: string | null = null;
       
+      // Special handling for OWNER_DELAYED_PROJECTS (hybrid: deterministic + optional LLM narrative)
+      if (routeResult.route === "OWNER_DELAYED_PROJECTS") {
+        try {
+          const hybridAnswer: OwnerDelayedProjectsAnswer = await generateOwnerDelayedProjectsAnswer(routeResult);
+          
+          // Try to add optional LLM narrative if circuit is not open
+          if (!isCircuitOpen() && hybridAnswer.projects.length > 0) {
+            try {
+              const narrativePrompt = `Genera un breve resumen narrativo (2-3 oraciones) sobre los proyectos de ${hybridAnswer.owner_key}. 
+Datos: ${hybridAnswer.count} proyectos, ${hybridAnswer.delayed_count} con demoras.
+Proyectos demorados: ${hybridAnswer.projects.filter(p => p.is_delayed).map(p => `${p.title} (${p.delay_reasons.join(', ')})`).join('; ') || 'ninguno'}.
+Responde SOLO con el resumen narrativo, sin agregar información adicional.`;
+              
+              const portfolioView = await getCurrentPortfolioView();
+              const context: ChatContext = {
+                projects: [],
+                versionId: latestVersion?.id || null,
+                versionFileName: latestVersion?.fileName || null,
+              };
+              
+              const narrativeResponse = await withTimeout(
+                generatePMOBotResponse(narrativePrompt, context),
+                getLlmTimeoutMs(),
+                "LLM_TIMEOUT"
+              );
+              hybridAnswer.narrative = narrativeResponse.content;
+              recordSuccess();
+              console.log(`[PMO-Bot] OWNER_DELAYED_PROJECTS narrative generated successfully`);
+            } catch (llmError) {
+              const errMsg = llmError instanceof Error ? llmError.message : String(llmError);
+              console.warn(`[PMO-Bot] LLM narrative failed:`, errMsg);
+              recordFailure();
+              hybridAnswer.narrative_error = { 
+                error_code: errMsg === "LLM_TIMEOUT" ? "LLM_TIMEOUT" : "LLM_UNAVAILABLE", 
+                request_id: requestId 
+              };
+            }
+          } else if (isCircuitOpen()) {
+            hybridAnswer.narrative_error = { 
+              error_code: "CIRCUIT_OPEN", 
+              request_id: requestId 
+            };
+          }
+          
+          // Format response content as JSON for frontend to parse
+          response = {
+            content: JSON.stringify(hybridAnswer),
+            citations: hybridAnswer.evidence_refs.map(ref => ({ type: ref.type, id: ref.id })),
+          };
+          responseMode = "DETERMINISTIC";
+          console.log(`[PMO-Bot] OWNER_DELAYED_PROJECTS: ${hybridAnswer.count} projects, ${hybridAnswer.delayed_count} delayed`);
+        } catch (dbError) {
+          console.error(`[PMO-Bot] OWNER_DELAYED_PROJECTS error:`, dbError);
+          responseMode = "LLM";
+          response = { content: "", citations: [] };
+        }
+      }
       // Check if this is a deterministic route (DB-only answer)
-      if (isDeterministicRoute(routeResult.route)) {
+      else if (isDeterministicRoute(routeResult.route)) {
         try {
           const deterministicAnswer = await generateDeterministicAnswer(routeResult);
           response = {

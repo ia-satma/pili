@@ -12,6 +12,7 @@ export type QueryRoute =
   | "COUNT_BY_DEPARTMENT"// "cuántos proyectos tiene el departamento X"
   | "LIST_BY_DEPARTMENT" // "qué proyectos tiene el departamento X"
   | "TOTAL_COUNT"        // "cuántos proyectos hay"
+  | "OWNER_DELAYED_PROJECTS" // "proyectos de X y cuáles están demorados/vencidos y por qué"
   | "FALLBACK_LLM";      // Complex queries requiring AI
 
 export interface RouterResult {
@@ -40,6 +41,11 @@ const PATTERNS = {
   
   // Total count: "cuántos proyectos hay", "cuantos proyectos tenemos"
   TOTAL_COUNT: /cu[aá]ntos\s+proyectos\s+(?:hay|tenemos|existen|son)/i,
+  
+  // Owner delayed projects: "proyectos que tiene marina y cuales estan demorados"
+  // Matches: "cual es el nombre de los proyectos que tiene X y cuales estan demorados y porque"
+  // Also: "dame los proyectos de X y cuales estan vencidos/atrasados"
+  OWNER_DELAYED_PROJECTS: /(?:(?:cu[aá]l(?:es)?|qu[eé]|dame|dime|muestra|lista).*(?:proyectos?|nombre).*(?:tiene|de)\s+)(.+?)(?:\s+y\s+(?:cu[aá]l(?:es)?|qu[eé])?\s*(?:est[aá]n?|son)\s*(?:demorad|vencid|atrasad|retrasad|en\s*riesgo))/i,
 };
 
 /**
@@ -60,6 +66,18 @@ function cleanExtractedName(name: string): string {
  */
 export function routePmoQuery(message: string): RouterResult {
   const trimmedMessage = message.trim();
+  
+  // Try OWNER_DELAYED_PROJECTS first (most specific pattern)
+  const ownerDelayedMatch = trimmedMessage.match(PATTERNS.OWNER_DELAYED_PROJECTS);
+  if (ownerDelayedMatch && ownerDelayedMatch[1]) {
+    const ownerName = cleanExtractedName(ownerDelayedMatch[1]);
+    return {
+      route: "OWNER_DELAYED_PROJECTS",
+      params: { ownerName },
+      normalizedKey: normalizeKey(ownerName),
+      originalQuery: trimmedMessage,
+    };
+  }
   
   // Try TOTAL_COUNT first (no parameters)
   if (PATTERNS.TOTAL_COUNT.test(trimmedMessage)) {
