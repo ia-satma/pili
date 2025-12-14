@@ -240,6 +240,10 @@ export interface IStorage {
   createApiTelemetry(data: InsertApiTelemetry): Promise<ApiTelemetry>;
   createAgentTelemetry(data: InsertAgentTelemetry): Promise<AgentTelemetry>;
   createJobTelemetry(data: InsertJobTelemetry): Promise<JobTelemetry>;
+
+  // H7.4 - Cost & Load Controls
+  getMonthlyAgentCost(): Promise<number>;
+  getRecentApiLatencies(limit: number): Promise<number[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1268,6 +1272,29 @@ export class DatabaseStorage implements IStorage {
   async createJobTelemetry(data: InsertJobTelemetry): Promise<JobTelemetry> {
     const [result] = await db.insert(jobTelemetry).values(data).returning();
     return result;
+  }
+
+  // H7.4 - Cost & Load Controls
+  async getMonthlyAgentCost(): Promise<number> {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    const result = await db.select({
+      totalCost: sql<string>`COALESCE(SUM(CAST(${agentTelemetry.costUsd} AS DECIMAL)), 0)`
+    })
+    .from(agentTelemetry)
+    .where(sql`${agentTelemetry.timestamp} >= ${startOfMonth}`);
+    
+    return parseFloat(result[0]?.totalCost || "0");
+  }
+
+  async getRecentApiLatencies(limit: number): Promise<number[]> {
+    const results = await db.select({ durationMs: apiTelemetry.durationMs })
+      .from(apiTelemetry)
+      .orderBy(desc(apiTelemetry.timestamp))
+      .limit(limit);
+    
+    return results.map(r => r.durationMs);
   }
 }
 

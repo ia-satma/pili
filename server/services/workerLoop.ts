@@ -4,14 +4,17 @@ import { generateCommitteePacket } from "./committeePacketGenerator";
 import { generateChaserDrafts } from "./chaserDraftGenerator";
 import { runBatchIndependentLimboDetection } from "./limboDetector";
 import { generateSystemDocs } from "./systemDocsGenerator";
+import { runEvalSuite } from "./evalRunner";
+import { runGuardrailChecks } from "./costGuardrails";
 import type { Job, InsertJobRun } from "@shared/schema";
 import { hostname } from "os";
 
 const POLL_INTERVAL_MS = 5000;
 const STALE_LOCK_MINUTES = 10;
 const BACKOFF_BASE_MS = 60000;
+const EVAL_REGRESSION_THRESHOLD = 0.20;
 
-type JobType = "GENERATE_EXPORT_EXCEL" | "GENERATE_COMMITTEE_PACKET" | "DETECT_LIMBO" | "DRAFT_CHASERS" | "GENERATE_SYSTEM_DOCS";
+type JobType = "GENERATE_EXPORT_EXCEL" | "GENERATE_COMMITTEE_PACKET" | "DETECT_LIMBO" | "DRAFT_CHASERS" | "GENERATE_SYSTEM_DOCS" | "RUN_EVALS_DAILY";
 
 interface JobHandler {
   (job: Job): Promise<Record<string, unknown>>;
@@ -74,6 +77,56 @@ const jobHandlers: Record<JobType, JobHandler> = {
     return {
       docsCreated: result.docsCreated,
       docTypes: result.docTypes,
+    };
+  },
+
+  RUN_EVALS_DAILY: async (_job: Job) => {
+    const evalResult = await runEvalSuite();
+    
+    const recentEvals = await storage.getRecentEvalRuns(50);
+    const failedCount = recentEvals.filter(e => e.status === "FAIL" || e.status === "ERROR").length;
+    const totalCount = recentEvals.length;
+    const failureRate = totalCount > 0 ? failedCount / totalCount : 0;
+    
+    if (failureRate > EVAL_REGRESSION_THRESHOLD) {
+      const failurePercentage = (failureRate * 100).toFixed(1);
+      const rationale = `Eval regression detected: ${failurePercentage}% of recent evaluations failed (${failedCount}/${totalCount}). Threshold: ${EVAL_REGRESSION_THRESHOLD * 100}%`;
+      
+      console.warn(`[Worker] EVAL_REGRESSION alert: ${rationale}`);
+      
+      const initiatives = await storage.getInitiatives();
+      if (initiatives.length > 0) {
+        await storage.createGovernanceAlert({
+          initiativeId: initiatives[0].id,
+          signalCode: "EVAL_REGRESSION",
+          severity: "HIGH",
+          rationale,
+          status: "OPEN",
+        });
+        console.log(`[Worker] Created EVAL_REGRESSION governance alert`);
+      }
+    }
+    
+    const hasPending = await storage.hasPendingJobByType("RUN_EVALS_DAILY");
+    if (!hasPending) {
+      const nextRun = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await storage.createJob({
+        jobType: "RUN_EVALS_DAILY",
+        status: "QUEUED",
+        payload: {},
+        runAt: nextRun,
+        attempts: 0,
+        maxAttempts: 3,
+      });
+      console.log(`[Worker] Scheduled next RUN_EVALS_DAILY for ${nextRun.toISOString()}`);
+    }
+    
+    return {
+      total: evalResult.total,
+      passed: evalResult.passed,
+      failed: evalResult.failed,
+      failureRate: failureRate,
+      regressionDetected: failureRate > EVAL_REGRESSION_THRESHOLD,
     };
   },
 };
@@ -233,6 +286,8 @@ async function pollAndProcess(): Promise<void> {
     for (const job of jobs) {
       await processJob(job);
     }
+
+    await runGuardrailChecks();
   } catch (error) {
     console.error("[Worker] Poll error:", error);
   }

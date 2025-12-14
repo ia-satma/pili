@@ -6,7 +6,7 @@ interface SystemDocGenerationResult {
 }
 
 export async function generateSystemDocs(): Promise<SystemDocGenerationResult> {
-  const docTypes = ["ARCHITECTURE", "OPS_MANUAL", "AGENT_REGISTRY", "DATA_LINEAGE", "API_REFERENCE"];
+  const docTypes = ["ARCHITECTURE", "OPS_MANUAL", "AGENT_REGISTRY", "DATA_LINEAGE", "API_REFERENCE", "EVAL_SUMMARY"];
   const docsCreated: string[] = [];
 
   for (const docType of docTypes) {
@@ -38,6 +38,8 @@ async function generateDocContent(docType: string): Promise<string> {
       return await generateDataLineageDoc(timestamp);
     case "API_REFERENCE":
       return generateApiReferenceDoc(timestamp);
+    case "EVAL_SUMMARY":
+      return await generateEvalSummaryDoc(timestamp);
     default:
       return `# ${docType}\n\nGenerado: ${timestamp}\n`;
   }
@@ -128,6 +130,7 @@ El sistema se inicia con \`npm run dev\` que ejecuta:
 | DETECT_LIMBO | Detecta iniciativas estancadas | Automático (24h) |
 | DRAFT_CHASERS | Genera emails de seguimiento | Manual |
 | GENERATE_SYSTEM_DOCS | Actualiza documentación | POST /api/system/docs/run |
+| RUN_EVALS_DAILY | Ejecuta evaluaciones de calidad | Automático (24h) |
 
 ## Monitoreo
 
@@ -436,5 +439,84 @@ Ejecuta una evaluación contra fixtures predefinidos.
   }
 }
 \`\`\`
+`;
+}
+
+async function generateEvalSummaryDoc(timestamp: string): Promise<string> {
+  const recentEvals = await storage.getRecentEvalRuns(100);
+  
+  const passedCount = recentEvals.filter(e => e.status === "PASS").length;
+  const failedCount = recentEvals.filter(e => e.status === "FAIL").length;
+  const errorCount = recentEvals.filter(e => e.status === "ERROR").length;
+  const totalCount = recentEvals.length;
+  
+  const passRate = totalCount > 0 ? ((passedCount / totalCount) * 100).toFixed(1) : "N/A";
+  
+  const lastRunDate = recentEvals.length > 0 && recentEvals[0].startedAt 
+    ? new Date(recentEvals[0].startedAt).toISOString()
+    : "Never";
+  
+  const byFixture: Record<string, { passed: number; failed: number; error: number }> = {};
+  for (const evalRun of recentEvals) {
+    const fixture = evalRun.fixtureName;
+    if (!byFixture[fixture]) {
+      byFixture[fixture] = { passed: 0, failed: 0, error: 0 };
+    }
+    if (evalRun.status === "PASS") byFixture[fixture].passed++;
+    else if (evalRun.status === "FAIL") byFixture[fixture].failed++;
+    else if (evalRun.status === "ERROR") byFixture[fixture].error++;
+  }
+  
+  let fixtureTable = `| Fixture | Passed | Failed | Error |
+|---------|--------|--------|-------|
+`;
+  for (const [fixture, counts] of Object.entries(byFixture)) {
+    fixtureTable += `| ${fixture} | ${counts.passed} | ${counts.failed} | ${counts.error} |\n`;
+  }
+
+  return `# Eval Summary
+
+Generado automáticamente: ${timestamp}
+
+## Resumen de Evaluaciones
+
+| Métrica | Valor |
+|---------|-------|
+| Total de ejecuciones | ${totalCount} |
+| Pasadas | ${passedCount} |
+| Falladas | ${failedCount} |
+| Errores | ${errorCount} |
+| Tasa de éxito | ${passRate}% |
+| Última ejecución | ${lastRunDate} |
+
+## Estado de Regresión
+
+${totalCount > 0 && (failedCount + errorCount) / totalCount > 0.20 
+  ? "**ALERTA**: Regresión detectada. Más del 20% de las evaluaciones recientes han fallado."
+  : "Estado: Normal. La tasa de fallos está dentro del umbral aceptable (< 20%)."}
+
+## Resultados por Fixture
+
+${fixtureTable}
+
+## Quality Gates
+
+El sistema ejecuta evaluaciones diarias (RUN_EVALS_DAILY) para monitorear la calidad:
+
+- **Umbral de regresión**: 20% de fallos
+- **Severidad de alerta**: HIGH
+- **Código de señal**: EVAL_REGRESSION
+- **Frecuencia**: Cada 24 horas
+
+## Acciones Recomendadas
+
+${(failedCount + errorCount) > 0 ? `
+- Revisar los fixtures fallidos en la tabla anterior
+- Verificar logs de los agentes involucrados
+- Confirmar que las APIs externas (OpenAI, Anthropic, Google) estén funcionando
+- Ejecutar evaluaciones manuales para fixtures específicos
+` : `
+- Sin acciones requeridas. Todas las evaluaciones están pasando.
+`}
 `;
 }
