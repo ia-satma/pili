@@ -81,9 +81,10 @@ export default function Orchestrator() {
   const [message, setMessage] = useState("");
   const [response, setResponse] = useState<OrchestratorResponse | null>(null);
 
-  const { data: initiatives = [], isLoading: loadingInitiatives } = useQuery<Initiative[]>({
+  const { data: initiativesData, isLoading: loadingInitiatives } = useQuery<{ initiatives: Initiative[] }>({
     queryKey: ["/api/initiatives"],
   });
+  const initiatives = initiativesData?.initiatives ?? [];
 
   const bounceMutation = useMutation({
     mutationFn: async (data: { initiativeId?: number; message: string; mode: OrchestratorMode }) => {

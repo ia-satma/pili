@@ -611,8 +611,8 @@ export const evalRuns = pgTable("eval_runs", {
   startedAt: timestamp("started_at").defaultNow().notNull(),
   finishedAt: timestamp("finished_at"),
   latencyMs: integer("latency_ms"),
-  success: boolean("success"),
-  notes: jsonb("notes").$type<Record<string, unknown>>(),
+  notes: text("notes"),
+  inputJson: jsonb("input_json").$type<Record<string, unknown>>(),
   outputJson: jsonb("output_json").$type<Record<string, unknown>>(),
 });
 

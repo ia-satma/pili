@@ -6,7 +6,7 @@ interface SystemDocGenerationResult {
 }
 
 export async function generateSystemDocs(): Promise<SystemDocGenerationResult> {
-  const docTypes = ["ARCHITECTURE", "OPS_MANUAL", "AGENT_REGISTRY", "DATA_LINEAGE"];
+  const docTypes = ["ARCHITECTURE", "OPS_MANUAL", "AGENT_REGISTRY", "DATA_LINEAGE", "API_REFERENCE"];
   const docsCreated: string[] = [];
 
   for (const docType of docTypes) {
@@ -36,6 +36,8 @@ async function generateDocContent(docType: string): Promise<string> {
       return await generateAgentRegistryDoc(timestamp);
     case "DATA_LINEAGE":
       return await generateDataLineageDoc(timestamp);
+    case "API_REFERENCE":
+      return generateApiReferenceDoc(timestamp);
     default:
       return `# ${docType}\n\nGenerado: ${timestamp}\n`;
   }
@@ -89,6 +91,19 @@ PILAR es un sistema de gestión de PMO (Project Management Office) que proporcio
 3. Snapshots → Delta Engine → Delta Events
 4. Deltas → Signal Detector → Governance Alerts
 5. User Request → Agent Runner → Evidence Pack → LLM → Council Review → Output
+
+## Evidence Pack Limits
+
+El Evidence Pack utiliza límites para optimizar el contexto enviado al LLM:
+
+| Parámetro | Límite | Descripción |
+|-----------|--------|-------------|
+| maxSnapshots | 3 | Snapshots más recientes incluidos |
+| maxDeltas | 50 | Eventos delta máximos |
+| maxStatusUpdates | 5 | Actualizaciones de estado recientes |
+| maxAlerts | 20 | Alertas de gobernanza activas |
+
+Estos límites aseguran que el contexto no exceda los límites del modelo y mantenga relevancia temporal.
 `;
 }
 
@@ -257,5 +272,169 @@ Los agentes reciben un pack de evidencia con:
 - Open Alerts (alertas activas)
 - Recent Status Updates (últimas 5)
 - Provenance (IDs de trazabilidad)
+`;
+}
+
+function generateApiReferenceDoc(timestamp: string): string {
+  return `# API Reference
+
+Generado automáticamente: ${timestamp}
+
+## RBAC Protections
+
+El sistema implementa Role-Based Access Control (RBAC) con tres niveles de acceso:
+
+| Rol | Descripción |
+|-----|-------------|
+| admin | Acceso completo + gestión de usuarios |
+| editor | CRUD de proyectos + ejecución de agentes |
+| viewer | Solo lectura de datos |
+
+### Endpoints Protegidos por Rol
+
+| Endpoint Pattern | Rol Mínimo | Descripción |
+|------------------|------------|-------------|
+| \`/api/system/*\` | admin | Configuración del sistema y documentación |
+| \`/api/agents/*\` | editor | Ejecución y gestión de agentes |
+| \`/api/exports/download\` | viewer | Descarga de exports generados |
+| \`/api/ingest/artifacts/download\` | viewer | Descarga de artifacts de ingesta |
+| \`/api/jobs/*\` | editor | Gestión y monitoreo de jobs |
+| \`/api/admin/users/*\` | admin | Gestión de usuarios |
+| \`/api/orchestrator/*\` | editor | PMO Bot / Orchestrator |
+
+## Rate Limits
+
+Límites de tasa aplicados para proteger el sistema:
+
+| Endpoint | Límite | Ventana | Descripción |
+|----------|--------|---------|-------------|
+| Agent runs (\`/api/agents/*/run\`) | 5 | 1 minuto | Ejecución de agentes |
+| System docs (\`/api/system/docs/run\`) | 3 | 1 minuto | Generación de documentación |
+| Exports (\`/api/exports/run\`) | 10 | 1 minuto | Generación de Excel |
+| Uploads (\`/api/ingest/upload\`) | 5 | 1 minuto | Carga de archivos Excel |
+
+### Límites de Archivo
+
+| Parámetro | Límite |
+|-----------|--------|
+| Tamaño máximo Excel | 15 MB |
+| Formatos soportados | .xlsx, .xls |
+
+## PMO Bot / Orchestrator
+
+El Orchestrator proporciona un endpoint para interacción estructurada con el PMO Bot.
+
+### POST /api/orchestrator/bounce
+
+Envía una consulta al PMO Bot y recibe una respuesta estructurada.
+
+**Request Body:**
+\`\`\`json
+{
+  "mode": "BRAINSTORM" | "DECIDE" | "RISKS" | "NEXT_ACTIONS",
+  "prompt": "Texto de la consulta del usuario",
+  "context": {
+    "initiativeId": 123,  // opcional
+    "projectId": 456      // opcional
+  }
+}
+\`\`\`
+
+**Modos Soportados:**
+
+| Modo | Propósito |
+|------|-----------|
+| BRAINSTORM | Generación de ideas y exploración de opciones |
+| DECIDE | Análisis para toma de decisiones |
+| RISKS | Identificación y evaluación de riesgos |
+| NEXT_ACTIONS | Planificación de próximos pasos |
+
+**Response:**
+\`\`\`json
+{
+  "success": true,
+  "mode": "BRAINSTORM",
+  "response": {
+    "content": "Respuesta estructurada del bot",
+    "suggestions": ["sugerencia 1", "sugerencia 2"],
+    "sources": ["initiative:123", "snapshot:456"]
+  },
+  "tokensUsed": 1500
+}
+\`\`\`
+
+## Evals
+
+El sistema de evaluaciones permite medir la calidad de las respuestas de los agentes.
+
+### Tabla eval_runs
+
+Almacena ejecuciones de evaluación con métricas de calidad:
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| id | serial | ID único de la evaluación |
+| agent_name | text | Nombre del agente evaluado |
+| fixture_id | text | ID del fixture de prueba |
+| score | numeric | Puntuación 0.0 - 1.0 |
+| passed | boolean | Si superó el umbral |
+| output_json | jsonb | Salida del agente |
+| expected_json | jsonb | Salida esperada |
+| created_at | timestamp | Fecha de ejecución |
+
+### GET /api/evals/recent
+
+Obtiene las evaluaciones más recientes.
+
+**Query Parameters:**
+- \`limit\`: Número de evaluaciones (default: 20)
+- \`agent\`: Filtrar por nombre de agente
+
+**Response:**
+\`\`\`json
+{
+  "evals": [
+    {
+      "id": 1,
+      "agentName": "RISK_ANALYST",
+      "fixtureId": "happy_path_1",
+      "score": 0.95,
+      "passed": true,
+      "createdAt": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+\`\`\`
+
+### POST /api/evals/run
+
+Ejecuta una evaluación contra fixtures predefinidos.
+
+**Request Body:**
+\`\`\`json
+{
+  "agentName": "RISK_ANALYST",
+  "fixtureIds": ["happy_path_1", "edge_case_1"]  // opcional, ejecuta todos si omitido
+}
+\`\`\`
+
+**Response:**
+\`\`\`json
+{
+  "success": true,
+  "results": [
+    {
+      "fixtureId": "happy_path_1",
+      "score": 0.95,
+      "passed": true
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "avgScore": 0.93
+  }
+}
+\`\`\`
 `;
 }

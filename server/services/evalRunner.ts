@@ -1,88 +1,129 @@
 import { storage } from "../storage";
 import { runOrchestrator } from "./orchestrator";
-import { EVAL_FIXTURES, EvalFixture } from "../evals/fixtures";
+
+interface EvalFixture {
+  name: string;
+  mode: "BRAINSTORM" | "DECIDE" | "RISKS" | "NEXT_ACTIONS";
+  initiativeId?: number;
+  message: string;
+  expectedHas: {
+    hasSummary?: boolean;
+    hasIdeas?: boolean;
+    hasRisks?: boolean;
+    hasNextActions?: boolean;
+    insufficientEvidence?: boolean;
+  };
+}
+
+const FIXTURES: EvalFixture[] = [
+  {
+    name: "complete_evidence",
+    mode: "BRAINSTORM",
+    message: "¿Qué alternativas tenemos para mejorar el proyecto?",
+    expectedHas: { hasSummary: true, hasIdeas: true },
+  },
+  {
+    name: "missing_evidence",
+    mode: "DECIDE",
+    message: "¿Debemos continuar con este proyecto?",
+    expectedHas: { hasSummary: true, insufficientEvidence: true },
+  },
+  {
+    name: "high_alerts",
+    mode: "RISKS",
+    message: "¿Cuáles son los principales riesgos?",
+    expectedHas: { hasSummary: true, hasRisks: true },
+  },
+  {
+    name: "conflicting_deltas",
+    mode: "NEXT_ACTIONS",
+    message: "¿Qué pasos debemos seguir dado los cambios recientes?",
+    expectedHas: { hasSummary: true, hasNextActions: true },
+  },
+  {
+    name: "benefits_missing",
+    mode: "BRAINSTORM",
+    message: "¿Cómo podemos demostrar el valor del proyecto?",
+    expectedHas: { hasSummary: true, hasIdeas: true },
+  },
+];
 
 export async function runEvalSuite(): Promise<{
   total: number;
   passed: number;
   failed: number;
-  errors: number;
-  results: Array<{ fixture: string; status: string; latencyMs: number; notes: string }>;
+  results: Array<{ fixture: string; status: string; latencyMs: number }>;
 }> {
-  const results: Array<{ fixture: string; status: string; latencyMs: number; notes: string }> = [];
-  let passed = 0, failed = 0, errors = 0;
+  const results: Array<{ fixture: string; status: string; latencyMs: number }> = [];
+  let passed = 0;
+  let failed = 0;
 
-  const initiatives = await storage.getInitiatives();
-  const firstInitiativeId = initiatives[0]?.id;
-
-  for (const fixture of EVAL_FIXTURES) {
+  for (const fixture of FIXTURES) {
     const startTime = Date.now();
     let status = "PASS";
+    let outputJson: Record<string, unknown> = {};
     let notes = "";
-    let output: Record<string, unknown> | null = null;
 
     try {
-      const initiativeId = fixture.initiativeId ? firstInitiativeId : undefined;
-      
-      const orchestratorOutput = await runOrchestrator({
-        initiativeId,
+      const response = await runOrchestrator({
+        initiativeId: fixture.initiativeId,
         message: fixture.message,
         mode: fixture.mode,
       });
 
-      output = orchestratorOutput as unknown as Record<string, unknown>;
+      outputJson = response as unknown as Record<string, unknown>;
 
-      const checks: string[] = [];
-      if (fixture.expectedBehavior.shouldHaveEvidence && !orchestratorOutput.evidenceRefs) {
-        checks.push("Expected evidence refs but got none");
-      }
-      if (fixture.expectedBehavior.shouldHaveIdeas && orchestratorOutput.ideas.length === 0) {
-        checks.push("Expected ideas but got none");
-      }
-      if (fixture.expectedBehavior.shouldHaveRisks && orchestratorOutput.risks.length === 0) {
-        checks.push("Expected risks but got none");
-      }
-      if (fixture.expectedBehavior.shouldHaveNextActions && orchestratorOutput.nextActions.length === 0) {
-        checks.push("Expected next actions but got none");
-      }
-      if (fixture.expectedBehavior.shouldAskQuestions && orchestratorOutput.questionsToClairfy.length === 0) {
-        checks.push("Expected clarifying questions but got none");
-      }
-      if (!fixture.expectedBehavior.shouldHaveEvidence && orchestratorOutput.evidenceRefs) {
-        checks.push("Expected no evidence refs but got some");
-      }
-
-      if (checks.length > 0) {
+      if (fixture.expectedHas.hasSummary && !response.summary) {
         status = "FAIL";
-        notes = checks.join("; ");
-        failed++;
-      } else {
-        notes = "All checks passed";
-        passed++;
+        notes += "Missing summary. ";
       }
-    } catch (err) {
+      if (fixture.expectedHas.hasIdeas && response.ideas.length === 0) {
+        status = "FAIL";
+        notes += "Missing ideas. ";
+      }
+      if (fixture.expectedHas.hasRisks && response.risks.length === 0) {
+        status = "FAIL";
+        notes += "Missing risks. ";
+      }
+      if (fixture.expectedHas.hasNextActions && response.nextActions.length === 0) {
+        status = "FAIL";
+        notes += "Missing next actions. ";
+      }
+      if (fixture.expectedHas.insufficientEvidence !== undefined) {
+        if (fixture.expectedHas.insufficientEvidence && !response.insufficientEvidence) {
+          status = "FAIL";
+          notes += "Expected insufficient evidence flag but got false. ";
+        }
+        if (!fixture.expectedHas.insufficientEvidence && response.insufficientEvidence) {
+          status = "FAIL";
+          notes += "Got unexpected insufficient evidence flag. ";
+        }
+      }
+    } catch (error) {
       status = "ERROR";
-      notes = err instanceof Error ? err.message : String(err);
-      errors++;
+      notes = error instanceof Error ? error.message : String(error);
     }
 
     const latencyMs = Date.now() - startTime;
 
     await storage.createEvalRun({
-      suiteName: "orchestrator_v1",
+      suiteName: "H6_Orchestrator",
       fixtureName: fixture.name,
       mode: fixture.mode,
       status,
       startedAt: new Date(startTime),
       finishedAt: new Date(),
       latencyMs,
-      success: status === "PASS",
-      notes: { message: notes },
-      outputJson: output,
+      notes: notes || null,
+      inputJson: { message: fixture.message, initiativeId: fixture.initiativeId },
+      outputJson,
     });
 
-    results.push({ fixture: fixture.name, status, latencyMs, notes });
+    if (status === "PASS") passed++;
+    else failed++;
+
+    results.push({ fixture: fixture.name, status, latencyMs });
   }
 
-  return { total: EVAL_FIXTURES.length, passed, failed, errors, results };
+  return { total: FIXTURES.length, passed, failed, results };
 }

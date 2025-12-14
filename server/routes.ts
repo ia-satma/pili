@@ -2173,5 +2173,31 @@ export async function registerRoutes(
     }
   });
 
+  // ===== H6.4 Eval Harness Routes =====
+
+  // POST /api/evals/run - Run evaluation suite (admin only)
+  app.post("/api/evals/run", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { runEvalSuite } = await import("./services/evalRunner");
+      const results = await runEvalSuite();
+      res.json(results);
+    } catch (error) {
+      console.error("[Evals] Error running eval suite:", error);
+      res.status(500).json({ message: "Error al ejecutar suite de evaluación" });
+    }
+  });
+
+  // GET /api/evals/recent - Get recent eval runs (editor access)
+  app.get("/api/evals/recent", isAuthenticated, isEditor, async (req: Request, res: Response) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const runs = await storage.getRecentEvalRuns(limit);
+      res.json(runs);
+    } catch (error) {
+      console.error("[Evals] Error fetching recent runs:", error);
+      res.status(500).json({ message: "Error al obtener ejecuciones recientes" });
+    }
+  });
+
   return httpServer;
 }

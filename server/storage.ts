@@ -37,6 +37,7 @@ import {
   type CouncilReview, type InsertCouncilReview,
   type SystemDoc, type InsertSystemDoc,
   type DownloadAudit, type InsertDownloadAudit,
+  type EvalRun, type InsertEvalRun,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray, count, lt, lte, or, isNull } from "drizzle-orm";
@@ -227,6 +228,10 @@ export interface IStorage {
 
   // H6 - Download Audit
   createDownloadAudit(data: InsertDownloadAudit): Promise<DownloadAudit>;
+
+  // H6.4 - Eval Runs
+  createEvalRun(data: InsertEvalRun): Promise<EvalRun>;
+  getRecentEvalRuns(limit?: number): Promise<EvalRun[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1226,6 +1231,19 @@ export class DatabaseStorage implements IStorage {
   async createDownloadAudit(data: InsertDownloadAudit): Promise<DownloadAudit> {
     const [result] = await db.insert(downloadAudit).values(data).returning();
     return result;
+  }
+
+  // H6.4 - Eval Runs
+  async createEvalRun(data: InsertEvalRun): Promise<EvalRun> {
+    const [result] = await db.insert(evalRuns).values(data).returning();
+    return result;
+  }
+
+  async getRecentEvalRuns(limit: number = 50): Promise<EvalRun[]> {
+    return db.select()
+      .from(evalRuns)
+      .orderBy(desc(evalRuns.startedAt))
+      .limit(limit);
   }
 }
 
