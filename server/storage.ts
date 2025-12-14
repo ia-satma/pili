@@ -247,6 +247,9 @@ export interface IStorage {
 
   // H7.5 - Soft Data Reset
   resetOperationalData(): Promise<{ tablesCleared: number }>;
+
+  // Backfill initiatives from legacy projects table (for smoke test)
+  backfillInitiativesFromProjects(): Promise<{ initiativesCreated: number; snapshotsCreated: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1342,6 +1345,75 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { tablesCleared: operationalTables.length };
+  }
+
+  // Backfill initiatives from legacy projects table (idempotent - won't duplicate)
+  async backfillInitiativesFromProjects(): Promise<{ initiativesCreated: number; snapshotsCreated: number }> {
+    // Check if initiatives already exist - if so, skip
+    const existingInitiatives = await db.select({ count: count() }).from(initiatives);
+    if (existingInitiatives[0]?.count > 0) {
+      return { initiativesCreated: 0, snapshotsCreated: 0 };
+    }
+
+    // Get all active projects
+    const allProjects = await db.select().from(projects).where(eq(projects.isActive, true));
+    if (allProjects.length === 0) {
+      return { initiativesCreated: 0, snapshotsCreated: 0 };
+    }
+
+    // Create a seed ingestion batch for the backfill
+    const [batch] = await db.insert(ingestionBatches).values({
+      sourceFileHash: 'backfill-from-projects-' + Date.now(),
+      sourceFileName: 'legacy-projects-backfill',
+      status: 'committed',
+      totalRows: allProjects.length,
+      processedRows: allProjects.length,
+      hardErrorCount: 0,
+      softErrorCount: 0,
+    }).returning();
+
+    let initiativesCreated = 0;
+    let snapshotsCreated = 0;
+
+    for (const project of allProjects) {
+      // Create initiative
+      const [initiative] = await db.insert(initiatives).values({
+        devopsCardId: project.legacyId || `project-${project.id}`,
+        title: project.projectName,
+        owner: project.responsible,
+        currentStatus: project.status,
+        isActive: true,
+      }).returning();
+      initiativesCreated++;
+
+      // Create snapshot for this initiative
+      await db.insert(initiativeSnapshots).values({
+        initiativeId: initiative.id,
+        batchId: batch.id,
+        title: project.projectName,
+        description: project.description,
+        owner: project.responsible,
+        sponsor: project.sponsor,
+        departmentName: project.departmentName,
+        status: project.status,
+        estatusAlDia: project.estatusAlDia,
+        priority: project.priority,
+        category: project.category,
+        projectType: project.projectType,
+        startDate: project.startDate,
+        endDateEstimated: project.endDateEstimated,
+        endDateActual: project.endDateActual,
+        percentComplete: project.percentComplete,
+        totalValor: project.totalValor,
+        totalEsfuerzo: project.totalEsfuerzo,
+        puntajeTotal: project.puntajeTotal,
+        ranking: project.ranking,
+        rawExcelRow: project.extraFields || {},
+      });
+      snapshotsCreated++;
+    }
+
+    return { initiativesCreated, snapshotsCreated };
   }
 }
 

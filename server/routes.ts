@@ -16,6 +16,8 @@ import { enqueueJob } from "./services/workerLoop";
 import { agentRateLimit, exportRateLimit, uploadRateLimit, systemDocsRateLimit } from "./middleware/rateLimiter";
 import { telemetryMiddleware } from "./middleware/telemetryMiddleware";
 import { runOrchestrator } from "./services/orchestrator";
+import { normalizeKey, normalizedEquals, normalizedIncludes } from "./services/normalization";
+import { getCurrentPortfolioView } from "./services/portfolioView";
 
 // Validation schemas
 const sendMessageSchema = z.object({
@@ -413,13 +415,13 @@ export async function registerRoutes(
           if (estado && estado !== "all" && project.status !== estado) {
             return false;
           }
-          if (depto && depto !== "all" && project.departmentName !== depto) {
+          if (depto && depto !== "all" && !normalizedEquals(project.departmentName, depto)) {
             return false;
           }
           if (analista && analista !== "all") {
             const extraFields = project.extraFields as Record<string, unknown> | null;
             const analyst = extraFields?.["Business Process Analyst"] as string | undefined;
-            if (!analyst || analyst.trim() !== analista) {
+            if (!analyst || !normalizedEquals(analyst, analista)) {
               return false;
             }
           }
@@ -593,14 +595,14 @@ export async function registerRoutes(
       }
       
       if (depto && depto !== "all") {
-        projects = projects.filter(p => p.departmentName === depto);
+        projects = projects.filter(p => normalizedEquals(p.departmentName, depto as string));
       }
       
       if (analista && analista !== "all") {
         projects = projects.filter(p => {
           const extra = (p.extraFields || {}) as Record<string, unknown>;
           const projectAnalyst = extra["Business Process Analyst"] as string | undefined;
-          return projectAnalyst && projectAnalyst.trim() === analista;
+          return projectAnalyst && normalizedEquals(projectAnalyst, analista as string);
         });
       }
       
@@ -1194,14 +1196,14 @@ export async function registerRoutes(
       }
       
       if (depto && depto !== "all") {
-        allProjects = allProjects.filter(p => p.departmentName === depto);
+        allProjects = allProjects.filter(p => normalizedEquals(p.departmentName, depto as string));
       }
       
       if (analista && analista !== "all") {
         allProjects = allProjects.filter(p => {
           const extra = (p.extraFields || {}) as Record<string, unknown>;
           const projectAnalyst = extra["Business Process Analyst"] as string | undefined;
-          return projectAnalyst && projectAnalyst.trim() === analista;
+          return projectAnalyst && normalizedEquals(projectAnalyst, analista as string);
         });
       }
       
@@ -1302,12 +1304,32 @@ export async function registerRoutes(
         citations: [],
       });
       
-      // Get context for PMO Bot
-      const allProjects = await storage.getProjects();
+      // Get context for PMO Bot using single source of truth
+      const portfolioView = await getCurrentPortfolioView();
       const latestVersion = await storage.getLatestExcelVersion();
       
+      // Convert PortfolioItems to Project-compatible format for ChatContext
+      const projectsForContext = portfolioView.items.map(item => ({
+        id: item.id,
+        projectName: item.title,
+        status: item.status,
+        departmentName: item.departmentName,
+        responsible: item.responsible,
+        sponsor: item.sponsor,
+        percentComplete: item.percentComplete,
+        startDate: item.startDate,
+        endDateEstimated: item.endDateEstimated,
+        endDateEstimatedTbd: item.endDateEstimatedTbd,
+        priority: item.priority,
+        description: item.description,
+        parsedStatus: item.parsedStatus,
+        parsedNextSteps: item.parsedNextSteps,
+        estatusAlDia: item.estatusAlDia,
+        extraFields: item.extraFields,
+      })) as Project[];
+      
       const context: ChatContext = {
-        projects: allProjects,
+        projects: projectsForContext,
         versionId: latestVersion?.id || null,
         versionFileName: latestVersion?.fileName || null,
       };
@@ -2101,16 +2123,26 @@ export async function registerRoutes(
     try {
       const startTime = Date.now();
 
-      // Find first initiative
-      const initiatives = await storage.getInitiatives();
-      if (initiatives.length === 0) {
-        return res.status(400).json({
-          message: "No hay iniciativas disponibles para prueba",
-          status: "NO_DATA",
-        });
+      // Find first initiative - auto-backfill from projects if empty
+      let initiativesList = await storage.getInitiatives();
+      if (initiativesList.length === 0) {
+        // Auto-backfill from legacy projects table (idempotent)
+        const backfillResult = await storage.backfillInitiativesFromProjects();
+        console.log(`[Agents] Auto-backfill completed: ${backfillResult.initiativesCreated} initiatives, ${backfillResult.snapshotsCreated} snapshots`);
+        
+        // Retry getting initiatives after backfill
+        initiativesList = await storage.getInitiatives();
+        if (initiativesList.length === 0) {
+          // Still no data - return success with empty status
+          return res.json({
+            status: "OK_EMPTY",
+            message: "No hay datos de proyectos para backfill",
+            duration: Date.now() - startTime,
+          });
+        }
       }
 
-      const initiative = initiatives[0];
+      const initiative = initiativesList[0];
 
       // Run CommitteeBriefAgent
       const { runAgent } = await import("./services/agentRunner");
