@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Settings, FileText, Bot, Play, RefreshCw, CheckCircle, XCircle, Clock, Loader2, AlertTriangle, Zap, Key } from "lucide-react";
+import { Settings, FileText, Bot, Play, RefreshCw, CheckCircle, XCircle, Clock, Loader2, AlertTriangle, Zap, Key, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -85,9 +87,37 @@ function getJobTypeLabel(jobType: string): string {
 }
 
 function OperationsTab() {
+  const { toast } = useToast();
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  
   const { data: jobsData, isLoading } = useQuery<{ jobs: Job[] }>({
     queryKey: ["/api/jobs/recent"],
     refetchInterval: 5000,
+  });
+
+  const resetDataMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/reset-data");
+      return res.json();
+    },
+    onSuccess: (data: { success: boolean; tablesCleared: number; message: string }) => {
+      toast({
+        title: "Datos eliminados",
+        description: `Se limpiaron ${data.tablesCleared} tablas operacionales exitosamente`,
+      });
+      setResetDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs/recent"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/initiatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/alerts"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al eliminar datos operacionales",
+        variant: "destructive",
+      });
+    },
   });
 
   const jobs = jobsData?.jobs || [];
@@ -158,6 +188,84 @@ function OperationsTab() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-destructive/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-destructive">
+            <Trash2 className="h-5 w-5" />
+            Reset de Datos
+          </CardTitle>
+          <CardDescription>
+            Elimina todos los datos operacionales del sistema. Esta acción conserva la configuración 
+            (usuarios, agentes, modelos de scoring, plantillas) pero elimina proyectos, iniciativas, 
+            snapshots, alertas, trabajos y telemetría.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="p-4 bg-destructive/10 rounded-md border border-destructive/30">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-destructive">Advertencia: Esta acción es irreversible</p>
+                  <p className="text-muted-foreground mt-1">
+                    Se eliminarán permanentemente: proyectos, iniciativas, snapshots, cambios de estado, 
+                    alertas de gobernanza, eventos delta, ejecuciones de trabajos, borradores de chaser, 
+                    paquetes de comité, mensajes de chat y todos los datos de telemetría.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="destructive" 
+                  data-testid="button-reset-data"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Eliminar Datos Operacionales
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-5 w-5" />
+                    Confirmar eliminación de datos
+                  </DialogTitle>
+                  <DialogDescription>
+                    ¿Está seguro que desea eliminar todos los datos operacionales? Esta acción 
+                    no se puede deshacer. Se eliminarán todos los proyectos, iniciativas, 
+                    snapshots, alertas y registros de telemetría.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setResetDialogOpen(false)}
+                    data-testid="button-cancel-reset"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    variant="destructive"
+                    onClick={() => resetDataMutation.mutate()}
+                    disabled={resetDataMutation.isPending}
+                    data-testid="button-confirm-reset"
+                  >
+                    {resetDataMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4 mr-2" />
+                    )}
+                    Sí, eliminar datos
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardContent>
       </Card>
     </div>

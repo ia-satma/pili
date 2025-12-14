@@ -2290,5 +2290,27 @@ export async function registerRoutes(
     }
   });
 
+  // ===== H7.5 Soft Data Reset Routes =====
+
+  // POST /api/admin/reset-data - Truncate operational tables (admin only)
+  app.post("/api/admin/reset-data", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      console.log("[Admin] Starting soft data reset...");
+      const result = await storage.resetOperationalData();
+      console.log(`[Admin] Soft data reset completed. Tables cleared: ${result.tablesCleared}`);
+      res.json({
+        success: true,
+        tablesCleared: result.tablesCleared,
+        message: `Se eliminaron los datos de ${result.tablesCleared} tablas operacionales`,
+      });
+    } catch (error) {
+      console.error("[Admin] Error during soft data reset:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Error al realizar el reset de datos operacionales" 
+      });
+    }
+  });
+
   return httpServer;
 }

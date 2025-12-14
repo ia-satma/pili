@@ -244,6 +244,9 @@ export interface IStorage {
   // H7.4 - Cost & Load Controls
   getMonthlyAgentCost(): Promise<number>;
   getRecentApiLatencies(limit: number): Promise<number[]>;
+
+  // H7.5 - Soft Data Reset
+  resetOperationalData(): Promise<{ tablesCleared: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1295,6 +1298,50 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
     
     return results.map(r => r.durationMs);
+  }
+
+  // H7.5 - Soft Data Reset (TRUNCATE operational tables, KEEP config tables)
+  async resetOperationalData(): Promise<{ tablesCleared: number }> {
+    // Order matters due to foreign key constraints - child tables first
+    const operationalTables = [
+      'council_reviews',
+      'agent_runs', 
+      'chaser_drafts',
+      'committee_packets',
+      'job_runs',
+      'jobs',
+      'export_artifacts',
+      'export_batches',
+      'governance_alerts',
+      'delta_events',
+      'assessment_entries',
+      'benefit_records',
+      'status_updates',
+      'initiative_snapshots',
+      'action_items',
+      'chat_messages',
+      'validation_issues',
+      'raw_artifacts',
+      'ingestion_batches',
+      'change_logs',
+      'project_updates',
+      'milestones',
+      'kpi_values',
+      'projects',
+      'initiatives',
+      'api_telemetry',
+      'agent_telemetry',
+      'job_telemetry',
+      'eval_runs',
+      'download_audit',
+    ];
+
+    // Use TRUNCATE with CASCADE for efficiency and FK handling
+    for (const tableName of operationalTables) {
+      await db.execute(sql`TRUNCATE TABLE ${sql.identifier(tableName)} CASCADE`);
+    }
+
+    return { tablesCleared: operationalTables.length };
   }
 }
 
