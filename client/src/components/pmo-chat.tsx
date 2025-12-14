@@ -13,6 +13,7 @@ import {
   Info,
   LogIn,
   Lock,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -299,6 +300,43 @@ export function PMOChat() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span className="text-sm text-muted-foreground">Consultando datos...</span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Error indicator from lastMeta */}
+          {lastMeta?.status === "ERROR" && (
+            <div className="flex gap-3" data-testid="chat-error-display">
+              <div className="h-8 w-8 rounded-md bg-destructive flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="h-4 w-4 text-destructive-foreground" />
+              </div>
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-3 max-w-[80%]">
+                <p className="text-sm text-destructive font-medium">
+                  {lastMeta.messageUser || "Error al procesar la consulta"}
+                </p>
+                {isAdminOrEditor && (
+                  <div className="mt-2">
+                    <button
+                      onClick={() => setShowErrorDetails(!showErrorDetails)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      data-testid="button-toggle-error-details"
+                    >
+                      <ChevronDown 
+                        className={cn(
+                          "h-3 w-3 transition-transform",
+                          showErrorDetails && "rotate-180"
+                        )}
+                      />
+                      Detalles
+                    </button>
+                    {showErrorDetails && (
+                      <div className="mt-2 p-2 bg-muted/50 rounded text-xs font-mono space-y-1" data-testid="error-details-panel">
+                        <p><span className="text-muted-foreground">Código:</span> {lastMeta.errorCode || "UNKNOWN"}</p>
+                        <p><span className="text-muted-foreground">Request ID:</span> {lastMeta.requestId}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -1667,6 +1667,35 @@ export async function registerRoutes(
       const finalStatus = hardErrorCount > 0 ? "failed" : "committed";
       await storage.updateIngestionBatchStatus(batch.id, finalStatus, hardErrorCount, softErrorCount, totalRows);
 
+      // Auto-enqueue jobs after successful ingestion
+      if (finalStatus === "committed") {
+        const jobsToEnqueue: Array<{type: string, payload: Record<string, unknown>}> = [
+          { type: "GENERATE_EXPORT_EXCEL", payload: { batchId: batch.id } },
+          { type: "GENERATE_COMMITTEE_PACKET", payload: { batchId: batch.id } },
+          { type: "DETECT_LIMBO", payload: {} },
+          { type: "DRAFT_CHASERS", payload: { batchId: batch.id } },
+        ];
+        
+        for (const job of jobsToEnqueue) {
+          const hasPending = await storage.hasPendingJobByType(job.type);
+          if (!hasPending) {
+            await enqueueJob(job.type as any, job.payload);
+            console.log(`[Ingestion] Auto-enqueued ${job.type} for batch ${batch.id}`);
+          }
+        }
+        
+        // GENERATE_SYSTEM_DOCS once per day max
+        const lastDocsJob = await storage.getLastSuccessfulJobByType("GENERATE_SYSTEM_DOCS");
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        if (!lastDocsJob || new Date(lastDocsJob.createdAt) < oneDayAgo) {
+          const hasPendingDocs = await storage.hasPendingJobByType("GENERATE_SYSTEM_DOCS");
+          if (!hasPendingDocs) {
+            await enqueueJob("GENERATE_SYSTEM_DOCS" as any, {});
+            console.log(`[Ingestion] Auto-enqueued GENERATE_SYSTEM_DOCS (daily)`);
+          }
+        }
+      }
+
       // Reload batch for response
       const updatedBatch = await storage.getIngestionBatch(batch.id);
 
@@ -2417,6 +2446,183 @@ export async function registerRoutes(
     } catch (error) {
       console.error("[Evals] Error fetching recent runs:", error);
       res.status(500).json({ message: "Error al obtener ejecuciones recientes" });
+    }
+  });
+
+  // ===== PILAR Output Activation Pack Routes =====
+
+  // GET /api/outputs/summary - Direct DB queries for accurate stats
+  app.get("/api/outputs/summary", isAuthenticated, isEditor, async (req: Request, res: Response) => {
+    try {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      
+      // Get queue stats from DB directly
+      const queueStats = await storage.getJobQueueStats(oneDayAgo);
+      
+      // Get latest successful jobs with artifact details
+      const latestExport = await storage.getLatestExportArtifact();
+      const latestPacket = await storage.getLatestCompletedCommitteePacket();
+      const chaserCount = await storage.getChaserDraftsCount();
+      const alertsCount = await storage.getOpenAlertsCount();
+      const latestDocs = await storage.getLatestSystemDocEntry();
+      
+      // Get failed jobs with error details
+      const failedJobsRaw = await storage.getFailedJobsInWindow(oneDayAgo);
+      const failedJobs = failedJobsRaw.map(j => ({
+        id: j.id,
+        jobType: j.jobType,
+        status: j.status,
+        errorCode: (j.payload as any)?.errorCode || null,
+        lastError: j.lastError || null,
+        requestId: (j.payload as any)?.requestId || null,
+        createdAt: j.createdAt,
+        updatedAt: j.updatedAt,
+      }));
+
+      // Build summary for job types (legacy compatibility)
+      const outputTypes = [
+        "GENERATE_EXPORT_EXCEL",
+        "GENERATE_COMMITTEE_PACKET",
+        "DETECT_LIMBO",
+        "DRAFT_CHASERS",
+        "GENERATE_SYSTEM_DOCS",
+      ];
+
+      const summary: Record<string, any> = {};
+      for (const jobType of outputTypes) {
+        const lastSuccess = await storage.getLastSuccessfulJobByType(jobType);
+        const hasPending = await storage.hasPendingJobByType(jobType);
+        
+        summary[jobType] = {
+          lastSuccess: lastSuccess ? {
+            id: lastSuccess.id,
+            completedAt: lastSuccess.updatedAt,
+            output: lastSuccess.payload,
+          } : null,
+          hasPending,
+        };
+      }
+
+      res.json({
+        summary,
+        queueStats,
+        failedJobs,
+        artifacts: {
+          export: latestExport ? {
+            id: latestExport.id,
+            fileName: latestExport.fileName,
+            fileSize: latestExport.fileSize,
+            createdAt: latestExport.createdAt,
+            downloadUrl: `/api/exports/${latestExport.batchId}/download`,
+          } : null,
+          packet: latestPacket ? {
+            id: latestPacket.id,
+            status: latestPacket.status,
+            createdAt: latestPacket.createdAt,
+            initiativeCount: (latestPacket.summaryJson as any)?.initiativeCount || 0,
+            viewUrl: `/api/committee/${latestPacket.id}`,
+          } : null,
+          docs: latestDocs ? {
+            id: latestDocs.id,
+            docType: latestDocs.docType,
+            createdAt: latestDocs.generatedAt,
+          } : null,
+        },
+        counts: {
+          openAlerts: alertsCount,
+          chaserDrafts: chaserCount,
+        },
+      });
+    } catch (error) {
+      console.error("[Outputs] Error fetching summary:", error);
+      res.status(500).json({ message: "Error al obtener resumen de outputs" });
+    }
+  });
+
+  // POST /api/outputs/rerun/:jobType - Re-run a specific job type (with dedupe)
+  app.post("/api/outputs/rerun/:jobType", isAuthenticated, isEditor, async (req: Request, res: Response) => {
+    try {
+      const { jobType } = req.params;
+      
+      const validTypes = [
+        "GENERATE_EXPORT_EXCEL",
+        "GENERATE_COMMITTEE_PACKET",
+        "DETECT_LIMBO",
+        "DRAFT_CHASERS",
+        "GENERATE_SYSTEM_DOCS",
+      ];
+
+      if (!validTypes.includes(jobType)) {
+        return res.status(400).json({ message: `Tipo de job inválido: ${jobType}` });
+      }
+
+      const hasPending = await storage.hasPendingJobByType(jobType);
+      if (hasPending) {
+        return res.status(409).json({ 
+          message: `Ya existe un job de tipo ${jobType} en cola o ejecutándose`,
+          alreadyQueued: true,
+        });
+      }
+
+      const jobId = await enqueueJob(jobType as any, {});
+      console.log(`[Outputs] Manual rerun enqueued: ${jobType}, jobId: ${jobId}`);
+
+      res.json({ 
+        success: true, 
+        jobId,
+        message: `Job ${jobType} encolado exitosamente`,
+      });
+    } catch (error) {
+      console.error("[Outputs] Error rerunning job:", error);
+      res.status(500).json({ message: "Error al encolar job" });
+    }
+  });
+
+  // ===== AI Brief Agent Route =====
+
+  // POST /api/agent/brief - Run AI brief on top initiatives
+  app.post("/api/agent/brief", isAuthenticated, isEditor, agentRateLimit, async (req: Request, res: Response) => {
+    try {
+      const snapshots = await storage.getLatestSnapshotPerInitiative();
+      
+      // Sort by ranking (lower = higher priority) or fall back to all if no ranking
+      let sorted = snapshots
+        .filter(s => s.ranking !== null)
+        .sort((a, b) => (a.ranking || 999) - (b.ranking || 999))
+        .slice(0, 3);
+      
+      // If no ranked initiatives, take the most recent ones
+      if (sorted.length === 0) {
+        sorted = snapshots.slice(0, 3);
+      }
+      
+      if (sorted.length === 0) {
+        return res.status(404).json({ message: "No hay iniciativas disponibles" });
+      }
+      
+      const { runAgent } = await import("./services/agentRunner");
+      
+      const results = [];
+      for (const snapshot of sorted) {
+        const result = await runAgent("CommitteeBriefAgent", snapshot.initiativeId);
+        results.push({
+          initiativeId: snapshot.initiativeId,
+          title: snapshot.title,
+          runId: result.runId,
+          status: result.status,
+          output: result.outputJson,
+          blockedReason: result.blockedReason,
+        });
+      }
+      
+      res.json({
+        success: true,
+        results,
+        hasBlocked: results.some(r => r.status === "BLOCKED"),
+      });
+    } catch (error) {
+      console.error("[Agent] Brief error:", error);
+      res.status(500).json({ message: error instanceof Error ? error.message : "Error al ejecutar brief IA" });
     }
   });
 

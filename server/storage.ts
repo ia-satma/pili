@@ -6,7 +6,7 @@ import {
   exportBatches, exportArtifacts, jobs, jobRuns, committeePackets, chaserDrafts,
   initiatives, initiativeSnapshots, deltaEvents, governanceAlerts, statusUpdates,
   agentDefinitions, agentVersions, agentRuns, councilReviews, systemDocs,
-  downloadAudit, evalRuns, apiTelemetry, agentTelemetry, jobTelemetry,
+  downloadAudit, evalRuns, apiTelemetry, agentTelemetry, jobTelemetry, outputRuns,
   type ExcelVersion, type InsertExcelVersion,
   type Project, type InsertProject,
   type Department, type InsertDepartment,
@@ -41,6 +41,7 @@ import {
   type ApiTelemetry, type InsertApiTelemetry,
   type AgentTelemetry, type InsertAgentTelemetry,
   type JobTelemetry, type InsertJobTelemetry,
+  type OutputRun, type InsertOutputRun,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray, count, lt, lte, or, isNull } from "drizzle-orm";
@@ -167,6 +168,7 @@ export interface IStorage {
   getStaleRunningJobs(staleMinutes: number): Promise<Job[]>;
   hasPendingJobByType(jobType: string): Promise<boolean>;
   getRecentJobs(limit?: number): Promise<Job[]>;
+  getLastSuccessfulJobByType(jobType: string): Promise<Job | undefined>;
 
   // H4 - Limbo Detection
   getInitiativesForLimboCheck(): Promise<{ initiative: Initiative; latestSnapshot: InitiativeSnapshot | null; latestStatusUpdate: StatusUpdate | null }[]>;
@@ -250,6 +252,21 @@ export interface IStorage {
 
   // Backfill initiatives from legacy projects table (for smoke test)
   backfillInitiativesFromProjects(): Promise<{ initiativesCreated: number; snapshotsCreated: number }>;
+
+  // Output Runs
+  createOutputRun(data: InsertOutputRun): Promise<OutputRun>;
+  updateOutputRun(id: number, data: Partial<OutputRun>): Promise<void>;
+  getOutputRunsByBatch(batchId: number): Promise<OutputRun[]>;
+  getLatestOutputRunByType(jobType: string): Promise<OutputRun | undefined>;
+
+  // PILAR Output Activation Pack - Direct DB queries
+  getJobQueueStats(since: Date): Promise<{ queued: number; running: number; succeeded: number; failed: number }>;
+  getLatestExportArtifact(): Promise<ExportArtifact | undefined>;
+  getLatestCompletedCommitteePacket(): Promise<CommitteePacket | undefined>;
+  getChaserDraftsCount(): Promise<number>;
+  getOpenAlertsCount(): Promise<number>;
+  getLatestSystemDocEntry(): Promise<SystemDoc | undefined>;
+  getFailedJobsInWindow(since: Date): Promise<Job[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -946,6 +963,16 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
+  async getLastSuccessfulJobByType(jobType: string): Promise<Job | undefined> {
+    const [job] = await db
+      .select()
+      .from(jobs)
+      .where(and(eq(jobs.jobType, jobType), eq(jobs.status, "SUCCEEDED")))
+      .orderBy(desc(jobs.createdAt))
+      .limit(1);
+    return job;
+  }
+
   async getInitiativesForLimboCheck(): Promise<{ initiative: Initiative; latestSnapshot: InitiativeSnapshot | null; latestStatusUpdate: StatusUpdate | null }[]> {
     const allInitiatives = await db.select().from(initiatives);
     const results: { initiative: Initiative; latestSnapshot: InitiativeSnapshot | null; latestStatusUpdate: StatusUpdate | null }[] = [];
@@ -1414,6 +1441,99 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { initiativesCreated, snapshotsCreated };
+  }
+
+  // Output Runs
+  async createOutputRun(data: InsertOutputRun): Promise<OutputRun> {
+    const [result] = await db.insert(outputRuns).values(data).returning();
+    return result;
+  }
+
+  async updateOutputRun(id: number, data: Partial<OutputRun>): Promise<void> {
+    await db.update(outputRuns).set(data).where(eq(outputRuns.id, id));
+  }
+
+  async getOutputRunsByBatch(batchId: number): Promise<OutputRun[]> {
+    return db.select().from(outputRuns).where(eq(outputRuns.batchId, batchId));
+  }
+
+  async getLatestOutputRunByType(jobType: string): Promise<OutputRun | undefined> {
+    const [result] = await db.select()
+      .from(outputRuns)
+      .where(eq(outputRuns.jobType, jobType))
+      .orderBy(desc(outputRuns.createdAt))
+      .limit(1);
+    return result;
+  }
+
+  // PILAR Output Activation Pack - Direct DB queries
+  async getJobQueueStats(since: Date): Promise<{ queued: number; running: number; succeeded: number; failed: number }> {
+    const results = await db.select({
+      status: jobs.status,
+      cnt: count(),
+    })
+      .from(jobs)
+      .where(sql`${jobs.createdAt} >= ${since}`)
+      .groupBy(jobs.status);
+
+    const stats = { queued: 0, running: 0, succeeded: 0, failed: 0 };
+    for (const r of results) {
+      if (r.status === "QUEUED") stats.queued = r.cnt;
+      else if (r.status === "RUNNING") stats.running = r.cnt;
+      else if (r.status === "SUCCEEDED") stats.succeeded = r.cnt;
+      else if (r.status === "FAILED" || r.status === "DEAD") stats.failed += r.cnt;
+    }
+    return stats;
+  }
+
+  async getLatestExportArtifact(): Promise<ExportArtifact | undefined> {
+    const [result] = await db.select()
+      .from(exportArtifacts)
+      .orderBy(desc(exportArtifacts.createdAt))
+      .limit(1);
+    return result;
+  }
+
+  async getLatestCompletedCommitteePacket(): Promise<CommitteePacket | undefined> {
+    const [result] = await db.select()
+      .from(committeePackets)
+      .where(eq(committeePackets.status, "COMPLETED"))
+      .orderBy(desc(committeePackets.createdAt))
+      .limit(1);
+    return result;
+  }
+
+  async getChaserDraftsCount(): Promise<number> {
+    const [result] = await db.select({ count: count() })
+      .from(chaserDrafts)
+      .where(eq(chaserDrafts.status, "DRAFT"));
+    return result?.count || 0;
+  }
+
+  async getOpenAlertsCount(): Promise<number> {
+    const [result] = await db.select({ count: count() })
+      .from(governanceAlerts)
+      .where(eq(governanceAlerts.status, "OPEN"));
+    return result?.count || 0;
+  }
+
+  async getLatestSystemDocEntry(): Promise<SystemDoc | undefined> {
+    const [result] = await db.select()
+      .from(systemDocs)
+      .orderBy(desc(systemDocs.generatedAt))
+      .limit(1);
+    return result;
+  }
+
+  async getFailedJobsInWindow(since: Date): Promise<Job[]> {
+    return db.select()
+      .from(jobs)
+      .where(and(
+        sql`${jobs.createdAt} >= ${since}`,
+        or(eq(jobs.status, "FAILED"), eq(jobs.status, "DEAD"))
+      ))
+      .orderBy(desc(jobs.createdAt))
+      .limit(10);
   }
 }
 

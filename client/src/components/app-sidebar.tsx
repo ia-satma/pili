@@ -18,6 +18,7 @@ import {
   Mail,
   Settings,
   Brain,
+  Activity,
 } from "lucide-react";
 import {
   Sidebar,
@@ -95,6 +96,12 @@ const managementItems = [
     title: "Chasers",
     url: "/chasers",
     icon: Mail,
+    requiredRole: null,
+  },
+  {
+    title: "Torre de Control",
+    url: "/outputs",
+    icon: Activity,
     requiredRole: null,
   },
   {

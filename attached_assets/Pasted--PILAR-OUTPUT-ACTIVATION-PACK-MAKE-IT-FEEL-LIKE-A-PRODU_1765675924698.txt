@@ -1,0 +1,83 @@
+# PILAR — OUTPUT ACTIVATION PACK (MAKE IT FEEL LIKE A PRODUCT) — COPY/PASTE
+
+RULES:
+1) Do NOT ask user to review code or run SQL. Self-verify and paste evidence.
+2) Objective: make the platform produce visible outputs automatically after Excel ingestion.
+3) Keep agents mostly disabled; rely on deterministic outputs first.
+
+====================================================
+TASK 1 — AUTO-ENQUEUE JOBS AFTER SUCCESSFUL INGESTION
+====================================================
+When an ingestion_batch is COMMITTED or COMMITTED_WITH_WARNINGS:
+Automatically enqueue these jobs (DB-backed, no cron required):
+- GENERATE_EXPORT_EXCEL
+- GENERATE_COMMITTEE_PACKET
+- DETECT_LIMBO (payload empty ok)
+- DRAFT_CHASERS
+Also enqueue GENERATE_SYSTEM_DOCS once per day max (dedupe).
+
+Requirements:
+- Idempotent: do not enqueue duplicates if a pending job of the same type exists for the same “run window”.
+- Persist a lightweight “output_run” record with links to generated artifacts.
+
+====================================================
+TASK 2 — CREATE A SINGLE “OUTPUTS CONTROL TOWER” PAGE
+====================================================
+Add UI route: /outputs (Admin/Editor)
+This page must show, in one screen:
+
+A) Last successful outputs (with timestamps + quick links):
+- latest export (download)
+- latest committee packet (view)
+- latest chaser drafts count (view)
+- latest alert count open (view)
+- last docs generation (view)
+
+B) Queue status:
+- jobs queued/running/failed in last 24h
+- a “Re-run Now” button for each job type (enqueue)
+
+C) Failure visibility:
+- if any job failed, show error_code + last_error + request_id (if available)
+
+====================================================
+TASK 3 — MAKE “COMMITTEE PACKET” AND “EXPORT” MEANINGFUL (MINIMUM CONTENT)
+====================================================
+- Committee packet must include for each initiative:
+  - title, owner/analyst, department, canonical_status
+  - scores (if available), open alerts, top 3 deltas
+  - recommended_action (rule-based, deterministic)
+- Export must include the same minimal columns and be downloadable.
+
+====================================================
+TASK 4 — AGENT VALUE WITHOUT TURNING THEM ALL ON
+====================================================
+Keep only CommitteeBriefAgent enabled.
+But add to /outputs a button:
+- “Generar Brief IA para el último packet”
+This runs CommitteeBriefAgent on 1–3 initiatives (limit) and stores results.
+If Council reviewers are BLOCKED due to missing keys, show that explicitly (no silent).
+
+====================================================
+DoD — SELF-VERIFY (MANDATORY)
+====================================================
+You must demonstrate in report (no user validation):
+
+1) Upload 1 Excel -> system auto-enqueues jobs
+2) Within a short time, /outputs shows:
+   - export available
+   - committee packet available
+   - chaser drafts count
+   - alerts count
+   - docs updated
+3) Paste:
+   - job_runs summary (last 10)
+   - links/endpoints hit for download/view
+4) Confirm no duplicates enqueued (dedupe works)
+
+STOP:
+Deliver Spanish report with:
+- files changed
+- proof of auto-run outputs
+- screenshot NOT required; paste endpoints/JSON outputs
+No questions to user.

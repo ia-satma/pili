@@ -9,6 +9,7 @@ interface InitiativeSummary {
   type: string | null;
   businessUnit: string | null;
   gate: string | null;
+  owner: string | null;
   scores: {
     value: number | null;
     effort: number | null;
@@ -86,6 +87,7 @@ export async function generateCommitteePacket(
         type: snapshot.projectType,
         businessUnit: snapshot.departmentName,
         gate: snapshot.status,
+        owner: snapshot.owner || null,
         scores: {
           value: snapshot.totalValor,
           effort: snapshot.totalEsfuerzo,

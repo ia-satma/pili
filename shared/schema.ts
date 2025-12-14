@@ -1030,6 +1030,22 @@ export type InsertAgentTelemetry = z.infer<typeof insertAgentTelemetrySchema>;
 export type JobTelemetry = typeof jobTelemetry.$inferSelect;
 export type InsertJobTelemetry = z.infer<typeof insertJobTelemetrySchema>;
 
+// Output Runs - tracks generated artifacts per ingestion batch
+export const outputRuns = pgTable("output_runs", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  batchId: integer("batch_id").references(() => ingestionBatches.id),
+  jobId: integer("job_id").references(() => jobs.id),
+  jobType: text("job_type").notNull(),
+  artifactId: integer("artifact_id"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertOutputRunSchema = createInsertSchema(outputRuns).omit({ id: true });
+export type OutputRun = typeof outputRuns.$inferSelect;
+export type InsertOutputRun = z.infer<typeof insertOutputRunSchema>;
+
 // Traffic light status enum for frontend
 export type TrafficLightStatus = 'green' | 'yellow' | 'red' | 'gray';
 
