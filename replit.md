@@ -39,6 +39,11 @@ A Project Management Office (PMO) dashboard designed for managing continuous imp
 -   **PMO Scoring System**: Prioritization matrix (Value/Effort) for projects, including `Total Valor`, `Total Esfuerzo`, `Puntaje Total`, and `Ranking`, visualized in a quadrant (Quick Wins, Big Bets, Fill-Ins, Money Pit).
 -   **Evidence Pack & Agent Fleet**: Infrastructure for AI agents to gather and process project evidence for various purposes (e.g., Committee Briefs, Risk Explanations).
 -   **Rate Limiting & Evidence Caps**: Implemented for API endpoints and evidence packs to ensure system stability and performance.
+-   **Telemetry & Observability**: API, agent, and job telemetry tables with automatic metric capture via middleware.
+-   **Agent Health Monitoring**: Health endpoints showing API key status, smoke test capability, and agent fleet health.
+-   **Quality Gates**: Daily evaluation runs with regression detection (>20% failure threshold triggers EVAL_REGRESSION alert).
+-   **Cost & Load Guardrails**: Soft alerts for monthly AI cost ($100) and P95 API latency (2000ms) thresholds.
+-   **Soft Data Reset**: Admin-only endpoint to truncate operational data while preserving configuration tables.
 
 ## External Dependencies
 -   **PostgreSQL (Neon)**: Cloud-hosted relational database for all persistent data storage.
