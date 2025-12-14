@@ -28,6 +28,7 @@ import Chasers from "@/pages/chasers";
 import System from "@/pages/system";
 import Orchestrator from "@/pages/orchestrator";
 import Outputs from "@/pages/outputs";
+import DataCleaning from "@/pages/data-cleaning";
 
 function ProtectedRouter() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -64,6 +65,7 @@ function ProtectedRouter() {
       <Route path="/orchestrator" component={Orchestrator} />
       <Route path="/system" component={System} />
       <Route path="/admin/users" component={AdminUsers} />
+      <Route path="/admin/data-cleaning" component={DataCleaning} />
       <Route component={NotFound} />
     </Switch>
   );

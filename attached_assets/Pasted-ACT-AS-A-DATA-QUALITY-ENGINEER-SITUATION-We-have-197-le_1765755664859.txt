@@ -1,0 +1,36 @@
+ACT AS A DATA QUALITY ENGINEER.
+
+**SITUATION:** We have 197+ legacy projects imported from Excel. The data is "dirty" (mixed types, missing fields, invalid dates).
+**GOAL:** Clean the existing data without forcing users to re-enter everything.
+**STRATEGY:** Implement a "Data Health Validator" that nags the user until 100% of projects are clean.
+
+**STEP 1: DATABASE UPGRADE**
+Modify `server/db/schema.ts` for the `projects` table:
+1.  Add column `data_health_score` (integer, 0-100).
+2.  Add column `validation_errors` (jsonb) to store specific error messages (e.g., `{"budget": "Expected number, got string"}`).
+3.  Add column `is_clean` (boolean, default false).
+
+**STEP 2: THE VALIDATOR ENGINE (The Audit Script)**
+Create `server/services/data-validator.ts`.
+* **Schema:** Define a strict Zod schema for a "Perfect Project" (Budget > 0, StartDate < EndDate, Status in Enum).
+* **Logic:** Create a function `runFullAudit()` that:
+    1.  Fetches all projects.
+    2.  Parses each against the Zod schema.
+    3.  If fails, capture exact field errors.
+    4.  Update the project's `validation_errors` and set `is_clean = false`.
+* **Trigger:** Run this audit automatically after every Excel upload or manual update.
+
+**STEP 3: THE "NAGGER" UI (The Dashboard Alert)**
+* Create a persistent "System Health Bar" at the top of the Dashboard.
+* Logic: `SELECT count(*) FROM projects WHERE is_clean = false`.
+* Message: "⚠️ Atención: [X] Proyectos tienen errores de datos. La analítica no será precisa hasta corregirlos."
+* Action Button: "Ir al Centro de Limpieza".
+
+**STEP 4: THE CLEANING CENTER (Rapid Fix UI)**
+Create a page `/admin/data-cleaning`.
+* **View:** A Data Grid (Table) showing ONLY the projects with `is_clean = false`.
+* **Highlight:** Visually highlight the specific cells that failed validation (Red border).
+* **Interaction:** Allow **Inline Editing**. User clicks the red cell, types the correct value, hits Enter -> System re-validates that row immediately.
+
+**OUTPUT:**
+Generate the Zod Schema for validation, the `runFullAudit` function, and the React code for the "Health Bar" component.

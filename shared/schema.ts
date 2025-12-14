@@ -123,6 +123,11 @@ export const projects = pgTable("projects", {
   fechaInvalida: boolean("fecha_invalida").default(false),
   catalogoPendienteMapeo: boolean("catalogo_pendiente_mapeo").default(false),
   
+  // Data Health Validator fields
+  dataHealthScore: integer("data_health_score").default(0), // 0-100 score
+  validationErrors: jsonb("validation_errors").$type<Record<string, string>>().default({}), // Field-level errors
+  isClean: boolean("is_clean").default(false), // True if no validation errors
+  
   // Tracking
   sourceVersionId: integer("source_version_id").references(() => excelVersions.id),
   isActive: boolean("is_active").default(true),

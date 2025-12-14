@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiCard, KpiCardSkeleton } from "@/components/kpi-card";
 import { TrafficLight, calculateTrafficLight } from "@/components/traffic-light";
 import { FilterBar } from "@/components/filter-bar";
+import { HealthBar } from "@/components/health-bar";
 import { useFilters } from "@/contexts/filter-context";
 import {
   BarChart,
@@ -174,6 +175,7 @@ export default function Dashboard() {
             Vista general de proyectos de mejora continua
           </p>
         </div>
+        <HealthBar />
         <FilterBar />
         {hasActiveFilters && (
           <p className="text-sm text-muted-foreground">

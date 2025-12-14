@@ -21,6 +21,7 @@ import { getCurrentPortfolioView } from "./services/portfolioView";
 import { routePmoQuery, isDeterministicRoute } from "./services/pmoQueryRouter";
 import { generateDeterministicAnswer, generateOwnerDelayedProjectsAnswer, type OwnerDelayedProjectsAnswer } from "./services/pmoDeterministicAnswer";
 import { isCircuitOpen, recordSuccess, recordFailure, getCircuitStatus, getLlmTimeoutMs, withTimeout } from "./services/circuitBreaker";
+import { runFullAudit, getHealthStats, getDirtyProjects, validateAndUpdateProject } from "./services/data-validator";
 
 // Validation schemas
 const sendMessageSchema = z.object({
@@ -721,6 +722,64 @@ export async function registerRoutes(
     }
   });
 
+  // ===== PATCH SINGLE PROJECT (with revalidation) =====
+  app.patch("/api/projects/:id", isAuthenticated, isEditor, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const updateData = req.body;
+      await storage.updateProject(id, updateData);
+      
+      // Re-validate project after update
+      const validationResult = await validateAndUpdateProject(id);
+      
+      res.json({ 
+        success: true, 
+        message: "Proyecto actualizado",
+        validation: validationResult
+      });
+    } catch (error) {
+      console.error("Project update error:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Error al actualizar proyecto" 
+      });
+    }
+  });
+
+  // ===== DATA HEALTH ENDPOINTS =====
+  app.get("/api/health/stats", isAuthenticated, async (req, res) => {
+    try {
+      const stats = await getHealthStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Health stats error:", error);
+      res.status(500).json({ message: "Error al obtener estadísticas de salud" });
+    }
+  });
+
+  app.get("/api/health/dirty-projects", isAuthenticated, async (req, res) => {
+    try {
+      const dirtyProjects = await getDirtyProjects();
+      res.json(dirtyProjects);
+    } catch (error) {
+      console.error("Dirty projects error:", error);
+      res.status(500).json({ message: "Error al obtener proyectos con errores" });
+    }
+  });
+
+  app.post("/api/health/audit", isAuthenticated, isEditor, async (req, res) => {
+    try {
+      const auditResult = await runFullAudit();
+      res.json(auditResult);
+    } catch (error) {
+      console.error("Full audit error:", error);
+      res.status(500).json({ message: "Error al ejecutar auditoría" });
+    }
+  });
+
   // ===== EXPORT EXCEL =====
   app.post("/api/projects/export", async (req, res) => {
     try {
@@ -1032,6 +1091,14 @@ export async function registerRoutes(
         parsed.proyectosCreados + parsed.proyectosBorradorIncompleto,
         errorMessages
       );
+      
+      // Run data health audit after upload
+      try {
+        await runFullAudit();
+        console.log("[Excel Upload] Data health audit completed");
+      } catch (auditError) {
+        console.error("[Excel Upload] Data health audit failed:", auditError);
+      }
       
       // Return new enhanced response format
       res.json({
