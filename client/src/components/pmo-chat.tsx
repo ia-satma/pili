@@ -26,9 +26,20 @@ import type { ChatMessage, ExcelVersion } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 
+interface ChatResponseMeta {
+  requestId: string;
+  mode: "DETERMINISTIC" | "LLM" | "ERROR";
+  route?: string;
+  latencyMs?: number;
+  errorCode?: string;
+  status?: string;
+  messageUser?: string;
+}
+
 interface ChatResponse {
   message: ChatMessage;
   sourceVersion?: ExcelVersion;
+  meta?: ChatResponseMeta;
 }
 
 interface ChatMessagesResponse {
@@ -37,10 +48,14 @@ interface ChatMessagesResponse {
 
 export function PMOChat() {
   const [input, setInput] = useState("");
+  const [lastMeta, setLastMeta] = useState<ChatResponseMeta | null>(null);
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+  
+  const isAdminOrEditor = user?.role === "admin" || user?.role === "editor";
 
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery<ChatMessagesResponse>({
     queryKey: ["/api/chat/messages"],
@@ -57,9 +72,15 @@ export function PMOChat() {
       const response = await apiRequest("POST", "/api/chat/send", { content });
       return response.json() as Promise<ChatResponse>;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/chat/messages"] });
       setInput("");
+      if (data.meta) {
+        setLastMeta(data.meta);
+        if (data.meta.status === "ERROR") {
+          setShowErrorDetails(false);
+        }
+      }
     },
     onError: (error: Error) => {
       toast({

@@ -18,6 +18,9 @@ import { telemetryMiddleware } from "./middleware/telemetryMiddleware";
 import { runOrchestrator } from "./services/orchestrator";
 import { normalizeKey, normalizedEquals, normalizedIncludes } from "./services/normalization";
 import { getCurrentPortfolioView } from "./services/portfolioView";
+import { routePmoQuery, isDeterministicRoute } from "./services/pmoQueryRouter";
+import { generateDeterministicAnswer } from "./services/pmoDeterministicAnswer";
+import { isCircuitOpen, recordSuccess, recordFailure, getCircuitStatus, getLlmTimeoutMs, withTimeout } from "./services/circuitBreaker";
 
 // Validation schemas
 const sendMessageSchema = z.object({
@@ -1286,6 +1289,9 @@ export async function registerRoutes(
   });
 
   app.post("/api/chat/send", isAuthenticated, async (req, res) => {
+    const requestId = crypto.randomUUID().slice(0, 8);
+    const startTime = Date.now();
+    
     try {
       const parseResult = sendMessageSchema.safeParse(req.body);
       
@@ -1304,46 +1310,106 @@ export async function registerRoutes(
         citations: [],
       });
       
-      // Get context for PMO Bot using single source of truth
-      const portfolioView = await getCurrentPortfolioView();
+      // Route the query
+      const routeResult = routePmoQuery(content);
       const latestVersion = await storage.getLatestExcelVersion();
       
-      // Convert PortfolioItems to Project-compatible format for ChatContext
-      const projectsForContext = portfolioView.items.map(item => ({
-        id: item.id,
-        projectName: item.title,
-        status: item.status,
-        departmentName: item.departmentName,
-        responsible: item.responsible,
-        sponsor: item.sponsor,
-        percentComplete: item.percentComplete,
-        startDate: item.startDate,
-        endDateEstimated: item.endDateEstimated,
-        endDateEstimatedTbd: item.endDateEstimatedTbd,
-        priority: item.priority,
-        description: item.description,
-        parsedStatus: item.parsedStatus,
-        parsedNextSteps: item.parsedNextSteps,
-        estatusAlDia: item.estatusAlDia,
-        extraFields: item.extraFields,
-      })) as Project[];
+      let response: { content: string; citations: unknown[] };
+      let responseMode: "DETERMINISTIC" | "LLM" | "ERROR" = "LLM";
+      let errorCode: string | null = null;
       
-      const context: ChatContext = {
-        projects: projectsForContext,
-        versionId: latestVersion?.id || null,
-        versionFileName: latestVersion?.fileName || null,
-      };
+      // Check if this is a deterministic route (DB-only answer)
+      if (isDeterministicRoute(routeResult.route)) {
+        try {
+          const deterministicAnswer = await generateDeterministicAnswer(routeResult);
+          response = {
+            content: deterministicAnswer.content,
+            citations: deterministicAnswer.citations,
+          };
+          responseMode = "DETERMINISTIC";
+          console.log(`[PMO-Bot] Deterministic answer for route=${routeResult.route}, matched=${deterministicAnswer.matchedItems}`);
+        } catch (dbError) {
+          console.error(`[PMO-Bot] Deterministic answer error:`, dbError);
+          // Fall back to LLM if deterministic fails
+          responseMode = "LLM";
+          response = { content: "", citations: [] };
+        }
+      } else {
+        response = { content: "", citations: [] };
+      }
       
-      // Generate response
-      let response;
-      try {
-        response = await generatePMOBotResponse(content, context);
-      } catch (aiError) {
-        console.error("AI error:", aiError);
-        response = {
-          content: "Lo siento, no pude procesar tu consulta en este momento. Por favor intenta de nuevo.",
-          citations: [],
-        };
+      // If not deterministic or deterministic failed, use LLM
+      if (responseMode === "LLM") {
+        // Check circuit breaker
+        if (isCircuitOpen()) {
+          const circuitStatus = getCircuitStatus();
+          console.warn(`[PMO-Bot] Circuit breaker OPEN, ${circuitStatus.secondsUntilReset}s until reset`);
+          errorCode = "CIRCUIT_OPEN";
+          responseMode = "ERROR";
+          response = {
+            content: `El servicio de IA está temporalmente no disponible. Por favor intenta de nuevo en ${circuitStatus.secondsUntilReset} segundos.`,
+            citations: [],
+          };
+        } else {
+          // Get context for PMO Bot using single source of truth
+          const portfolioView = await getCurrentPortfolioView();
+          
+          // Convert PortfolioItems to Project-compatible format for ChatContext
+          const projectsForContext = portfolioView.items.map(item => ({
+            id: item.id,
+            projectName: item.title,
+            status: item.status,
+            departmentName: item.departmentName,
+            responsible: item.responsible,
+            sponsor: item.sponsor,
+            percentComplete: item.percentComplete,
+            startDate: item.startDate,
+            endDateEstimated: item.endDateEstimated,
+            endDateEstimatedTbd: item.endDateEstimatedTbd,
+            priority: item.priority,
+            description: item.description,
+            parsedStatus: item.parsedStatus,
+            parsedNextSteps: item.parsedNextSteps,
+            estatusAlDia: item.estatusAlDia,
+            extraFields: item.extraFields,
+          })) as Project[];
+          
+          const context: ChatContext = {
+            projects: projectsForContext,
+            versionId: latestVersion?.id || null,
+            versionFileName: latestVersion?.fileName || null,
+          };
+          
+          // Try LLM with timeout and retry
+          let llmSuccess = false;
+          for (let attempt = 1; attempt <= 2 && !llmSuccess; attempt++) {
+            try {
+              const llmResponse = await withTimeout(
+                generatePMOBotResponse(content, context),
+                getLlmTimeoutMs(),
+                "LLM_TIMEOUT"
+              );
+              response = llmResponse;
+              responseMode = "LLM";
+              llmSuccess = true;
+              recordSuccess();
+              console.log(`[PMO-Bot] LLM response success on attempt ${attempt}`);
+            } catch (llmError) {
+              const errMsg = llmError instanceof Error ? llmError.message : String(llmError);
+              console.error(`[PMO-Bot] LLM attempt ${attempt} failed:`, errMsg);
+              
+              if (attempt === 2) {
+                recordFailure();
+                errorCode = errMsg === "LLM_TIMEOUT" ? "LLM_TIMEOUT" : "LLM_ERROR";
+                responseMode = "ERROR";
+                response = {
+                  content: "Lo siento, no pude procesar tu consulta en este momento. El servicio de IA está experimentando problemas. Por favor intenta de nuevo en unos minutos.",
+                  citations: [],
+                };
+              }
+            }
+          }
+        }
       }
       
       // Save assistant message
@@ -1354,13 +1420,45 @@ export async function registerRoutes(
         versionContext: latestVersion?.id,
       });
       
+      // Calculate latency
+      const latencyMs = Date.now() - startTime;
+      
+      // Return response with metadata
       res.json({
         message: assistantMessage,
         sourceVersion: latestVersion,
+        meta: {
+          requestId,
+          mode: responseMode,
+          route: routeResult.route,
+          latencyMs,
+          ...(errorCode && { errorCode }),
+          ...(responseMode === "ERROR" && { 
+            status: "ERROR",
+            messageUser: response.content,
+          }),
+        },
       });
     } catch (error) {
       console.error("Chat send error:", error);
-      res.status(500).json({ message: "Error sending message" });
+      const errMsg = error instanceof Error ? error.message : String(error);
+      res.status(200).json({ 
+        message: {
+          id: -1,
+          role: "assistant",
+          content: "Ocurrió un error inesperado. Por favor intenta de nuevo.",
+          citations: [],
+          createdAt: new Date().toISOString(),
+        },
+        meta: {
+          requestId,
+          mode: "ERROR",
+          errorCode: "INTERNAL_ERROR",
+          status: "ERROR",
+          messageUser: "Ocurrió un error inesperado. Por favor intenta de nuevo.",
+          errorDetail: errMsg,
+        },
+      });
     }
   });
 

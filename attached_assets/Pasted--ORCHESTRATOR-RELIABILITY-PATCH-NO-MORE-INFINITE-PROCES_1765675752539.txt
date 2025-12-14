@@ -1,0 +1,107 @@
+# ORCHESTRATOR RELIABILITY PATCH — NO MORE INFINITE "PROCESANDO" (COPY/PASTE)
+
+ROLE: Lead Engineer (Reliability)
+RULES:
+1) Do NOT ask the user to review code or run SQL. You must self-verify and paste evidence.
+2) Fix must guarantee UI never stays stuck in "Procesando..." indefinitely.
+3) Orchestrator must respond fast even with NO initiative context and even if LLM keys are missing.
+4) Always return structured JSON with request_id and status.
+
+GOAL
+Fix Orquestador PMO (/orchestrator UI + /api/orchestrator/bounce) so it ALWAYS returns a response:
+- If initiative_id is missing: return INSUFFICIENT_EVIDENCE quickly (deterministic, no LLM).
+- If LLM fails/keys missing/rate limit/timeout: return ERROR with error_code + request_id.
+- UI must stop spinner and show the error (no infinite loading).
+
+====================================================
+TASK 1 — SERVER: HARD TIMEOUTS + CIRCUIT BREAKER FOR LLM PATH
+====================================================
+In server/services/orchestrator.ts (or current orchestrator service):
+1) Add request_id = uuid for every call and include it in ALL responses.
+2) If initiative_id is NOT provided:
+   - Do NOT call LLM.
+   - Return 200 in <200ms with:
+     {
+       "status":"INSUFFICIENT_EVIDENCE",
+       "mode":"NO_PROJECT_CONTEXT",
+       "request_id":"...",
+       "summary":"No hay contexto de iniciativa seleccionado.",
+       "questions_to_clarify":[...],
+       "next_actions":[...],
+       "evidence_refs":[]
+     }
+   - Questions_to_clarify must include: stakeholder, scope, legal jurisdictions, integration needs, timeline, approval flow.
+
+3) If initiative_id IS provided:
+   - Build evidencePack (DB-only) with existing caps.
+   - Then (only then) you may call LLM.
+   - Wrap LLM call with AbortController timeout (10s hard timeout).
+   - Retry once on 429/5xx with backoff (e.g., 500ms).
+   - Add circuit breaker: if 3 consecutive failures in 2 minutes, skip LLM for 60s and return:
+     {status:"ERROR", error_code:"LLM_UNAVAILABLE", request_id, message_user:"..."}
+
+4) On ANY server error:
+   - Return 200 (not 500) with:
+     {
+       "status":"ERROR",
+       "error_code":"TIMEOUT|RATE_LIMIT|KEY_MISSING|DB_ERROR|UNKNOWN",
+       "request_id":"...",
+       "message_user":"No pude procesar la solicitud por <razón>. Intenta de nuevo o selecciona una iniciativa para usar evidencia."
+     }
+   - Also persist api_telemetry.error_code + request_id.
+   - If LLM path was attempted, persist agent_telemetry with status ERROR/BLOCKED.
+
+====================================================
+TASK 2 — SERVER: ENSURE ENDPOINT NEVER HANGS
+====================================================
+In server/routes.ts:
+- Ensure /api/orchestrator/bounce always ends with res.json(...) in all branches.
+- Ensure RBAC errors return JSON immediately (not hanging).
+- Ensure rate limiter returns JSON with error_code="RATE_LIMIT" and request_id (generate one).
+
+====================================================
+TASK 3 — CLIENT: GUARANTEED REQUEST TIMEOUT + ERROR UI (NO INFINITE SPINNER)
+====================================================
+In client/src/pages/orchestrator.tsx:
+1) Add AbortController with 15s timeout for fetch call.
+2) Ensure finally{} always clears loading state.
+3) Handle non-200 and JSON status=ERROR:
+   - Show message_user + request_id (small)
+   - Provide "Reintentar" button that resubmits
+4) If response is INSUFFICIENT_EVIDENCE:
+   - Render questions_to_clarify + next_actions as the “Resumen” (so it never stays empty)
+
+====================================================
+TASK 4 — ADD A FAST HEALTH CHECK
+====================================================
+Add GET /api/orchestrator/health (no RBAC or Editor-only, your call):
+Returns { ok:true, time:..., llmKeys:{openai:true/false, anthropic:true/false, google:true/false} }
+UI can optionally show this in a small banner.
+
+====================================================
+TASK 5 — SELF-VERIFICATION (MANDATORY, NO USER VALIDATION)
+====================================================
+You must prove it works with 3 tests and paste outputs in final report:
+
+A) No initiative selected:
+- Call /api/orchestrator/bounce with mode=NEXT_ACTIONS and initiative_id=null
+- Must return in <200ms with status=INSUFFICIENT_EVIDENCE and questions_to_clarify
+- UI must show those questions in “Resumen” (no spinner stuck)
+
+B) With initiative selected but force LLM failure (simulate missing key or throw):
+- Must return status=ERROR with error_code and request_id (not generic)
+- UI must stop spinner and show error
+
+C) With initiative selected and normal path (if keys exist):
+- Must return status=OK with summary and evidence_refs
+
+Also show telemetry evidence:
+- One api_telemetry row for each test (with error_code where applicable)
+
+STOP:
+After patch, STOP and provide Spanish report:
+- files changed
+- sample JSON responses for A/B/C (paste)
+- confirm UI no longer hangs (describe)
+- telemetry proof
+No questions to the user.

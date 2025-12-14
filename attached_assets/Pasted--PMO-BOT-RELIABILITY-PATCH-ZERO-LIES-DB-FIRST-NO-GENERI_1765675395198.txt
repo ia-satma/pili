@@ -1,0 +1,114 @@
+# PMO BOT RELIABILITY PATCH — ZERO-LIES, DB-FIRST, NO-GENERIC-FAILURES (COPY/PASTE)
+
+ROLE: Lead Engineer (Reliability)
+RULES:
+1) Do NOT ask the user to review code or run SQL. Self-verify and paste evidence.
+2) PMO Bot must never fail with a generic message without logging root cause + returning an error_code.
+3) For simple queries (counts/lists by owner/analyst/department/status), DO NOT call LLM. Use DB-only deterministic answers.
+
+GOAL
+Fix PMO Bot intermittent failures and make it deterministic + explainable:
+- “cuántos proyectos tiene marina” must ALWAYS work if DB has data.
+- If LLM fails, respond with clear reason + request_id, not “intenta de nuevo”.
+
+====================================================
+TASK 1 — ADD PMO QUERY ROUTER (DETERMINISTIC)
+====================================================
+Implement server/services/pmoQueryRouter.ts:
+Input: { message: string }
+Output: { route: "COUNT_BY_OWNER"|"LIST_BY_OWNER"|"FALLBACK_LLM", params: {...}, normalizedKey?: string }
+
+Rules:
+- Use normalizeKey() already implemented.
+- Patterns (Spanish):
+  A) /cu[aá]ntos proyectos tiene (.+)/i  => COUNT_BY_OWNER
+  B) /(qu[eé]|que) proyectos tiene (.+)/i => LIST_BY_OWNER
+  C) /(proyectos vencidos|atrasados) de (.+)/i => optional future; ignore for now if risky
+
+Extract ownerName, compute owner_key = normalizeKey(ownerName).
+
+====================================================
+TASK 2 — DB-ONLY ANSWERS FOR ROUTED QUERIES
+====================================================
+Implement server/services/pmoDeterministicAnswer.ts using portfolioView as the single source of truth:
+- COUNT_BY_OWNER:
+  - Filter portfolioView by owner_key (or analyst_key if your domain uses analyst)
+  - Return count + short list of titles (optional)
+- LIST_BY_OWNER:
+  - Return list with: title, id, canonical_status, department, end_date if present
+
+IMPORTANT:
+- Never invent. If no matches: respond OK with count=0 and suggest closest matches (optional).
+- MUST be stable under accents: “Marina Dávila” == “Marina Davila”.
+
+====================================================
+TASK 3 — PMO BOT ENDPOINT: ALWAYS RETURNS STRUCTURED RESPONSE
+====================================================
+Update /api/chat/send (or current PMO endpoint) behavior:
+1) Run pmoQueryRouter(message)
+2) If deterministic route:
+   - Use pmoDeterministicAnswer
+   - Return 200 with JSON:
+     {
+       "status":"OK",
+       "mode":"DETERMINISTIC",
+       "answer":"...",
+       "meta":{ "owner_key":"...", "count":N, "matched":N }
+     }
+   - DO NOT call LLM
+3) Else fallback:
+   - Use existing DB-grounded approach (portfolioView/evidencePack)
+   - Add:
+     - timeout (e.g., 10s)
+     - retry once with backoff on transient errors (429/5xx)
+     - circuit breaker: if 3 failures in 2 min, return BLOCKED with error_code=LLM_UNAVAILABLE and do not call LLM for 60s
+   - Return JSON:
+     { "status":"OK", "mode":"LLM", "answer":"...", "request_id":"..." }
+
+On any error:
+- Return 200 (not 500) with:
+  {
+    "status":"ERROR",
+    "error_code":"RATE_LIMIT|TIMEOUT|LLM_KEY_MISSING|DB_ERROR|UNKNOWN",
+    "request_id":"uuid",
+    "message_user":"No pude procesar la solicitud por <razón>. Intenta nuevamente o formula la consulta como: 'cuántos proyectos tiene <nombre>'."
+  }
+- Persist api_telemetry row with error_code + request_id
+- Persist agent_telemetry if LLM path was used
+
+====================================================
+TASK 4 — FRONTEND: SHOW REAL ERROR CODE (NOT GENERIC)
+====================================================
+Update PMO Bot UI:
+- If response.status == ERROR:
+  - Show message_user
+  - Show small “Detalles” expander with error_code + request_id (admin/editor only)
+
+====================================================
+TASK 5 — SELF-VERIFICATION (MANDATORY)
+====================================================
+You must demonstrate with evidence in final report:
+
+A) Deterministic success:
+- Query: “cuantos proyectos tiene marina”
+- Must return mode=DETERMINISTIC and a numeric count
+- Repeat 3 times in a row; must succeed 3/3
+
+B) Accent normalization:
+- Query: “cuantos proyectos tiene marina dávila”
+- Must match same result as “marina davila”
+
+C) LLM fallback failure safety:
+- Temporarily simulate LLM failure (missing key or forced throw) and show:
+  - endpoint returns status=ERROR with error_code and request_id
+  - NOT a generic “intenta de nuevo”
+
+D) Telemetry:
+- Show api_telemetry rows exist for these calls, including error_code when applicable.
+
+STOP:
+After patch, STOP and provide Spanish report:
+- files changed
+- examples of JSON responses (A,B,C)
+- telemetry proof
+No questions to the user.
