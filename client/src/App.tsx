@@ -31,21 +31,7 @@ import Outputs from "@/pages/outputs";
 import DataCleaning from "@/pages/data-cleaning";
 
 function ProtectedRouter() {
-  const { isAuthenticated, isLoading } = useAuth();
-  const [location] = useLocation();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated && location !== "/login") {
-    return <Redirect to="/login" />;
-  }
-
+  // TEMP: Auth disabled for testing
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
@@ -73,20 +59,10 @@ function ProtectedRouter() {
 
 function AppContent() {
   const [location] = useLocation();
-  const { isAuthenticated, isLoading } = useAuth();
 
+  // TEMP: Auth disabled for testing - redirect login to dashboard
   if (location === "/login") {
-    if (isLoading) {
-      return (
-        <div className="flex items-center justify-center h-screen">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      );
-    }
-    if (isAuthenticated) {
-      return <Redirect to="/" />;
-    }
-    return <Login />;
+    return <Redirect to="/" />;
   }
 
   const style = {
