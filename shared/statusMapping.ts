@@ -28,6 +28,7 @@ const STATUS_MAP: Record<string, CanonicalStatus> = {
   'proyecto nuevo': 'OPEN',
   'new': 'OPEN',
   'open': 'OPEN',
+  'nuevo arrancado': 'OPEN',
   
   // IN_PROGRESS variants
   'desarrollo': 'IN_PROGRESS',
@@ -38,6 +39,12 @@ const STATUS_MAP: Record<string, CanonicalStatus> = {
   'in progress': 'IN_PROGRESS',
   'active': 'IN_PROGRESS',
   'activo': 'IN_PROGRESS',
+  'análisis': 'IN_PROGRESS',
+  'analisis': 'IN_PROGRESS',
+  'pruebas': 'IN_PROGRESS',
+  'testing': 'IN_PROGRESS',
+  'implementación': 'IN_PROGRESS',
+  'implementacion': 'IN_PROGRESS',
   
   // ON_HOLD variants
   'pausa': 'ON_HOLD',
