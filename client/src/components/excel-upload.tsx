@@ -83,15 +83,19 @@ export function ExcelUpload() {
         throw err;
       }
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setLastUpload(data);
       setUploadProgress(100);
       setShowAllWarnings(false);
       
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/versions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/kpis"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+      // Force refresh of ALL query variants regardless of active filters
+      // Using exact: false to match queries like ["/api/dashboard", "filter=xyz"]
+      await queryClient.invalidateQueries({ queryKey: ["/api/dashboard"], exact: false });
+      await queryClient.invalidateQueries({ queryKey: ["/api/scoring/matrix"], exact: false });
+      await queryClient.invalidateQueries({ queryKey: ["/api/projects"], exact: false });
+      await queryClient.invalidateQueries({ queryKey: ["/api/versions"], exact: false });
+      await queryClient.invalidateQueries({ queryKey: ["/api/kpis"], exact: false });
+      await queryClient.invalidateQueries({ queryKey: ["/api/initiatives"], exact: false });
 
       const totalProcessed = data.proyectosCreados + data.proyectosBorradorIncompleto;
       toast({
