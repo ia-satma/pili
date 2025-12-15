@@ -45,6 +45,7 @@ import {
   Download,
 } from "lucide-react";
 import type { Project } from "@shared/schema";
+import { CreateProjectDialog } from "@/components/create-project-dialog";
 
 const STATUS_OPTIONS = ["No Iniciado", "En Progreso", "Completado", "En Espera", "Cancelado"] as const;
 type StatusOption = typeof STATUS_OPTIONS[number];
@@ -1565,6 +1566,7 @@ export function SmartProjectGrid() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <CreateProjectDialog />
           <Button
             variant="destructive"
             size="sm"
