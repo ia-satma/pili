@@ -12,6 +12,10 @@ import {
   Trash2,
   Loader2,
   ShieldCheck,
+  Gem,
+  Skull,
+  Target,
+  Sparkles,
 } from "lucide-react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
@@ -131,6 +135,33 @@ interface HealthStats {
   averageScore: number;
 }
 
+interface PortfolioInsight {
+  id: number;
+  projectName: string;
+  departmentName: string | null;
+  capexTier: string | null;
+  financialImpact: string | null;
+  strategicFit: string | null;
+  status: string | null;
+  reason: string;
+}
+
+interface PortfolioInsightsData {
+  quickWins: PortfolioInsight[];
+  zombiesToKill: PortfolioInsight[];
+  strategicMisalignment: PortfolioInsight[];
+  valueBets: PortfolioInsight[];
+  summary: {
+    totalAnalyzed: number;
+    quickWinsCount: number;
+    zombiesCount: number;
+    misalignedCount: number;
+    valueBetsCount: number;
+    portfolioHealthScore: number;
+  };
+  generatedAt: string;
+}
+
 const CHART_COLORS = [
   "hsl(217, 91%, 48%)",  // primary blue
   "hsl(142, 71%, 35%)",  // green
@@ -237,6 +268,11 @@ export default function Dashboard() {
   const { data: healthStats, isLoading: healthLoading } = useQuery<HealthStats>({
     queryKey: ["/api/health/stats"],
     refetchInterval: 30000,
+  });
+
+  const { data: insightsData, isLoading: insightsLoading } = useQuery<PortfolioInsightsData>({
+    queryKey: ["/api/pmo/insights"],
+    refetchInterval: 60000,
   });
 
   const resetMutation = useMutation({
@@ -417,6 +453,133 @@ export default function Dashboard() {
           </>
         )}
       </div>
+
+      {/* Strategy Insights Widget */}
+      <Card className="overflow-visible" data-testid="strategy-insights-widget">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Insights Estratégicos
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Análisis automático del portafolio basado en la matriz Valor/Esfuerzo</p>
+            </div>
+            {insightsData && (
+              <Badge variant="outline" className="text-xs" data-testid="badge-portfolio-health">
+                Salud del Portafolio: {insightsData.summary.portfolioHealthScore}%
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {insightsLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Quick Wins */}
+              <Link href="/projects?insight=quick-wins">
+                <motion.div 
+                  whileHover={{ scale: 1.02 }}
+                  className="group cursor-pointer rounded-lg border border-green-500/30 bg-green-500/10 p-4 hover-elevate"
+                  data-testid="insight-quick-wins"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 rounded-full bg-green-500/20">
+                      <Gem className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="text-quick-wins-count">
+                        {insightsData?.summary.quickWinsCount || 0}
+                      </div>
+                      <div className="text-xs font-medium">Quick Wins</div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Bajo costo, alto beneficio. Candidatos para fast-track.
+                  </p>
+                </motion.div>
+              </Link>
+
+              {/* Value Bets */}
+              <Link href="/projects?insight=value-bets">
+                <motion.div 
+                  whileHover={{ scale: 1.02 }}
+                  className="group cursor-pointer rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 hover-elevate"
+                  data-testid="insight-value-bets"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 rounded-full bg-blue-500/20">
+                      <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-value-bets-count">
+                        {insightsData?.summary.valueBetsCount || 0}
+                      </div>
+                      <div className="text-xs font-medium">Big Bets</div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Alto costo + alto retorno + alineación estratégica.
+                  </p>
+                </motion.div>
+              </Link>
+
+              {/* Zombies to Kill */}
+              <Link href="/projects?insight=zombies">
+                <motion.div 
+                  whileHover={{ scale: 1.02 }}
+                  className="group cursor-pointer rounded-lg border border-red-500/30 bg-red-500/10 p-4 hover-elevate"
+                  data-testid="insight-zombies"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 rounded-full bg-red-500/20">
+                      <Skull className="h-5 w-5 text-red-600 dark:text-red-400" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-red-600 dark:text-red-400" data-testid="text-zombies-count">
+                        {insightsData?.summary.zombiesCount || 0}
+                      </div>
+                      <div className="text-xs font-medium">Value Destroyers</div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Alto costo sin beneficio. Candidatos para cancelación.
+                  </p>
+                </motion.div>
+              </Link>
+
+              {/* Strategic Misalignment */}
+              <Link href="/projects?insight=misaligned">
+                <motion.div 
+                  whileHover={{ scale: 1.02 }}
+                  className="group cursor-pointer rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 hover-elevate"
+                  data-testid="insight-misaligned"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 rounded-full bg-yellow-500/20">
+                      <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400" data-testid="text-misaligned-count">
+                        {insightsData?.summary.misalignedCount || 0}
+                      </div>
+                      <div className="text-xs font-medium">Sin Alineación</div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Inversión sin alineación estratégica. Requieren caso de negocio.
+                  </p>
+                </motion.div>
+              </Link>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Quality Pulse & Stagnation Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

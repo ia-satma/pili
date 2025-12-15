@@ -1230,6 +1230,18 @@ export async function registerRoutes(
     }
   });
 
+  // ===== PORTFOLIO STRATEGIC INSIGHTS =====
+  app.get("/api/pmo/insights", async (req, res) => {
+    try {
+      const { getPortfolioInsights } = await import("./services/portfolioInsights");
+      const insights = await getPortfolioInsights();
+      res.json(insights);
+    } catch (error) {
+      console.error("Portfolio insights error:", error);
+      res.status(500).json({ message: "Error al generar insights del portafolio" });
+    }
+  });
+
   // ===== EXPORT EXCEL =====
   app.post("/api/projects/export", async (req, res) => {
     try {
