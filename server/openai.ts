@@ -48,52 +48,70 @@ export interface PMOBotResponse {
   citations: Citation[];
 }
 
-const SYSTEM_PROMPT = `Eres el PMO Bot, un asistente especializado para el equipo de PMO (Project Management Office).
+const SYSTEM_PROMPT = `Eres Pilar, una Analista Estrategica de PMO. Tienes acceso al portafolio completo de proyectos.
 
-REGLAS ESTRICTAS - DEBES SEGUIRLAS SIN EXCEPCIÓN:
-1. SOLO puedes responder con datos que existen EXPLÍCITAMENTE en la base de datos de proyectos.
-2. NUNCA debes inferir, deducir, predecir o asumir valores que no existan.
-3. NUNCA debes generar opiniones, hipótesis o interpretaciones.
-4. Si algo no existe en los datos, responde: "No existe ese dato en los proyectos cargados."
-5. Para cada respuesta debes identificar qué proyecto(s) estás referenciando.
-6. Debes rechazar cualquier petición de predicción de resultados o suposición.
+REGLAS ESTRICTAS:
+1. SOLO responde con datos que existen en el portafolio. NUNCA inventes ni supongas.
+2. Si un campo esta vacio o es null, di "Sin informacion registrada". NO halucines.
+3. Identifica siempre que proyecto(s) estas referenciando por nombre.
+
+COMO INTERPRETAR LOS DATOS (LOGICA DE MATRIZ):
+
+**Dinero (Salida) - capex_tier:**
+- HIGH_COST (>100k USD): Proyecto CARO, requiere aprobacion de alto nivel
+- MEDIUM_COST (20k-100k): Inversion moderada
+- LOW_COST (5k-20k): Bajo costo
+- ZERO_COST (<5k): Practicamente gratis
+
+**Dinero (Entrada) - financial_impact:**
+- HIGH_REVENUE (>300k USD): ALTO VALOR, genera ingresos significativos
+- MEDIUM_REVENUE (100k-300k): Valor moderado
+- LOW_REVENUE (<100k): Bajo retorno
+- NONE (0): Sin beneficio financiero directo = posible desperdicio
+
+**Alineacion Estrategica - strategic_fit:**
+- FULL: Totalmente alineado con estrategia corporativa = BUENO
+- PARTIAL: Parcialmente alineado
+- NONE: Sin alineacion estrategica = MALO, revisar justificacion
+
+**Clasificacion de Riesgo:**
+- ZOMBIE/ALTO RIESGO: capex_tier=HIGH_COST + financial_impact=LOW_REVENUE o NONE
+- QUICK WIN: capex_tier=LOW_COST o ZERO_COST + financial_impact=HIGH_REVENUE
+- BIG BET: capex_tier=HIGH_COST + financial_impact=HIGH_REVENUE
+- FILL-IN: capex_tier=LOW_COST + financial_impact=LOW_REVENUE
+
+**Health Score (0-100):**
+- 80-100: Proyecto saludable
+- 50-79: Requiere atencion
+- 0-49: Proyecto en riesgo critico
 
 CAPACIDADES:
-- Consultar el estado exacto de un proyecto
-- Contar proyectos por estado, departamento, responsable
-- Listar proyectos que cumplan ciertos criterios
-- Mostrar información de campos específicos
-- Responder preguntas sobre fechas, avances, estados
+- Analizar el portafolio completo o por filtros
+- Identificar proyectos riesgosos (zombies, alto costo/bajo valor)
+- Encontrar quick wins (bajo costo/alto valor)
+- Responder sobre estado, fechas, responsables, departamentos
+- Dar resumen ejecutivo del portafolio
 
-FORMATO DE RESPUESTA (OBLIGATORIO JSON):
-Debes responder SIEMPRE en formato JSON con esta estructura:
+FORMATO DE RESPUESTA (JSON OBLIGATORIO):
 {
-  "respuesta": "Tu respuesta aquí...",
-  "citas": [{"fila": 1, "columna": "A", "valor": "dato citado"}]
+  "respuesta": "Tu analisis aqui...",
+  "citas": [{"proyecto": "Nombre Proyecto", "campo": "capex_tier", "valor": "HIGH_COST"}]
 }
-- Sé conciso y directo en el campo "respuesta"
-- Usa listas cuando sea apropiado dentro del texto
-- Incluye los nombres exactos de los proyectos cuando los menciones
-- El campo "citas" puede estar vacío [] si no hay citas específicas
 
 DATOS DISPONIBLES POR PROYECTO:
 - projectName: Nombre del proyecto
-- status: Estado (Abierto, Cerrado, En Pausa, etc.)
+- description: Descripcion (si vacio = "Sin detalles proporcionados")
+- status: Estado actual
 - departmentName: Departamento
-- responsible: Responsable
-- sponsor: Sponsor
-- startDate: Fecha de inicio
-- endDateEstimated: Fecha estimada de fin
-- endDateEstimatedTbd: Si la fecha es TBD
-- percentComplete: Porcentaje de avance
-- priority: Prioridad (Alta, Media, Baja)
-- category: Categoría
-- parsedStatus: Último status (S:)
-- parsedNextSteps: Próximos pasos (N:)
-- description: Descripción
-- benefits: Beneficios
-- scope: Alcance
-- risks: Riesgos`;
+- responsible: Responsable asignado
+- sponsor: Patrocinador
+- percentComplete: % de avance
+- endDateEstimated: Fecha estimada de cierre
+- capex_tier: Nivel de inversion (HIGH_COST, MEDIUM_COST, LOW_COST, ZERO_COST, null)
+- financial_impact: Impacto financiero (HIGH_REVENUE, MEDIUM_REVENUE, LOW_REVENUE, NONE, null)
+- strategic_fit: Alineacion estrategica (FULL, PARTIAL, NONE, null)
+- health_score: Puntuacion de salud (0-100)
+- audit_flags: Banderas de auditoria (lista de problemas detectados)`;
 
 export async function generatePMOBotResponse(
   userMessage: string,
@@ -111,25 +129,73 @@ export async function generatePMOBotResponse(
   return limit(() =>
     pRetry(
       async () => {
-        // Build context from projects
-        const projectsSummary = context.projects.map((p, index) => ({
-          id: p.id,
-          nombre: p.projectName,
-          estado: p.status || "Sin estado",
-          departamento: p.departmentName || "Sin departamento",
-          responsable: p.responsible || "Sin asignar",
-          avance: `${p.percentComplete || 0}%`,
-          fechaFin: p.endDateEstimatedTbd ? "TBD" : (p.endDateEstimated || "Sin fecha"),
-          prioridad: p.priority || "Sin prioridad",
-          ultimoStatus: p.parsedStatus || "Sin actualización",
-          proximosPasos: p.parsedNextSteps || "Sin próximos pasos",
-        }));
+        // Build context from projects with matrix logic
+        const projectsSummary = context.projects.map((p) => {
+          // Determine risk classification based on matrix logic
+          const capex = p.capexTier;
+          const financial = p.financialImpact;
+          let clasificacion = "SIN_CLASIFICAR";
+          
+          if (capex === "HIGH_COST" && (financial === "LOW_REVENUE" || financial === "NONE" || !financial)) {
+            clasificacion = "ZOMBIE_ALTO_RIESGO";
+          } else if ((capex === "LOW_COST" || capex === "ZERO_COST") && financial === "HIGH_REVENUE") {
+            clasificacion = "QUICK_WIN";
+          } else if (capex === "HIGH_COST" && financial === "HIGH_REVENUE") {
+            clasificacion = "BIG_BET";
+          } else if ((capex === "LOW_COST" || capex === "ZERO_COST") && (financial === "LOW_REVENUE" || financial === "NONE")) {
+            clasificacion = "FILL_IN";
+          }
+          
+          return {
+            id: p.id,
+            nombre: p.projectName || "Sin nombre",
+            descripcion: p.description && p.description.length > 10 ? p.description.substring(0, 200) + "..." : "Sin detalles proporcionados",
+            estado: p.status || "Sin estado",
+            departamento: p.departmentName || "Sin departamento",
+            responsable: p.responsible || "Sin asignar",
+            sponsor: p.sponsor || "Sin sponsor",
+            avance: p.percentComplete || 0,
+            fechaFin: p.endDateEstimatedTbd ? "TBD" : (p.endDateEstimated || "Sin fecha"),
+            capex_tier: p.capexTier || "SIN_CLASIFICAR",
+            financial_impact: p.financialImpact || "SIN_CLASIFICAR",
+            strategic_fit: p.strategicFit || "SIN_CLASIFICAR",
+            health_score: p.healthScore ?? null,
+            audit_flags: p.auditFlags || [],
+            clasificacion_matriz: clasificacion,
+          };
+        });
 
+        // Pre-compute portfolio statistics
+        const zombies = projectsSummary.filter(p => p.clasificacion_matriz === "ZOMBIE_ALTO_RIESGO");
+        const quickWins = projectsSummary.filter(p => p.clasificacion_matriz === "QUICK_WIN");
+        const bigBets = projectsSummary.filter(p => p.clasificacion_matriz === "BIG_BET");
+        const fillIns = projectsSummary.filter(p => p.clasificacion_matriz === "FILL_IN");
+        const sinClasificar = projectsSummary.filter(p => p.clasificacion_matriz === "SIN_CLASIFICAR");
+        const criticalHealth = projectsSummary.filter(p => p.health_score !== null && p.health_score < 50);
+        
         const dataContext = `
-DATOS ACTUALES (Versión: ${context.versionFileName || "Sin versión"}):
+DATOS ACTUALES DEL PORTAFOLIO (Version: ${context.versionFileName || "Sin version"}):
 Total de proyectos: ${context.projects.length}
 
-Proyectos:
+=== RESUMEN EJECUTIVO DE MATRIZ ===
+- ZOMBIES/ALTO RIESGO (Alto Costo + Bajo Valor): ${zombies.length} proyectos
+- QUICK WINS (Bajo Costo + Alto Valor): ${quickWins.length} proyectos
+- BIG BETS (Alto Costo + Alto Valor): ${bigBets.length} proyectos
+- FILL-INS (Bajo Costo + Bajo Valor): ${fillIns.length} proyectos
+- SIN CLASIFICAR (Faltan datos): ${sinClasificar.length} proyectos
+- SALUD CRITICA (score < 50): ${criticalHealth.length} proyectos
+
+${zombies.length > 0 ? `
+=== PROYECTOS ZOMBIE (REVISAR URGENTE) ===
+${zombies.map(z => `- ${z.nombre} | Dept: ${z.departamento} | CAPEX: ${z.capex_tier} | Impacto: ${z.financial_impact}`).join('\n')}
+` : ''}
+
+${quickWins.length > 0 ? `
+=== QUICK WINS (OPORTUNIDADES) ===
+${quickWins.map(q => `- ${q.nombre} | Dept: ${q.departamento} | CAPEX: ${q.capex_tier} | Impacto: ${q.financial_impact}`).join('\n')}
+` : ''}
+
+=== DETALLE DE TODOS LOS PROYECTOS ===
 ${JSON.stringify(projectsSummary, null, 2)}
 `;
 

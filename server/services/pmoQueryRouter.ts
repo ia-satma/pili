@@ -13,6 +13,9 @@ export type QueryRoute =
   | "LIST_BY_DEPARTMENT" // "qué proyectos tiene el departamento X"
   | "TOTAL_COUNT"        // "cuántos proyectos hay"
   | "OWNER_DELAYED_PROJECTS" // "proyectos de X y cuáles están demorados/vencidos y por qué"
+  | "PORTFOLIO_RISKY"    // "proyectos riesgosos/zombies" - HIGH_COST + LOW_VALUE
+  | "PORTFOLIO_QUICK_WINS" // "quick wins/oportunidades" - LOW_COST + HIGH_VALUE
+  | "PORTFOLIO_ANALYSIS" // "analiza el portafolio" - Full matrix analysis
   | "FALLBACK_LLM";      // Complex queries requiring AI
 
 export interface RouterResult {
@@ -46,6 +49,18 @@ const PATTERNS = {
   // Matches: "cual es el nombre de los proyectos que tiene X y cuales estan demorados y porque"
   // Also: "dame los proyectos de X y cuales estan vencidos/atrasados"
   OWNER_DELAYED_PROJECTS: /(?:(?:cu[aá]l(?:es)?|qu[eé]|dame|dime|muestra|lista).*(?:proyectos?|nombre).*(?:tiene|de)\s+)(.+?)(?:\s+y\s+(?:cu[aá]l(?:es)?|qu[eé])?\s*(?:est[aá]n?|son)\s*(?:demorad|vencid|atrasad|retrasad|en\s*riesgo))/i,
+  
+  // Portfolio queries - risky/zombie projects
+  // "cuales son los proyectos riesgosos", "proyectos zombie", "alto riesgo", "proyectos caros sin valor"
+  PORTFOLIO_RISKY: /(?:proyectos?\s+)?(?:riesgos[oa]s?|zombie|zombi|alto\s*riesgo|caro.*sin\s*valor|sin\s*valor.*caro|alto\s*costo.*bajo\s*valor|high\s*cost.*low\s*value)/i,
+  
+  // Portfolio queries - quick wins
+  // "quick wins", "oportunidades", "bajo costo alto valor", "proyectos faciles"
+  PORTFOLIO_QUICK_WINS: /(?:quick\s*wins?|oportunidades?|bajo\s*costo.*alto\s*valor|faciles?.*alto\s*impacto|ganancia\s*rapida|victorias?\s*facil)/i,
+  
+  // Portfolio analysis - full matrix
+  // "analiza el portafolio", "resumen del portafolio", "estado del portafolio", "matriz de proyectos"
+  PORTFOLIO_ANALYSIS: /(?:analiz[ae]|resume|resumen|estado|matriz|vision\s*general|overview).*(?:portafolio|cartera|proyectos)/i,
 };
 
 /**
@@ -75,6 +90,34 @@ export function routePmoQuery(message: string): RouterResult {
       route: "OWNER_DELAYED_PROJECTS",
       params: { ownerName },
       normalizedKey: normalizeKey(ownerName),
+      originalQuery: trimmedMessage,
+    };
+  }
+  
+  // Try portfolio analysis patterns (these go to LLM with enriched context)
+  if (PATTERNS.PORTFOLIO_RISKY.test(trimmedMessage)) {
+    return {
+      route: "PORTFOLIO_RISKY",
+      params: {},
+      normalizedKey: "",
+      originalQuery: trimmedMessage,
+    };
+  }
+  
+  if (PATTERNS.PORTFOLIO_QUICK_WINS.test(trimmedMessage)) {
+    return {
+      route: "PORTFOLIO_QUICK_WINS",
+      params: {},
+      normalizedKey: "",
+      originalQuery: trimmedMessage,
+    };
+  }
+  
+  if (PATTERNS.PORTFOLIO_ANALYSIS.test(trimmedMessage)) {
+    return {
+      route: "PORTFOLIO_ANALYSIS",
+      params: {},
+      normalizedKey: "",
       originalQuery: trimmedMessage,
     };
   }
@@ -148,7 +191,15 @@ export function routePmoQuery(message: string): RouterResult {
 
 /**
  * Check if a route is deterministic (DB-only, no LLM needed)
+ * Portfolio routes (PORTFOLIO_RISKY, PORTFOLIO_QUICK_WINS, PORTFOLIO_ANALYSIS)
+ * use LLM with enriched context, so they are NOT deterministic
  */
 export function isDeterministicRoute(route: QueryRoute): boolean {
-  return route !== "FALLBACK_LLM";
+  const llmRoutes: QueryRoute[] = [
+    "FALLBACK_LLM",
+    "PORTFOLIO_RISKY",
+    "PORTFOLIO_QUICK_WINS", 
+    "PORTFOLIO_ANALYSIS",
+  ];
+  return !llmRoutes.includes(route);
 }
