@@ -392,6 +392,86 @@ export async function registerRoutes(
     }
   });
 
+  // ===== ADMIN PURGE (HARD RESET) =====
+  app.delete("/api/admin/purge-all", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      console.log("Starting database purge...");
+      
+      // Import all necessary schemas for deletion
+      const {
+        changeLogs, projectUpdates, milestones, projects, kpiValues, chatMessages,
+        chaserDrafts, assessmentEntries, benefitRecords, actionItems, deltaEvents,
+        statusUpdates, governanceAlerts, initiativeSnapshots, initiatives,
+        rawArtifacts, validationIssues, ingestionBatches, excelVersions,
+        exportArtifacts, exportBatches, jobRuns, committeePackets, jobs, departments, filterPresets
+      } = await import("@shared/schema");
+      
+      // Delete in order respecting foreign key constraints (leaf tables first)
+      // Phase 1: Tables with no dependents
+      await db.delete(changeLogs);
+      await db.delete(projectUpdates);
+      await db.delete(milestones);
+      await db.delete(kpiValues);
+      await db.delete(chatMessages);
+      await db.delete(filterPresets);
+      
+      // Phase 2: Chaser drafts (references governance_alerts and initiatives)
+      await db.delete(chaserDrafts);
+      
+      // Phase 3: Assessment/benefit/action/status records (reference initiative_snapshots)
+      await db.delete(assessmentEntries);
+      await db.delete(benefitRecords);
+      await db.delete(actionItems);
+      await db.delete(statusUpdates);
+      await db.delete(deltaEvents);
+      
+      // Phase 4: Governance alerts (references initiative_snapshots)
+      await db.delete(governanceAlerts);
+      
+      // Phase 5: Initiative snapshots (references initiatives and ingestion_batches)
+      await db.delete(initiativeSnapshots);
+      
+      // Phase 6: Projects (references departments and excel_versions)
+      await db.delete(projects);
+      
+      // Phase 7: Initiatives (no more dependents)
+      await db.delete(initiatives);
+      
+      // Phase 8: Raw artifacts and validation issues (reference ingestion_batches)
+      await db.delete(rawArtifacts);
+      await db.delete(validationIssues);
+      
+      // Phase 9: Ingestion batches
+      await db.delete(ingestionBatches);
+      
+      // Phase 10: Excel versions
+      await db.delete(excelVersions);
+      
+      // Phase 11: Export artifacts (references export_batches)
+      await db.delete(exportArtifacts);
+      
+      // Phase 12: Export batches
+      await db.delete(exportBatches);
+      
+      // Phase 13: Job runs and committee packets (reference jobs)
+      await db.delete(jobRuns);
+      await db.delete(committeePackets);
+      
+      // Phase 14: Jobs
+      await db.delete(jobs);
+      
+      // Phase 15: Departments catalog
+      await db.delete(departments);
+      
+      console.log("Database purge completed successfully");
+      
+      res.json({ success: true, message: "Base de datos purgada exitosamente" });
+    } catch (error) {
+      console.error("Error purging database:", error);
+      res.status(500).json({ message: "Error al purgar la base de datos", error: String(error) });
+    }
+  });
+
   // ===== DASHBOARD =====
   app.get("/api/dashboard", async (req, res) => {
     try {
