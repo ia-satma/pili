@@ -40,6 +40,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -543,7 +548,7 @@ export function ProjectsGrid() {
       </div>
 
       {/* Table */}
-      <div className="rounded-md border border-border overflow-hidden">
+      <div className="rounded-md border border-border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
@@ -613,6 +618,24 @@ export function ProjectsGrid() {
                 </button>
               </TableHead>
               <TableHead>Presupuesto</TableHead>
+              <TableHead>Descripción</TableHead>
+              <TableHead>Estatus Al Día</TableHead>
+              <TableHead>Categoría</TableHead>
+              <TableHead>Tipo Proyecto</TableHead>
+              <TableHead>Fecha Fin Real</TableHead>
+              <TableHead>Fecha Registro</TableHead>
+              <TableHead>S/N</TableHead>
+              <TableHead>Próximos Pasos</TableHead>
+              <TableHead>Beneficios</TableHead>
+              <TableHead>Alcance</TableHead>
+              <TableHead>Riesgos</TableHead>
+              <TableHead>Comentarios</TableHead>
+              <TableHead>Última Actualización</TableHead>
+              <TableHead>Valor</TableHead>
+              <TableHead>Esfuerzo</TableHead>
+              <TableHead>Puntaje</TableHead>
+              <TableHead>Ranking</TableHead>
+              <TableHead>Salud Datos</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -633,12 +656,30 @@ export function ProjectsGrid() {
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                 </TableRow>
               ))
             ) : paginatedProjects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={14} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={32} className="h-32 text-center text-muted-foreground">
                   No se encontraron proyectos
                 </TableCell>
               </TableRow>
@@ -762,6 +803,106 @@ export function ProjectsGrid() {
                           minimumFractionDigits: 0,
                         }).format(numValue);
                       })()}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.description || ""}>
+                      {project.description || "—"}
+                    </TableCell>
+                    <TableCell>
+                      {project.estatusAlDia ? (
+                        <Badge 
+                          variant="outline" 
+                          className={cn(
+                            "font-normal",
+                            project.estatusAlDia.toLowerCase().includes("verde") && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
+                            project.estatusAlDia.toLowerCase().includes("amarillo") && "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
+                            project.estatusAlDia.toLowerCase().includes("rojo") && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30"
+                          )}
+                        >
+                          {project.estatusAlDia}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[120px] truncate">
+                      {project.category || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[120px] truncate">
+                      {project.projectType || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {formatDate(project.endDateActual)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {formatDate(project.registrationDate)}
+                    </TableCell>
+                    <TableCell className="max-w-[200px]">
+                      {project.parsedStatus ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-muted-foreground truncate block cursor-help">
+                              {project.parsedStatus}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-sm">
+                            <p className="whitespace-pre-wrap">{project.parsedStatus}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[200px] truncate" title={project.parsedNextSteps || ""}>
+                      {project.parsedNextSteps || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.benefits || ""}>
+                      {project.benefits || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.scope || ""}>
+                      {project.scope || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.risks || ""}>
+                      {project.risks || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.comments || ""}>
+                      {project.comments || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.lastUpdateText || ""}>
+                      {project.lastUpdateText || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums text-center">
+                      {project.totalValor ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums text-center">
+                      {project.totalEsfuerzo ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums text-center font-medium">
+                      {project.puntajeTotal ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums text-center">
+                      {project.ranking ?? "—"}
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {project.dataHealthScore !== null && project.dataHealthScore !== undefined ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={cn(
+                                "h-full transition-all",
+                                project.dataHealthScore >= 80 && "bg-green-500",
+                                project.dataHealthScore >= 50 && project.dataHealthScore < 80 && "bg-yellow-500",
+                                project.dataHealthScore < 50 && "bg-red-500"
+                              )}
+                              style={{ width: `${project.dataHealthScore}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground w-8">
+                            {project.dataHealthScore}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Button

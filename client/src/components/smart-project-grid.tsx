@@ -1079,6 +1079,393 @@ export function SmartProjectGrid() {
         },
         size: 130,
       }),
+      columnHelper.accessor("description", {
+        header: "Descripción",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "description";
+          const error = getCellError(rowId, "description");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "description")}
+              onSave={(val) => handleCellSave(rowId, "description", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={false}
+            />
+          );
+        },
+        size: 200,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("estatusAlDia", {
+        header: "Estatus Al Día",
+        cell: ({ row, getValue }) => {
+          const value = getValue();
+          const lower = (value || "").toLowerCase();
+          let statusColor = "bg-muted text-muted-foreground border-border";
+          if (lower.includes("verde") || lower.includes("green") || lower.includes("ok")) {
+            statusColor = "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30";
+          } else if (lower.includes("amarillo") || lower.includes("yellow") || lower.includes("warning")) {
+            statusColor = "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
+          } else if (lower.includes("rojo") || lower.includes("red") || lower.includes("critical")) {
+            statusColor = "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30";
+          }
+
+          return (
+            <Badge
+              variant="outline"
+              className={cn("font-normal", statusColor)}
+              data-testid={`cell-estatus-al-dia-${row.original.id}`}
+            >
+              {value || "-"}
+            </Badge>
+          );
+        },
+        size: 120,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("category", {
+        header: "Categoría",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "category";
+          const error = getCellError(rowId, "category");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "category")}
+              onSave={(val) => handleCellSave(rowId, "category", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={true}
+            />
+          );
+        },
+        size: 130,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("projectType", {
+        header: "Tipo Proyecto",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "projectType";
+          const error = getCellError(rowId, "projectType");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "projectType")}
+              onSave={(val) => handleCellSave(rowId, "projectType", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={true}
+            />
+          );
+        },
+        size: 130,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("endDateActual", {
+        header: "Fecha Fin Real",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "endDateActual";
+          const error = getCellError(rowId, "endDateActual");
+
+          return (
+            <DateCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "endDateActual")}
+              onSave={(val) => handleCellSave(rowId, "endDateActual", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+            />
+          );
+        },
+        size: 130,
+        meta: { filterType: "date" },
+      }),
+      columnHelper.accessor("registrationDate", {
+        header: "Fecha Registro",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "registrationDate";
+          const error = getCellError(rowId, "registrationDate");
+
+          return (
+            <DateCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "registrationDate")}
+              onSave={(val) => handleCellSave(rowId, "registrationDate", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+            />
+          );
+        },
+        size: 130,
+        meta: { filterType: "date" },
+      }),
+      columnHelper.accessor("parsedStatus", {
+        header: "S/N",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "parsedStatus";
+          const error = getCellError(rowId, "parsedStatus");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "parsedStatus")}
+              onSave={(val) => handleCellSave(rowId, "parsedStatus", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={false}
+            />
+          );
+        },
+        size: 200,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("parsedNextSteps", {
+        header: "Próximos Pasos",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "parsedNextSteps";
+          const error = getCellError(rowId, "parsedNextSteps");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "parsedNextSteps")}
+              onSave={(val) => handleCellSave(rowId, "parsedNextSteps", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={false}
+            />
+          );
+        },
+        size: 200,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("benefits", {
+        header: "Beneficios",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "benefits";
+          const error = getCellError(rowId, "benefits");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "benefits")}
+              onSave={(val) => handleCellSave(rowId, "benefits", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={false}
+            />
+          );
+        },
+        size: 180,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("scope", {
+        header: "Alcance",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "scope";
+          const error = getCellError(rowId, "scope");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "scope")}
+              onSave={(val) => handleCellSave(rowId, "scope", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={false}
+            />
+          );
+        },
+        size: 180,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("risks", {
+        header: "Riesgos",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "risks";
+          const error = getCellError(rowId, "risks");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "risks")}
+              onSave={(val) => handleCellSave(rowId, "risks", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={false}
+            />
+          );
+        },
+        size: 180,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("comments", {
+        header: "Comentarios",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "comments";
+          const error = getCellError(rowId, "comments");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "comments")}
+              onSave={(val) => handleCellSave(rowId, "comments", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={false}
+            />
+          );
+        },
+        size: 180,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("lastUpdateText", {
+        header: "Última Actualización",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "lastUpdateText";
+          const error = getCellError(rowId, "lastUpdateText");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "lastUpdateText")}
+              onSave={(val) => handleCellSave(rowId, "lastUpdateText", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={false}
+            />
+          );
+        },
+        size: 160,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("totalValor", {
+        header: "Valor",
+        cell: ({ row, getValue }) => {
+          const value = getValue();
+          return (
+            <span className="text-sm font-mono" data-testid={`cell-total-valor-${row.original.id}`}>
+              {value ?? "-"}
+            </span>
+          );
+        },
+        size: 80,
+      }),
+      columnHelper.accessor("totalEsfuerzo", {
+        header: "Esfuerzo",
+        cell: ({ row, getValue }) => {
+          const value = getValue();
+          return (
+            <span className="text-sm font-mono" data-testid={`cell-total-esfuerzo-${row.original.id}`}>
+              {value ?? "-"}
+            </span>
+          );
+        },
+        size: 90,
+      }),
+      columnHelper.accessor("puntajeTotal", {
+        header: "Puntaje",
+        cell: ({ row, getValue }) => {
+          const value = getValue();
+          return (
+            <span className="text-sm font-mono" data-testid={`cell-puntaje-total-${row.original.id}`}>
+              {value ?? "-"}
+            </span>
+          );
+        },
+        size: 80,
+      }),
+      columnHelper.accessor("ranking", {
+        header: "Ranking",
+        cell: ({ row, getValue }) => {
+          const value = getValue();
+          return (
+            <span className="text-sm font-mono font-semibold" data-testid={`cell-ranking-${row.original.id}`}>
+              {value ?? "-"}
+            </span>
+          );
+        },
+        size: 80,
+      }),
+      columnHelper.accessor("dataHealthScore", {
+        header: "Salud Datos",
+        cell: ({ row, getValue }) => {
+          const value = getValue() ?? 0;
+          let progressColor = "bg-red-500";
+          if (value >= 80) progressColor = "bg-green-500";
+          else if (value >= 60) progressColor = "bg-blue-500";
+          else if (value >= 40) progressColor = "bg-yellow-500";
+          else if (value >= 20) progressColor = "bg-orange-500";
+
+          return (
+            <div
+              className="flex items-center gap-2"
+              data-testid={`cell-data-health-${row.original.id}`}
+            >
+              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className={cn("h-full transition-all", progressColor)}
+                  style={{ width: `${value}%` }}
+                />
+              </div>
+              <span className="text-xs font-medium w-8 text-right">{value}%</span>
+            </div>
+          );
+        },
+        size: 120,
+      }),
       columnHelper.display({
         id: "actions",
         header: "",
