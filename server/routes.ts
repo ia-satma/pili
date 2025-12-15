@@ -47,19 +47,39 @@ const orchestratorRequestSchema = z.object({
   mode: z.enum(["BRAINSTORM", "DECIDE", "RISKS", "NEXT_ACTIONS"]),
 });
 
-// Schema for creating individual projects
+// Schema for creating individual projects (aligned with new schema fields)
 const createProjectSchema = z.object({
+  // Identification
   projectName: z.string().min(1, "Nombre del proyecto es requerido"),
-  description: z.string().optional().nullable(),
+  bpAnalyst: z.string().optional().nullable(),
   departmentName: z.string().optional().nullable(),
-  responsible: z.string().optional().nullable(),
+  region: z.string().optional().nullable(),
+  status: z.string().default("Draft"),
+  
+  // Definition (Core)
+  problemStatement: z.string().optional().nullable(),
+  objective: z.string().optional().nullable(),
+  scopeIn: z.string().optional().nullable(),
+  scopeOut: z.string().optional().nullable(),
+  description: z.string().optional().nullable(), // Legacy
+  
+  // Impact & Resources
+  impactType: z.array(z.string()).default([]),
+  kpis: z.string().optional().nullable(),
+  budget: z.number().min(0).default(0),
+  
+  // Governance
   sponsor: z.string().optional().nullable(),
-  status: z.string().default("Abierto"),
+  leader: z.string().optional().nullable(),
+  responsible: z.string().optional().nullable(), // Legacy
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+  endDateEstimated: z.string().optional().nullable(), // Legacy
+  
+  // Legacy fields
   priority: z.string().default("Media"),
   category: z.string().optional().nullable(),
   projectType: z.string().optional().nullable(),
-  startDate: z.string().optional().nullable(),
-  endDateEstimated: z.string().optional().nullable(),
   endDateEstimatedTbd: z.boolean().default(false),
   endDateActual: z.string().optional().nullable(),
   percentComplete: z.number().min(0).max(100).default(0),
@@ -67,7 +87,7 @@ const createProjectSchema = z.object({
   parsedStatus: z.string().optional().nullable(),
   parsedNextSteps: z.string().optional().nullable(),
   benefits: z.string().optional().nullable(),
-  scope: z.string().optional().nullable(),
+  scope: z.string().optional().nullable(), // Legacy
   risks: z.string().optional().nullable(),
   comments: z.string().optional().nullable(),
 });
@@ -2862,37 +2882,40 @@ Responde SOLO con el resumen narrativo, sin agregar información adicional.`;
         });
       }
       
-      // Create seed initiative
+      // Create seed ingestion batch for the snapshot
+      const seedBatch = await storage.createIngestionBatch({
+        sourceFileHash: "SEED_BATCH_" + Date.now(),
+        sourceFileName: "seed-initiative.json",
+        status: "committed",
+        totalRows: 1,
+        processedRows: 1,
+        hardErrorCount: 0,
+        softErrorCount: 0,
+      });
+      
+      // Create seed initiative (only fields that exist on initiatives table)
       const initiative = await storage.createInitiative({
         devopsCardId: SEED_KEY,
         powerSteeringId: null,
         title: "Iniciativa de Prueba PMO",
-        description: "Iniciativa creada automáticamente para probar el sistema de agentes",
         owner: "Administrador",
-        startDate: new Date().toISOString().split("T")[0],
-        targetDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-        status: "Abierto",
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        currentStatus: "Abierto",
       });
       
-      // Create initial snapshot
+      // Create initial snapshot (using correct field names from initiativeSnapshots table)
       const snapshot = await storage.createInitiativeSnapshot({
         initiativeId: initiative.id,
-        batchId: null,
+        batchId: seedBatch.id,
         title: initiative.title,
-        description: initiative.description,
+        description: "Iniciativa creada automáticamente para probar el sistema de agentes",
         owner: initiative.owner,
-        status: initiative.status,
-        phase: "Ejecución",
+        status: "Abierto",
         percentComplete: 25,
-        targetDate: initiative.targetDate,
-        trafficLight: "green",
+        endDateEstimated: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
         ranking: 1,
-        valorTotal: 80,
-        esfuerzoTotal: 40,
+        totalValor: 80,
+        totalEsfuerzo: 40,
         puntajeTotal: 120,
-        capturedAt: new Date(),
       });
       
       console.log(`[Admin] Created seed initiative: ${initiative.id}, snapshot: ${snapshot.id}`);
