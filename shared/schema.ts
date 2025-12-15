@@ -129,6 +129,11 @@ export const projects = pgTable("projects", {
   validationErrors: jsonb("validation_errors").$type<Record<string, string>>().default({}),
   isClean: boolean("is_clean").default(false),
   
+  // === SCORING MATRIX FIELDS ===
+  capexTier: text("capex_tier"), // HIGH_COST, MEDIUM_COST, LOW_COST, ZERO_COST
+  financialImpact: text("financial_impact"), // HIGH_REVENUE, MEDIUM_REVENUE, LOW_REVENUE, NONE
+  strategicFit: text("strategic_fit"), // FULL, PARTIAL, NONE
+  
   // === PMO AUDIT FIELDS ===
   healthScore: integer("health_score").default(100), // 0-100 PMO health score
   auditFlags: jsonb("audit_flags").$type<string[]>().default([]), // List of audit flags/warnings
