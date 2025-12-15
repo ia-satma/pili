@@ -688,7 +688,9 @@ export function ProjectsGrid() {
                 </button>
               </TableHead>
               <TableHead>Impacto</TableHead>
-              <TableHead>Presupuesto</TableHead>
+              <TableHead className="text-center">Inversión</TableHead>
+              <TableHead className="text-center">Beneficio</TableHead>
+              <TableHead className="text-center">Alineación</TableHead>
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
@@ -715,7 +717,9 @@ export function ProjectsGrid() {
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-12" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-12" /></TableCell>
                   <TableCell><Skeleton className="h-8 w-8" /></TableCell>
@@ -723,7 +727,7 @@ export function ProjectsGrid() {
               ))
             ) : paginatedProjects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={14} className="h-32 text-center text-muted-foreground">
                   No se encontraron proyectos
                 </TableCell>
               </TableRow>
@@ -819,16 +823,82 @@ export function ProjectsGrid() {
                         );
                       })()}
                     </TableCell>
-                    <TableCell className="font-mono text-sm tabular-nums" data-testid={`cell-budget-${project.id}`}>
+                    {/* Inversión (CAPEX Tier) */}
+                    <TableCell className="text-center">
                       {(() => {
-                        const budgetValue = project.budget;
-                        if (budgetValue === null || budgetValue === undefined || budgetValue === 0) {
-                          return "—";
-                        }
-                        return new Intl.NumberFormat("es-MX", {
-                          style: "currency",
-                          currency: "MXN",
-                        }).format(budgetValue);
+                        const tier = (project as any).capexTier;
+                        if (!tier) return <span className="text-muted-foreground text-xs">—</span>;
+                        
+                        const config: Record<string, { label: string; tooltip: string; className: string }> = {
+                          HIGH_COST: { label: "Alto", tooltip: "> $100k USD inversión", className: "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30" },
+                          MEDIUM_COST: { label: "Medio", tooltip: "$20k - $100k USD", className: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30" },
+                          LOW_COST: { label: "Bajo", tooltip: "< $20k USD", className: "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30" },
+                          ZERO_COST: { label: "Nulo", tooltip: "Sin inversión requerida", className: "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30" },
+                        };
+                        const { label, tooltip, className } = config[tier] || { label: tier, tooltip: "", className: "" };
+                        
+                        return (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="outline" className={cn("text-xs cursor-help", className)} data-testid={`badge-capex-${project.id}`}>
+                                {label}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>{tooltip}</TooltipContent>
+                          </Tooltip>
+                        );
+                      })()}
+                    </TableCell>
+                    {/* Beneficio (Financial Impact) */}
+                    <TableCell className="text-center">
+                      {(() => {
+                        const impact = (project as any).financialImpact;
+                        if (!impact) return <span className="text-muted-foreground text-xs">—</span>;
+                        
+                        const config: Record<string, { label: string; tooltip: string; className: string }> = {
+                          HIGH_REVENUE: { label: "Alto", tooltip: "> $300k USD beneficio esperado", className: "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30" },
+                          MEDIUM_REVENUE: { label: "Medio", tooltip: "$100k - $300k USD", className: "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30" },
+                          LOW_REVENUE: { label: "Bajo", tooltip: "< $100k USD", className: "bg-gray-500/20 text-gray-600 dark:text-gray-400 border-gray-500/30" },
+                          NONE: { label: "Ninguno", tooltip: "Sin beneficio financiero directo", className: "bg-gray-500/20 text-gray-600 dark:text-gray-400 border-gray-500/30" },
+                        };
+                        const { label, tooltip, className } = config[impact] || { label: impact, tooltip: "", className: "" };
+                        
+                        return (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="outline" className={cn("text-xs cursor-help", className)} data-testid={`badge-impact-${project.id}`}>
+                                {label}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>{tooltip}</TooltipContent>
+                          </Tooltip>
+                        );
+                      })()}
+                    </TableCell>
+                    {/* Alineación (Strategic Fit) */}
+                    <TableCell className="text-center">
+                      {(() => {
+                        const fit = (project as any).strategicFit;
+                        if (!fit) return <span className="text-muted-foreground text-xs">—</span>;
+                        
+                        const config: Record<string, { label: string; icon: string; tooltip: string; className: string }> = {
+                          FULL: { label: "Sí", icon: "✓", tooltip: "Alineado a objetivos estratégicos", className: "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30" },
+                          PARTIAL: { label: "Parcial", icon: "◐", tooltip: "Alineación parcial a objetivos", className: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30" },
+                          NONE: { label: "No", icon: "✗", tooltip: "Sin alineación estratégica", className: "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30" },
+                        };
+                        const { label, icon, tooltip, className } = config[fit] || { label: fit, icon: "?", tooltip: "", className: "" };
+                        
+                        return (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="outline" className={cn("text-xs cursor-help", className)} data-testid={`badge-alignment-${project.id}`}>
+                                <span className="mr-1">{icon}</span>
+                                {label}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>{tooltip}</TooltipContent>
+                          </Tooltip>
+                        );
                       })()}
                     </TableCell>
                     <TableCell className="text-muted-foreground tabular-nums">
