@@ -2,6 +2,7 @@ import { ProjectsGrid } from "@/components/projects-grid";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { CsvImporter } from "@/components/csv-importer";
+import { ExcelImporter } from "@/components/excel-importer";
 
 export default function Projects() {
   useDocumentTitle("Proyectos");
@@ -17,6 +18,7 @@ export default function Projects() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ExcelImporter />
           <CsvImporter />
           <CreateProjectDialog />
         </div>

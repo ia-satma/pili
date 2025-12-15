@@ -4,6 +4,9 @@ import multer from "multer";
 import crypto from "crypto";
 import { z } from "zod";
 import * as XLSX from "xlsx";
+import { spawn } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
 import { storage } from "./storage";
 import { db } from "./db";
 import { desc, eq } from "drizzle-orm";
@@ -887,6 +890,180 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Bulk import error:", error);
       res.status(500).json({ message: "Error al importar proyectos", error: String(error) });
+    }
+  });
+
+  // ===== EXCEL IMPORT WITH ANCHOR ROW DETECTION (Python Parser) =====
+  app.post("/api/projects/import", isAuthenticated, isEditor, uploadRateLimit, upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No se proporcionó ningún archivo" });
+      }
+
+      const allowedExtensions = ['.xlsx', '.xls'];
+      const fileExt = path.extname(req.file.originalname).toLowerCase();
+      if (!allowedExtensions.includes(fileExt)) {
+        return res.status(400).json({ message: "Formato de archivo no soportado. Use .xlsx o .xls" });
+      }
+
+      const tempDir = '/tmp';
+      const tempFileName = `excel_import_${Date.now()}_${crypto.randomBytes(8).toString('hex')}${fileExt}`;
+      const tempFilePath = path.join(tempDir, tempFileName);
+
+      fs.writeFileSync(tempFilePath, req.file.buffer);
+
+      const pythonScript = path.join(process.cwd(), 'server', 'utils', 'excel_parser.py');
+      
+      const PARSER_TIMEOUT_MS = 30000;
+      const MAX_OUTPUT_SIZE = 10 * 1024 * 1024;
+      
+      const result = await new Promise<{
+        success: boolean;
+        projects: any[];
+        errors: string[];
+        metadata: {
+          header_row: number | null;
+          total_rows: number;
+          columns_mapped: Record<string, string>;
+          columns_unmapped: string[];
+        };
+      }>((resolve, reject) => {
+        const pythonProcess = spawn('python3', [pythonScript, tempFilePath], {
+          timeout: PARSER_TIMEOUT_MS,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        
+        let stdout = '';
+        let stderr = '';
+        let killed = false;
+
+        const timeout = setTimeout(() => {
+          killed = true;
+          pythonProcess.kill('SIGKILL');
+          fs.unlink(tempFilePath, () => {});
+          reject(new Error('Parser timeout: El archivo tardó demasiado en procesarse'));
+        }, PARSER_TIMEOUT_MS);
+
+        pythonProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+          if (stdout.length > MAX_OUTPUT_SIZE) {
+            killed = true;
+            pythonProcess.kill('SIGKILL');
+            clearTimeout(timeout);
+            fs.unlink(tempFilePath, () => {});
+            reject(new Error('Output size exceeded: El archivo genera demasiados datos'));
+          }
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+          if (stderr.length > MAX_OUTPUT_SIZE) {
+            killed = true;
+            pythonProcess.kill('SIGKILL');
+            clearTimeout(timeout);
+            fs.unlink(tempFilePath, () => {});
+            reject(new Error('Error output exceeded limits'));
+          }
+        });
+
+        pythonProcess.on('close', (code) => {
+          clearTimeout(timeout);
+          fs.unlink(tempFilePath, () => {});
+
+          if (killed) return;
+
+          if (code !== 0) {
+            reject(new Error(`Python parser failed: ${stderr || 'Unknown error'}`));
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(stdout);
+            resolve(parsed);
+          } catch (e) {
+            reject(new Error(`Failed to parse Python output: ${stdout.slice(0, 500)}`));
+          }
+        });
+
+        pythonProcess.on('error', (err) => {
+          clearTimeout(timeout);
+          fs.unlink(tempFilePath, () => {});
+          if (!killed) reject(err);
+        });
+      });
+
+      if (!result.success || result.projects.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: result.projects.length === 0 
+            ? "No se encontraron proyectos válidos en el archivo" 
+            : "Error procesando el archivo Excel",
+          errors: result.errors,
+          metadata: result.metadata
+        });
+      }
+
+      const importResults = { created: 0, errors: [] as string[] };
+
+      for (let i = 0; i < result.projects.length; i++) {
+        try {
+          const project = result.projects[i];
+          
+          let budget = 0;
+          if (project.budget !== undefined && project.budget !== null) {
+            budget = typeof project.budget === 'number' ? project.budget : parseFloat(String(project.budget).replace(/[^\d.-]/g, '')) || 0;
+          }
+
+          const projectData = {
+            projectName: project.projectName || `Proyecto Importado ${i + 1}`,
+            bpAnalyst: project.bpAnalyst || null,
+            departmentName: project.departmentName || null,
+            region: project.region || null,
+            status: project.status || "Draft",
+            problemStatement: project.problemStatement || null,
+            objective: project.objective || null,
+            scopeIn: project.scopeIn || null,
+            scopeOut: project.scopeOut || null,
+            impactType: Array.isArray(project.impactType) ? project.impactType : [],
+            kpis: project.kpis || null,
+            budget: budget,
+            sponsor: project.sponsor || null,
+            leader: project.leader || null,
+            responsible: project.responsible || null,
+            startDate: project.startDate || null,
+            endDateEstimated: project.endDateEstimated || null,
+            priority: project.priority || "Media",
+            category: project.category || null,
+            comments: project.comments || null,
+            benefits: project.benefits || null,
+            risks: project.risks || null,
+            percentComplete: project.percentComplete || 0,
+            totalValor: project.totalValor || null,
+            totalEsfuerzo: project.totalEsfuerzo || null,
+          };
+
+          await storage.createProject(projectData as any);
+          importResults.created++;
+        } catch (error) {
+          importResults.errors.push(`Proyecto ${i + 1}: ${String(error)}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        created: importResults.created,
+        errors: [...result.errors, ...importResults.errors],
+        metadata: result.metadata,
+        message: `Se importaron ${importResults.created} de ${result.projects.length} proyectos.${importResults.errors.length > 0 ? ` ${importResults.errors.length} errores.` : ""}`
+      });
+
+    } catch (error) {
+      console.error("Excel import error:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Error al importar archivo Excel", 
+        error: String(error) 
+      });
     }
   });
 
