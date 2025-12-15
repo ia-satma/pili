@@ -492,6 +492,34 @@ export async function registerRoutes(
     }
   });
 
+  // ===== EMERGENCY NUKE (PROJECTS ONLY) =====
+  app.delete("/api/admin/nuke-database", async (req, res) => {
+    try {
+      console.log("🔥 NUKE DATABASE: Starting emergency wipe of projects table...");
+      
+      const { projects, changeLogs, projectUpdates, milestones } = await import("@shared/schema");
+      
+      // Delete dependent tables first
+      await db.delete(changeLogs);
+      await db.delete(projectUpdates);
+      await db.delete(milestones);
+      
+      // Delete all projects
+      const result = await db.delete(projects);
+      
+      console.log("🔥 NUKE DATABASE: Complete. All project rows deleted.");
+      
+      res.json({ 
+        success: true, 
+        message: "Database Nuke Complete. All project rows deleted.",
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("NUKE DATABASE ERROR:", error);
+      res.status(500).json({ message: "Error nuking database", error: String(error) });
+    }
+  });
+
   // ===== DASHBOARD =====
   app.get("/api/dashboard", async (req, res) => {
     try {

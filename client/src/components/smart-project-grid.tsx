@@ -1566,6 +1566,27 @@ export function SmartProjectGrid() {
         </div>
         <div className="flex items-center gap-2">
           <Button
+            variant="destructive"
+            size="sm"
+            className="gap-1"
+            data-testid="button-nuke-database"
+            onClick={async () => {
+              if (confirm("ADVERTENCIA: Esto borrará TODOS los proyectos de la base de datos. ¿Continuar?")) {
+                try {
+                  const response = await fetch("/api/admin/nuke-database", { method: "DELETE" });
+                  const data = await response.json();
+                  alert(data.message || "Database nuked!");
+                  window.location.reload();
+                } catch (error) {
+                  alert("Error al borrar la base de datos");
+                }
+              }
+            }}
+          >
+            <AlertCircle className="h-3 w-3" />
+            BORRAR DB (EMERGENCIA)
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={() => refetch()}
