@@ -19,6 +19,7 @@ import {
   Settings,
   Brain,
   Activity,
+  Grid3X3,
 } from "lucide-react";
 import {
   Sidebar,
@@ -70,6 +71,11 @@ const mainNavItems = [
     title: "Alertas",
     url: "/alerts",
     icon: AlertTriangle,
+  },
+  {
+    title: "Project Master",
+    url: "/project-master",
+    icon: Grid3X3,
   },
 ];
 
