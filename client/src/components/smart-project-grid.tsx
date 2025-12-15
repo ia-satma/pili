@@ -710,6 +710,7 @@ export function SmartProjectGrid() {
 
   const projects = useMemo(() => {
     const baseProjects = projectsData?.projects || [];
+    console.log("Grid Data Source:", baseProjects);
     return baseProjects.map((project) => ({
       ...project,
       ...pendingChanges.get(project.id),
@@ -808,13 +809,16 @@ export function SmartProjectGrid() {
 
   const columns = useMemo<ColumnDef<Project, any>[]>(
     () => [
-      columnHelper.accessor("id", {
-        header: "ID",
+      columnHelper.accessor("legacyId", {
+        header: "ID Proyecto",
         cell: (info) => (
-          <span className="text-xs text-muted-foreground font-mono">{info.getValue()}</span>
+          <span className="text-xs text-muted-foreground font-mono" data-testid={`cell-project-id-${info.row.original.id}`}>
+            {info.getValue() || "-"}
+          </span>
         ),
-        size: 60,
-        enableColumnFilter: false,
+        size: 100,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
       }),
       columnHelper.accessor("projectName", {
         header: "Nombre del Proyecto",
