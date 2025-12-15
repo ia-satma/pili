@@ -26,6 +26,7 @@ import { generateDeterministicAnswer, generateOwnerDelayedProjectsAnswer, type O
 import { isCircuitOpen, recordSuccess, recordFailure, getCircuitStatus, getLlmTimeoutMs, withTimeout } from "./services/circuitBreaker";
 import { runFullAudit, getHealthStats, getDirtyProjects, validateAndUpdateProject } from "./services/data-validator";
 import { auditAllProjects, auditSingleProject } from "./services/auditor";
+import { enrichProjectMetadata } from "./services/enricher";
 
 // Validation schemas
 const sendMessageSchema = z.object({
@@ -1110,6 +1111,35 @@ export async function registerRoutes(
       res.status(500).json({ 
         success: false,
         message: "Error al auditar proyecto" 
+      });
+    }
+  });
+
+  // ===== AI ENRICHMENT ENDPOINT =====
+  app.post("/api/projects/:id/enrich", isAuthenticated, isEditor, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ message: "Proyecto no encontrado" });
+      }
+
+      const result = await enrichProjectMetadata(project);
+      
+      res.json({
+        projectId: id,
+        projectName: project.projectName,
+        ...result,
+      });
+    } catch (error) {
+      console.error("Enrichment error:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Error al generar sugerencias con IA" 
       });
     }
   });

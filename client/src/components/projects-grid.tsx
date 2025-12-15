@@ -17,6 +17,9 @@ import {
   Lock,
   User,
   X,
+  Sparkles,
+  Check,
+  ArrowRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -112,6 +115,25 @@ export function ProjectsGrid() {
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [bulkUpdateField, setBulkUpdateField] = useState<BulkField | null>(null);
   const [bulkUpdateValue, setBulkUpdateValue] = useState("");
+  
+  const [enrichDialogOpen, setEnrichDialogOpen] = useState(false);
+  const [enrichingProjectId, setEnrichingProjectId] = useState<number | null>(null);
+  const [enrichmentData, setEnrichmentData] = useState<{
+    projectId: number;
+    projectName: string;
+    original: {
+      problemStatement: string | null;
+      scopeIn: string | null;
+      scopeOut: string | null;
+      objective: string | null;
+    };
+    suggestion: {
+      problemStatement: string;
+      scopeIn: string;
+      scopeOut: string;
+      objective: string;
+    } | null;
+  } | null>(null);
   
   const pageSize = 20;
   const { toast } = useToast();
@@ -227,6 +249,86 @@ export function ProjectsGrid() {
       });
     },
   });
+
+  const enrichMutation = useMutation({
+    mutationFn: async (projectId: number) => {
+      const response = await apiRequest("POST", `/api/projects/${projectId}/enrich`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.success && data.suggestion) {
+        setEnrichmentData({
+          projectId: data.projectId,
+          projectName: data.projectName,
+          original: data.original,
+          suggestion: data.suggestion,
+        });
+        setEnrichDialogOpen(true);
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "No se pudieron generar sugerencias",
+          variant: "destructive",
+        });
+      }
+      setEnrichingProjectId(null);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Error al conectar con el servicio de IA",
+        variant: "destructive",
+      });
+      setEnrichingProjectId(null);
+    },
+  });
+
+  const applyEnrichmentMutation = useMutation({
+    mutationFn: async ({ projectId, data }: { projectId: number; data: Record<string, string> }) => {
+      return apiRequest("PATCH", `/api/projects/${projectId}`, data);
+    },
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setEnrichDialogOpen(false);
+      setEnrichmentData(null);
+      
+      if (enrichmentData?.projectId) {
+        await apiRequest("POST", `/api/projects/${enrichmentData.projectId}/audit`);
+        queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      }
+      
+      toast({
+        title: "Cambios aplicados",
+        description: "El proyecto ha sido actualizado con las sugerencias de IA",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudieron aplicar los cambios",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEnrichProject = (projectId: number) => {
+    setEnrichingProjectId(projectId);
+    enrichMutation.mutate(projectId);
+  };
+
+  const handleApplyEnrichment = () => {
+    if (!enrichmentData?.suggestion || !enrichmentData.projectId) return;
+    
+    applyEnrichmentMutation.mutate({
+      projectId: enrichmentData.projectId,
+      data: {
+        problemStatement: enrichmentData.suggestion.problemStatement,
+        scopeIn: enrichmentData.suggestion.scopeIn,
+        scopeOut: enrichmentData.suggestion.scopeOut,
+        objective: enrichmentData.suggestion.objective,
+      },
+    });
+  };
 
   // Extract unique statuses, departments, responsibles, and Business Process Analysts for filters
   const { statuses, departments, responsibles, businessProcessAnalysts } = useMemo(() => {
@@ -774,17 +876,40 @@ export function ProjectsGrid() {
                       })()}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedProjectId(project.id);
-                        }}
-                        data-testid={`button-view-project-${project.id}`}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEnrichProject(project.id);
+                              }}
+                              disabled={enrichingProjectId === project.id}
+                              data-testid={`button-enrich-project-${project.id}`}
+                            >
+                              {enrichingProjectId === project.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Mejorar con IA</TooltipContent>
+                        </Tooltip>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProjectId(project.id);
+                          }}
+                          data-testid={`button-view-project-${project.id}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -1058,6 +1183,159 @@ export function ProjectsGrid() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* AI Enrichment Dialog */}
+      <Dialog open={enrichDialogOpen} onOpenChange={(open) => {
+        setEnrichDialogOpen(open);
+        if (!open) setEnrichmentData(null);
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-ai-enrichment">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Mejorar Proyecto con IA
+            </DialogTitle>
+            <DialogDescription>
+              {enrichmentData?.projectName && (
+                <span className="font-medium">{enrichmentData.projectName}</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {enrichmentData?.suggestion && (
+            <div className="space-y-6 py-4">
+              {/* Problem Statement Comparison */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  Problem Statement
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground font-medium">Antes</p>
+                    <div className="p-3 rounded-md bg-muted/50 text-sm min-h-[100px]">
+                      {enrichmentData.original.problemStatement || (
+                        <span className="text-muted-foreground italic">Sin definir</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs text-primary font-medium flex items-center gap-1">
+                      <ArrowRight className="h-3 w-3" />
+                      Después (Sugerencia IA)
+                    </p>
+                    <div className="p-3 rounded-md bg-primary/10 border border-primary/20 text-sm min-h-[100px]">
+                      {enrichmentData.suggestion.problemStatement}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Objective Comparison */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  Objetivo
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground font-medium">Antes</p>
+                    <div className="p-3 rounded-md bg-muted/50 text-sm min-h-[80px]">
+                      {enrichmentData.original.objective || (
+                        <span className="text-muted-foreground italic">Sin definir</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs text-primary font-medium flex items-center gap-1">
+                      <ArrowRight className="h-3 w-3" />
+                      Después (Sugerencia IA)
+                    </p>
+                    <div className="p-3 rounded-md bg-primary/10 border border-primary/20 text-sm min-h-[80px]">
+                      {enrichmentData.suggestion.objective}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scope In Comparison */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  Alcance Incluido
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground font-medium">Antes</p>
+                    <div className="p-3 rounded-md bg-muted/50 text-sm min-h-[80px] whitespace-pre-wrap">
+                      {enrichmentData.original.scopeIn || (
+                        <span className="text-muted-foreground italic">Sin definir</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs text-primary font-medium flex items-center gap-1">
+                      <ArrowRight className="h-3 w-3" />
+                      Después (Sugerencia IA)
+                    </p>
+                    <div className="p-3 rounded-md bg-primary/10 border border-primary/20 text-sm min-h-[80px] whitespace-pre-wrap">
+                      {enrichmentData.suggestion.scopeIn}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scope Out Comparison */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  Fuera de Alcance
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground font-medium">Antes</p>
+                    <div className="p-3 rounded-md bg-muted/50 text-sm min-h-[60px] whitespace-pre-wrap">
+                      {enrichmentData.original.scopeOut || (
+                        <span className="text-muted-foreground italic">Sin definir</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs text-primary font-medium flex items-center gap-1">
+                      <ArrowRight className="h-3 w-3" />
+                      Después (Sugerencia IA)
+                    </p>
+                    <div className="p-3 rounded-md bg-primary/10 border border-primary/20 text-sm min-h-[60px] whitespace-pre-wrap">
+                      {enrichmentData.suggestion.scopeOut}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEnrichDialogOpen(false);
+                setEnrichmentData(null);
+              }}
+              data-testid="button-cancel-enrichment"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleApplyEnrichment}
+              disabled={applyEnrichmentMutation.isPending}
+              data-testid="button-apply-enrichment"
+            >
+              {applyEnrichmentMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4 mr-2" />
+              )}
+              Aplicar Cambios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
