@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -8,13 +9,29 @@ import {
   AlertTriangle,
   Activity,
   CalendarX2,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiCard, KpiCardSkeleton } from "@/components/kpi-card";
 import { TrafficLight, calculateTrafficLight } from "@/components/traffic-light";
@@ -203,6 +220,8 @@ export default function Dashboard() {
   useDocumentTitle("Dashboard");
   const { buildQueryString, hasActiveFilters } = useFilters();
   const queryString = buildQueryString();
+  const { toast } = useToast();
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["/api/dashboard", queryString],
@@ -217,6 +236,31 @@ export default function Dashboard() {
   const { data: healthStats, isLoading: healthLoading } = useQuery<HealthStats>({
     queryKey: ["/api/health/stats"],
     refetchInterval: 30000,
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/admin/nuke-database", { method: "DELETE" });
+      if (!response.ok) throw new Error("Error al borrar datos");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Base de datos reiniciada",
+        description: "Todos los proyectos han sido eliminados.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/health/stats"] });
+      setResetDialogOpen(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error desconocido",
+        variant: "destructive",
+      });
+    },
   });
 
   if (error) {
@@ -248,11 +292,48 @@ export default function Dashboard() {
     <div className="space-y-8 p-6">
       {/* Page Header */}
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Vista general de proyectos de mejora continua
-          </p>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground">
+              Vista general de proyectos de mejora continua
+            </p>
+          </div>
+          <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" data-testid="button-reset-database">
+                <Trash2 className="mr-2 h-4 w-4" />
+                BORRAR TODO (RESET)
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>BORRAR TODOS LOS PROYECTOS</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta acción eliminará TODOS los proyectos de la base de datos.
+                  Esta operación NO se puede deshacer.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel data-testid="button-cancel-reset">Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => resetMutation.mutate()}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={resetMutation.isPending}
+                  data-testid="button-confirm-reset"
+                >
+                  {resetMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Borrando...
+                    </>
+                  ) : (
+                    "Sí, BORRAR TODO"
+                  )}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
         <HealthBar />
         <FilterBar />

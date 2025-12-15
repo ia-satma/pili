@@ -824,6 +824,72 @@ export async function registerRoutes(
     }
   });
 
+  // ===== BULK CSV IMPORT =====
+  app.post("/api/projects/bulk", isAuthenticated, isEditor, async (req, res) => {
+    try {
+      const { projects: projectsData } = req.body;
+      
+      if (!Array.isArray(projectsData) || projectsData.length === 0) {
+        return res.status(400).json({ message: "Se requiere un array de proyectos" });
+      }
+
+      const results = { created: 0, errors: [] as string[] };
+      
+      for (let i = 0; i < projectsData.length; i++) {
+        try {
+          const row = projectsData[i];
+          
+          // Sanitize budget: remove $, commas, whitespace
+          let budget = 0;
+          const budgetValue = row.budget ?? row.presupuesto ?? row.Budget ?? row.Presupuesto;
+          if (budgetValue !== undefined && budgetValue !== null) {
+            const budgetStr = String(budgetValue).replace(/[$,\s]/g, "").trim();
+            budget = parseFloat(budgetStr) || 0;
+            if (isNaN(budget)) budget = 0;
+          }
+          
+          // Build project object with auto-mapped fields
+          const projectData = {
+            projectName: row.projectName || row.nombre || row.proyecto || `Proyecto ${i + 1}`,
+            bpAnalyst: row.bpAnalyst || row.analista || row.bp_analyst || null,
+            departmentName: row.departmentName || row.depto || row.area || row.negocio || null,
+            region: row.region || null,
+            status: row.status || row.estado || "Draft",
+            problemStatement: row.problemStatement || row.problema || row.problem_statement || null,
+            objective: row.objective || row.objetivo || null,
+            scopeIn: row.scopeIn || row.scope_in || null,
+            scopeOut: row.scopeOut || row.scope_out || null,
+            description: row.description || row.descripcion || null,
+            impactType: row.impactType || [],
+            kpis: row.kpis || row.indicadores || null,
+            budget: Math.round(budget),
+            sponsor: row.sponsor || row.patrocinador || null,
+            leader: row.leader || row.lider || null,
+            responsible: row.responsible || row.responsable || null,
+            startDate: row.startDate || row.fecha_inicio || null,
+            endDate: row.endDate || row.fecha_fin || null,
+            priority: row.priority || row.prioridad || "Media",
+          };
+          
+          await storage.createProject(projectData as any);
+          results.created++;
+        } catch (err) {
+          results.errors.push(`Fila ${i + 1}: ${err instanceof Error ? err.message : "Error desconocido"}`);
+        }
+      }
+      
+      res.json({
+        success: true,
+        created: results.created,
+        errors: results.errors,
+        message: `Se crearon ${results.created} proyectos. ${results.errors.length > 0 ? `${results.errors.length} errores.` : ""}`
+      });
+    } catch (error) {
+      console.error("Bulk import error:", error);
+      res.status(500).json({ message: "Error al importar proyectos", error: String(error) });
+    }
+  });
+
   app.post("/api/projects/bulk/delete", isAuthenticated, isAdmin, async (req, res) => {
     try {
       const validation = bulkDeleteSchema.safeParse(req.body);
