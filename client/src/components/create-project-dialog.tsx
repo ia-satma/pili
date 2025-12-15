@@ -239,12 +239,12 @@ export function CreateProjectDialog({ triggerClassName }: CreateProjectDialogPro
                   name="problemStatement"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Problema u oportunidad</FormLabel>
+                      <FormLabel>¿Qué problema u oportunidad se identifica?</FormLabel>
                       <FormControl>
                         <Textarea
                           {...field}
                           value={field.value || ""}
-                          placeholder="Describe el problema u oportunidad que aborda el proyecto"
+                          placeholder="Describe el problema u oportunidad con hechos específicos"
                           className="min-h-[80px]"
                           data-testid="textarea-problem-statement"
                         />
@@ -279,7 +279,7 @@ export function CreateProjectDialog({ triggerClassName }: CreateProjectDialogPro
                   name="scopeIn"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Qué SÍ incluye</FormLabel>
+                      <FormLabel>¿Qué SÍ incluye?</FormLabel>
                       <FormControl>
                         <Textarea
                           {...field}
@@ -299,12 +299,12 @@ export function CreateProjectDialog({ triggerClassName }: CreateProjectDialogPro
                   name="scopeOut"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Qué NO incluye</FormLabel>
+                      <FormLabel>¿Qué NO incluye?</FormLabel>
                       <FormControl>
                         <Textarea
                           {...field}
                           value={field.value || ""}
-                          placeholder="Define lo que el proyecto no incluye"
+                          placeholder="Define lo que el proyecto NO incluye"
                           className="min-h-[80px]"
                           data-testid="textarea-scope-out"
                         />
@@ -389,7 +389,7 @@ export function CreateProjectDialog({ triggerClassName }: CreateProjectDialogPro
                   name="budget"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Presupuesto</FormLabel>
+                      <FormLabel>Presupuesto Requerido</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
