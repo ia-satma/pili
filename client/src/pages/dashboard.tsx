@@ -602,7 +602,7 @@ export default function Dashboard() {
         <CardContent>
           {scoringLoading ? (
             <Skeleton className="h-80 w-full" />
-          ) : !scoringData || scoringData.projects.length === 0 ? (
+          ) : !scoringData || !scoringData.projects || scoringData.projects.length === 0 ? (
             <div className="h-80 flex flex-col items-center justify-center text-muted-foreground">
               <p>No hay datos de scoring disponibles</p>
               <p className="text-xs mt-1">Cargue un archivo Excel con columnas de Total Valor y Total Esfuerzo</p>
