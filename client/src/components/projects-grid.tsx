@@ -597,7 +597,7 @@ export function ProjectsGrid() {
                   <SortIcon field="endDateEstimated" />
                 </button>
               </TableHead>
-              <TableHead className="w-20 text-center">Salud</TableHead>
+              <TableHead className="w-24 text-center">Salud de Datos</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -737,24 +737,28 @@ export function ProjectsGrid() {
                         const score = project.healthScore ?? 100;
                         const flags = (project.auditFlags as string[]) || [];
                         let bgClass = "bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/30";
+                        let label = "Sólido";
                         
                         if (score < 50) {
                           bgClass = "bg-red-500/20 text-red-700 dark:text-red-400 border border-red-500/30";
+                          label = "Crítico";
                         } else if (score < 80) {
                           bgClass = "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-500/30";
+                          label = "Revisar";
                         }
                         
                         return (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span
-                                className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium cursor-help", bgClass)}
+                                className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium cursor-help", bgClass)}
                                 data-testid={`badge-health-${project.id}`}
                               >
-                                {score}
+                                {label}
                               </span>
                             </TooltipTrigger>
                             <TooltipContent side="left" className="max-w-xs">
+                              <p className="font-medium mb-1">Puntaje: {score}/100</p>
                               {flags.length > 0 ? (
                                 <ul className="text-xs space-y-1">
                                   {flags.map((flag, idx) => (

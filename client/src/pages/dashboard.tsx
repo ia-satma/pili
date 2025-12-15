@@ -266,14 +266,14 @@ export default function Dashboard() {
 
   const auditMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/projects/audit-all", { method: "POST" });
+      const response = await fetch("/api/projects/audit-batch", { method: "POST" });
       if (!response.ok) throw new Error("Error al ejecutar auditoría");
       return response.json();
     },
     onSuccess: (data) => {
       toast({
-        title: "Auditoría PMO Completada",
-        description: `${data.audited} proyectos auditados. Saludables: ${data.healthy}, Advertencias: ${data.warning}, Críticos: ${data.critical}`,
+        title: "Auditoría de Calidad Completada",
+        description: `${data.audited} proyectos auditados. Sólidos: ${data.healthy}, Revisar: ${data.warning}, Críticos: ${data.critical}`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
@@ -334,10 +334,8 @@ export default function Dashboard() {
             >
               {auditMutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <ShieldCheck className="mr-2 h-4 w-4" />
-              )}
-              Ejecutar Auditoría PMO
+              ) : null}
+              AUDITAR CALIDAD
             </Button>
             <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
               <AlertDialogTrigger asChild>

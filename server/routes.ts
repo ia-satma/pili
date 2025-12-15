@@ -1069,20 +1069,20 @@ export async function registerRoutes(
   });
 
   // ===== PMO AUDIT ENDPOINTS =====
-  app.post("/api/projects/audit-all", isAuthenticated, isEditor, async (req, res) => {
+  app.post("/api/projects/audit-batch", isAuthenticated, isEditor, async (req, res) => {
     try {
       const result = await auditAllProjects();
       
       res.json({
         success: true,
-        message: `Auditoría PMO completada. ${result.audited} proyectos auditados.`,
+        message: `Auditoría completada. ${result.audited} proyectos auditados.`,
         ...result,
       });
     } catch (error) {
       console.error("PMO Audit error:", error);
       res.status(500).json({ 
         success: false,
-        message: "Error al ejecutar auditoría PMO" 
+        message: "Error al ejecutar auditoría" 
       });
     }
   });

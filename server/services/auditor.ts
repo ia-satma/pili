@@ -8,105 +8,52 @@ export interface AuditResult {
   flags: string[];
 }
 
-export interface AuditFlag {
-  type: "FATAL" | "WARNING" | "INFO";
-  message: string;
-  scorePenalty: number;
-}
-
-const PMO_AUDIT_RULES: ((project: Project) => AuditFlag | null)[] = [
-  (project) => {
-    const budget = project.budget || 0;
-    const problemStatement = project.problemStatement || project.description || "";
-    if (budget > 0 && problemStatement.length < 20) {
-      return {
-        type: "FATAL",
-        message: "Presupuesto asignado sin justificación clara.",
-        scorePenalty: 40,
-      };
-    }
-    return null;
-  },
-
-  (project) => {
-    const scopeIn = project.scopeIn || project.scope || "";
-    const scopeOut = project.scopeOut || "";
-    if (!scopeIn.trim() || !scopeOut.trim()) {
-      return {
-        type: "WARNING",
-        message: "Alcance no definido (Riesgo de Creep).",
-        scorePenalty: 20,
-      };
-    }
-    return null;
-  },
-
-  (project) => {
-    const bpAnalyst = project.bpAnalyst || "";
-    if (!bpAnalyst.trim()) {
-      return {
-        type: "INFO",
-        message: "Sin analista asignado.",
-        scorePenalty: 10,
-      };
-    }
-    return null;
-  },
-
-  (project) => {
-    const sponsor = project.sponsor || "";
-    if (!sponsor.trim()) {
-      return {
-        type: "WARNING",
-        message: "Sin sponsor asignado.",
-        scorePenalty: 15,
-      };
-    }
-    return null;
-  },
-
-  (project) => {
-    const objective = project.objective || "";
-    if (!objective.trim() || objective.length < 10) {
-      return {
-        type: "INFO",
-        message: "Objetivo no definido o muy corto.",
-        scorePenalty: 10,
-      };
-    }
-    return null;
-  },
-
-  (project) => {
-    const startDate = project.startDate;
-    const endDate = project.endDate || project.endDateEstimated;
-    if (!startDate || !endDate) {
-      return {
-        type: "INFO",
-        message: "Fechas de inicio o fin no definidas.",
-        scorePenalty: 5,
-      };
-    }
-    return null;
-  },
-];
-
-export function auditProject(project: Project): AuditResult {
+/**
+ * PMO Data Quality Auditor
+ * 
+ * Calculates a health score (0-100) for projects based on "ruthless" rules:
+ * - Rule 1 (Ghost Project): Budget > 0 but problem_statement < 10 chars → -40 points
+ * - Rule 2 (Orphan): bp_analyst missing or "TBD" → -15 points
+ * - Rule 3 (Blank Check): scope_in AND scope_out both empty → -25 points
+ */
+export function calculateProjectHealth(project: Project): AuditResult {
   let score = 100;
   const flags: string[] = [];
 
-  for (const rule of PMO_AUDIT_RULES) {
-    const result = rule(project);
-    if (result) {
-      score -= result.scorePenalty;
-      flags.push(`[${result.type}] ${result.message}`);
-    }
+  // Rule 1: The Ghost Project
+  // Budget assigned but no justification (problem_statement missing or < 10 chars)
+  const budget = project.budget || 0;
+  const problemStatement = project.problemStatement || "";
+  if (budget > 0 && problemStatement.trim().length < 10) {
+    score -= 40;
+    flags.push("Presupuesto sin justificación");
   }
 
+  // Rule 2: The Orphan
+  // No analyst assigned or marked as TBD
+  const bpAnalyst = (project.bpAnalyst || "").trim().toLowerCase();
+  if (!bpAnalyst || bpAnalyst === "tbd" || bpAnalyst === "por definir") {
+    score -= 15;
+    flags.push("Sin Analista");
+  }
+
+  // Rule 3: The Blank Check
+  // Both scope_in AND scope_out are empty
+  const scopeIn = (project.scopeIn || "").trim();
+  const scopeOut = (project.scopeOut || "").trim();
+  if (!scopeIn && !scopeOut) {
+    score -= 25;
+    flags.push("Alcance indefinido");
+  }
+
+  // Clamp score between 0 and 100
   score = Math.max(0, Math.min(100, score));
 
   return { score, flags };
 }
+
+// Alias for backwards compatibility
+export const auditProject = calculateProjectHealth;
 
 export async function auditAllProjects(): Promise<{
   audited: number;
@@ -123,7 +70,7 @@ export async function auditAllProjects(): Promise<{
   let totalFlags = 0;
 
   for (const project of allProjects) {
-    const { score, flags } = auditProject(project);
+    const { score, flags } = calculateProjectHealth(project);
     
     await db
       .update(projects)
@@ -161,7 +108,7 @@ export async function auditSingleProject(projectId: number): Promise<AuditResult
     return null;
   }
 
-  const { score, flags } = auditProject(project);
+  const { score, flags } = calculateProjectHealth(project);
 
   await db
     .update(projects)
