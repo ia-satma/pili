@@ -42,6 +42,7 @@ import { KpiCard, KpiCardSkeleton } from "@/components/kpi-card";
 import { TrafficLight, calculateTrafficLight } from "@/components/traffic-light";
 import { FilterBar } from "@/components/filter-bar";
 import { HealthBar } from "@/components/health-bar";
+import { ChaserModal } from "@/components/chaser-modal";
 import { useFilters } from "@/contexts/filter-context";
 import {
   BarChart,
@@ -360,7 +361,7 @@ export default function Dashboard() {
               Vista general de proyectos de mejora continua
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button 
               variant="outline" 
               size="sm" 
@@ -373,6 +374,7 @@ export default function Dashboard() {
               ) : null}
               AUDITAR CALIDAD
             </Button>
+            <ChaserModal />
             <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm" data-testid="button-reset-database">

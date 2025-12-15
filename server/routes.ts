@@ -1242,6 +1242,29 @@ export async function registerRoutes(
     }
   });
 
+  // ===== CHASER AGENT (TARGETED NOTIFICATIONS) =====
+  app.post("/api/chaser/run-cycle", async (req, res) => {
+    try {
+      const { runChaserCycle } = await import("./services/chaser");
+      const result = await runChaserCycle();
+      res.json(result);
+    } catch (error) {
+      console.error("Chaser cycle error:", error);
+      res.status(500).json({ message: "Error al ejecutar ciclo de notificaciones" });
+    }
+  });
+
+  app.get("/api/chaser/stats", async (req, res) => {
+    try {
+      const { getChaserStats } = await import("./services/chaser");
+      const stats = await getChaserStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Chaser stats error:", error);
+      res.status(500).json({ message: "Error al obtener estadísticas del chaser" });
+    }
+  });
+
   // ===== EXPORT EXCEL =====
   app.post("/api/projects/export", async (req, res) => {
     try {
