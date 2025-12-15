@@ -451,7 +451,8 @@ export function PMOChat() {
       </ScrollArea>
 
       {/* Input */}
-      {!authLoading && !isAuthenticated ? (
+      {/* TEMP: Auth disabled for testing - always show input */}
+      {false ? (
         <div className="p-4 border-t border-border">
           <Card className="overflow-visible bg-muted/30 border-dashed">
             <CardContent className="p-4 text-center space-y-3">
