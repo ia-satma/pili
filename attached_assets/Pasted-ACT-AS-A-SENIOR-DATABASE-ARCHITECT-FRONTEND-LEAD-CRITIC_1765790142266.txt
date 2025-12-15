@@ -1,0 +1,58 @@
+ACT AS A SENIOR DATABASE ARCHITECT & FRONTEND LEAD.
+
+**CRITICAL MISSION:** EFFICIENCY MODE.
+We are burning credits. Stop analyzing. START EXECUTING.
+
+**THE PROBLEM:**
+The current database schema and Frontend Grid are generic garbage. They do not match the official business requirements.
+* *Error 1:* The Grid shows internal IDs as Currency (Budget).
+* *Error 2:* We are missing 80% of the fields defined in the "Project Charter".
+
+**THE SOLUTION (EXECUTE IMMEDIATELY):**
+You must REWRITE `server/db/schema.ts` and `client/src/components/project-grid.tsx` to strictly match the following specification derived from the "Formulario de Captura de Iniciativas".
+
+### STEP 1: REWRITE DATABASE SCHEMA (`server/db/schema.ts`)
+Define the `projects` table with EXACTLY these columns (drop old ones if needed):
+
+1.  **Identification:**
+    * `id` (serial, primary key)
+    * `legacy_id` (text) -> For the visual Project Code.
+    * `name` (text, not null) -> "Nombre de la iniciativa".
+    * `bp_analyst` (text) -> "Business Process Analyst".
+    * `business_unit` (text) -> "Negocio/Área".
+    * `region` (text) -> "Región".
+    * `status` (text) -> Default 'Draft'.
+
+2.  **Definition (The Core):**
+    * `problem_statement` (text) -> "Problema u oportunidad" (Facts only).
+    * `objective` (text) -> "Intención / Urgencia".
+    * `scope_in` (text) -> "Qué SÍ incluye".
+    * `scope_out` (text) -> "Qué NO incluye".
+
+3.  **Impact & Resources:**
+    * `impact_type` (jsonb/text array) -> Options: ['Eficiencia', 'Costos', 'Ingresos', 'Riesgo', 'Otro'].
+    * `kpis` (text) -> "Indicadores".
+    * `budget` (numeric/decimal) -> "Requiere presupuesto". IF NULL, TREAT AS 0.
+
+4.  **Governance:**
+    * `sponsor` (text).
+    * `leader` (text).
+    * `start_date` (timestamp).
+    * `end_date` (timestamp).
+
+### STEP 2: REWRITE THE GRID (`client/src/components/project-grid.tsx`)
+Hard-code the columns definition (`columnHelper`). DO NOT AUTO-GENERATE.
+Map them exactly like this to avoid the "ID as Money" bug:
+
+* **Column 1:** "ID" -> accessor: `legacy_id` (Width: 80px).
+* **Column 2:** "Proyecto" -> accessor: `name` (Bold text).
+* **Column 3:** "Problema" -> accessor: `problem_statement` (Truncate text).
+* **Column 4:** "Analista (BP)" -> accessor: `bp_analyst`.
+* **Column 5:** "Status" -> accessor: `status` (Badge component).
+* **Column 6:** "Impacto" -> accessor: `impact_type` (Tags).
+* **Column 7:** "Presupuesto" -> accessor: `budget`.
+    * **CRITICAL RENDER RULE:** Use `Intl.NumberFormat` for Currency. If value is 0 or null, show "-". **NEVER SHOW `row.id` HERE.**
+* **Column 8:** "Fin Estimado" -> accessor: `end_date` (Format DD/MM/YYYY).
+
+**EXECUTION COMMAND:**
+Write the code for `schema.ts` and `project-grid.tsx` NOW. Do not ask for clarifications. Assume standard ShadCN/TanStack Table patterns.

@@ -562,80 +562,41 @@ export function ProjectsGrid() {
                 />
               </TableHead>
               <TableHead className="w-10"></TableHead>
-              <TableHead className="w-24">ID</TableHead>
+              <TableHead className="w-[80px]">ID</TableHead>
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
                   onClick={() => handleSort("projectName")}
                   data-testid="sort-project-name"
                 >
-                  Nombre
+                  Proyecto
                   <SortIcon field="projectName" />
                 </button>
               </TableHead>
-              <TableHead>
-                <button
-                  className="flex items-center font-medium hover:text-foreground"
-                  onClick={() => handleSort("departmentName")}
-                  data-testid="sort-department"
-                >
-                  Área
-                  <SortIcon field="departmentName" />
-                </button>
-              </TableHead>
+              <TableHead>Problema</TableHead>
+              <TableHead>Analista (BP)</TableHead>
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
                   onClick={() => handleSort("status")}
                   data-testid="sort-status"
                 >
-                  Estado
+                  Status
                   <SortIcon field="status" />
                 </button>
               </TableHead>
-              <TableHead>
-                <button
-                  className="flex items-center font-medium hover:text-foreground"
-                  onClick={() => handleSort("percentComplete")}
-                  data-testid="sort-progress"
-                >
-                  Avance
-                  <SortIcon field="percentComplete" />
-                </button>
-              </TableHead>
-              <TableHead>Prioridad</TableHead>
-              <TableHead>Líder</TableHead>
-              <TableHead>Sponsor</TableHead>
-              <TableHead>Fecha Inicio</TableHead>
+              <TableHead>Impacto</TableHead>
+              <TableHead>Presupuesto</TableHead>
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
                   onClick={() => handleSort("endDateEstimated")}
                   data-testid="sort-end-date"
                 >
-                  Fecha Fin
+                  Fin Estimado
                   <SortIcon field="endDateEstimated" />
                 </button>
               </TableHead>
-              <TableHead>Presupuesto</TableHead>
-              <TableHead>Descripción</TableHead>
-              <TableHead>Estatus Al Día</TableHead>
-              <TableHead>Categoría</TableHead>
-              <TableHead>Tipo Proyecto</TableHead>
-              <TableHead>Fecha Fin Real</TableHead>
-              <TableHead>Fecha Registro</TableHead>
-              <TableHead>S/N</TableHead>
-              <TableHead>Próximos Pasos</TableHead>
-              <TableHead>Beneficios</TableHead>
-              <TableHead>Alcance</TableHead>
-              <TableHead>Riesgos</TableHead>
-              <TableHead>Comentarios</TableHead>
-              <TableHead>Última Actualización</TableHead>
-              <TableHead>Valor</TableHead>
-              <TableHead>Esfuerzo</TableHead>
-              <TableHead>Puntaje</TableHead>
-              <TableHead>Ranking</TableHead>
-              <TableHead>Salud Datos</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -647,39 +608,18 @@ export function ProjectsGrid() {
                   <TableCell><Skeleton className="h-3 w-3 rounded-full" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-2 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                 </TableRow>
               ))
             ) : paginatedProjects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={32} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">
                   No se encontraron proyectos
                 </TableCell>
               </TableRow>
@@ -717,192 +657,78 @@ export function ProjectsGrid() {
                     <TableCell>
                       <TrafficLight status={trafficLight} size="sm" />
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground font-mono" data-testid={`cell-id-${project.id}`}>
+                    <TableCell className="w-[80px] font-mono text-xs text-muted-foreground" data-testid={`cell-id-${project.id}`}>
                       {project.legacyId || "—"}
                     </TableCell>
-                    <TableCell className="font-medium max-w-[200px] truncate">
-                      {project.projectName}
+                    <TableCell className="font-bold max-w-[250px] truncate" data-testid={`cell-project-name-${project.id}`}>
+                      {project.projectName || "—"}
                     </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[120px] truncate">
-                      {project.departmentName || "—"}
+                    <TableCell className="text-muted-foreground max-w-[200px] truncate" title={project.problemStatement || project.description || ""}>
+                      {project.problemStatement || project.description || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[150px] truncate">
+                      {(() => {
+                        const bpAnalyst = project.bpAnalyst;
+                        if (bpAnalyst) return bpAnalyst;
+                        const extraFields = project.extraFields as Record<string, unknown> | null;
+                        const analyst = extraFields?.["Business Process Analyst"] as string | undefined;
+                        return analyst || "—";
+                      })()}
                     </TableCell>
                     <TableCell>
                       {project.status ? (
-                        <Badge variant="secondary" className="font-normal">
-                          {project.status}
-                        </Badge>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-primary transition-all"
-                            style={{ width: `${project.percentComplete || 0}%` }}
-                          />
-                        </div>
-                        <span className="text-xs text-muted-foreground tabular-nums w-8">
-                          {project.percentComplete || 0}%
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {project.priority ? (
                         <Badge 
-                          variant="outline" 
+                          variant="secondary" 
                           className={cn(
                             "font-normal",
-                            project.priority.toLowerCase().includes("alta") && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
-                            project.priority.toLowerCase().includes("media") && "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
-                            project.priority.toLowerCase().includes("baja") && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30"
+                            project.status.toLowerCase().includes("abierto") && "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30",
+                            project.status.toLowerCase().includes("progreso") && "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
+                            project.status.toLowerCase().includes("cerrado") && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
+                            project.status.toLowerCase().includes("cancelado") && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
+                            project.status.toLowerCase().includes("pausa") && "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/30"
                           )}
-                          data-testid={`cell-priority-${project.id}`}
+                          data-testid={`cell-status-${project.id}`}
                         >
-                          {project.priority}
+                          {project.status}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[120px] truncate">
-                      {project.responsible || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[120px] truncate">
-                      {project.sponsor || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      {formatDate(project.startDate)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      {project.endDateEstimatedTbd ? (
-                        <Badge variant="outline" className="text-xs font-normal">TBD</Badge>
-                      ) : (
-                        formatDate(project.endDateEstimated)
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-sm">
+                    <TableCell>
                       {(() => {
-                        const extraFields = project.extraFields as Record<string, unknown> | null;
-                        const budgetValue = extraFields?.["Presupuesto"] ?? extraFields?.["Budget"] ?? extraFields?.["budget"] ?? null;
-                        if (budgetValue === null || budgetValue === undefined || budgetValue === "") {
+                        const impactArray = project.impactType as string[] | null;
+                        if (!impactArray || impactArray.length === 0) return <span className="text-muted-foreground">—</span>;
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            {impactArray.slice(0, 3).map((impact, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs font-normal">
+                                {impact}
+                              </Badge>
+                            ))}
+                            {impactArray.length > 3 && (
+                              <Badge variant="outline" className="text-xs font-normal">
+                                +{impactArray.length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm tabular-nums" data-testid={`cell-budget-${project.id}`}>
+                      {(() => {
+                        const budgetValue = project.budget;
+                        if (budgetValue === null || budgetValue === undefined || budgetValue === 0) {
                           return "—";
-                        }
-                        const numValue = typeof budgetValue === "number" 
-                          ? budgetValue 
-                          : typeof budgetValue === "string" 
-                            ? parseFloat(budgetValue.replace(/[^0-9.-]/g, ""))
-                            : null;
-                        if (numValue === null || isNaN(numValue)) {
-                          return String(budgetValue);
                         }
                         return new Intl.NumberFormat("es-MX", {
                           style: "currency",
                           currency: "MXN",
-                          minimumFractionDigits: 0,
-                        }).format(numValue);
+                        }).format(budgetValue);
                       })()}
                     </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.description || ""}>
-                      {project.description || "—"}
-                    </TableCell>
-                    <TableCell>
-                      {project.estatusAlDia ? (
-                        <Badge 
-                          variant="outline" 
-                          className={cn(
-                            "font-normal",
-                            project.estatusAlDia.toLowerCase().includes("verde") && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
-                            project.estatusAlDia.toLowerCase().includes("amarillo") && "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
-                            project.estatusAlDia.toLowerCase().includes("rojo") && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30"
-                          )}
-                        >
-                          {project.estatusAlDia}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[120px] truncate">
-                      {project.category || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[120px] truncate">
-                      {project.projectType || "—"}
-                    </TableCell>
                     <TableCell className="text-muted-foreground tabular-nums">
-                      {formatDate(project.endDateActual)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      {formatDate(project.registrationDate)}
-                    </TableCell>
-                    <TableCell className="max-w-[200px]">
-                      {project.parsedStatus ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="text-muted-foreground truncate block cursor-help">
-                              {project.parsedStatus}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-sm">
-                            <p className="whitespace-pre-wrap">{project.parsedStatus}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[200px] truncate" title={project.parsedNextSteps || ""}>
-                      {project.parsedNextSteps || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.benefits || ""}>
-                      {project.benefits || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.scope || ""}>
-                      {project.scope || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.risks || ""}>
-                      {project.risks || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.comments || ""}>
-                      {project.comments || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={project.lastUpdateText || ""}>
-                      {project.lastUpdateText || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums text-center">
-                      {project.totalValor ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums text-center">
-                      {project.totalEsfuerzo ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums text-center font-medium">
-                      {project.puntajeTotal ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums text-center">
-                      {project.ranking ?? "—"}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {project.dataHealthScore !== null && project.dataHealthScore !== undefined ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className={cn(
-                                "h-full transition-all",
-                                project.dataHealthScore >= 80 && "bg-green-500",
-                                project.dataHealthScore >= 50 && project.dataHealthScore < 80 && "bg-yellow-500",
-                                project.dataHealthScore < 50 && "bg-red-500"
-                              )}
-                              style={{ width: `${project.dataHealthScore}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-muted-foreground w-8">
-                            {project.dataHealthScore}%
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                      {formatDate(project.endDate || project.endDateEstimated)}
                     </TableCell>
                     <TableCell>
                       <Button

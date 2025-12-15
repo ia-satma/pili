@@ -62,73 +62,72 @@ export const departments = pgTable("departments", {
   code: text("code"),
 });
 
-// Main Projects table - maps ALL Excel columns
+// Main Projects table - aligned with "Formulario de Captura de Iniciativas"
 export const projects = pgTable("projects", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  legacyId: text("legacy_id"), // Original ID from Excel for traceability
   
-  // Core fields
-  projectName: text("project_name").notNull(),
-  description: text("description"),
-  departmentId: integer("department_id").references(() => departments.id),
-  departmentName: text("department_name"), // Keep original text as well
-  responsible: text("responsible"),
+  // === IDENTIFICATION ===
+  legacyId: text("legacy_id"), // Visual Project Code
+  projectName: text("project_name").notNull(), // "Nombre de la iniciativa"
+  bpAnalyst: text("bp_analyst"), // "Business Process Analyst"
+  departmentName: text("department_name"), // "Negocio/Área" (business_unit)
+  region: text("region"), // "Región"
+  status: text("status").default("Draft"), // Status
+  
+  // === DEFINITION (Core) ===
+  problemStatement: text("problem_statement"), // "Problema u oportunidad" (Facts only)
+  objective: text("objective"), // "Intención / Urgencia"
+  scopeIn: text("scope_in"), // "Qué SÍ incluye"
+  scopeOut: text("scope_out"), // "Qué NO incluye"
+  description: text("description"), // Legacy - maps to problemStatement
+  
+  // === IMPACT & RESOURCES ===
+  impactType: jsonb("impact_type").$type<string[]>().default([]), // ['Eficiencia', 'Costos', 'Ingresos', 'Riesgo', 'Otro']
+  kpis: text("kpis"), // "Indicadores"
+  budget: integer("budget").default(0), // "Requiere presupuesto" in cents/pesos
+  
+  // === GOVERNANCE ===
   sponsor: text("sponsor"),
+  leader: text("leader"), // Project leader (was responsible)
+  responsible: text("responsible"), // Legacy - maps to leader
+  startDate: date("start_date"),
+  endDate: date("end_date"), // Renamed from endDateEstimated
+  endDateEstimated: date("end_date_estimated"), // Legacy compatibility
   
-  // Status fields
-  status: text("status"), // Open, Closed, On Hold, etc.
-  estatusAlDia: text("estatus_al_dia"), // From Excel column "ESTATUS AL DÍA" - On time, Delayed, etc.
-  priority: text("priority"), // High, Medium, Low
+  // === LEGACY FIELDS (preserved for backwards compatibility) ===
+  departmentId: integer("department_id").references(() => departments.id),
+  estatusAlDia: text("estatus_al_dia"),
+  priority: text("priority"),
   category: text("category"),
   projectType: text("project_type"),
-  
-  // Dates - all preserved as original text to avoid interpretation
-  startDate: date("start_date"),
-  startDateOriginal: text("start_date_original"), // Original Excel value
-  endDateEstimated: date("end_date_estimated"),
+  startDateOriginal: text("start_date_original"),
   endDateEstimatedOriginal: text("end_date_estimated_original"),
-  endDateEstimatedTbd: boolean("end_date_estimated_tbd").default(false), // TBD flag
+  endDateEstimatedTbd: boolean("end_date_estimated_tbd").default(false),
   endDateActual: date("end_date_actual"),
   endDateActualOriginal: text("end_date_actual_original"),
   registrationDate: date("registration_date"),
   registrationDateOriginal: text("registration_date_original"),
-  
-  // Progress
   percentComplete: integer("percent_complete").default(0),
-  
-  // Status/Next Steps parsed fields
-  statusText: text("status_text"), // Full original S/N text
-  parsedStatus: text("parsed_status"), // Extracted S: portion
-  parsedNextSteps: text("parsed_next_steps"), // Extracted N: portion
-  
-  // Additional Excel columns (keep ALL original data)
+  statusText: text("status_text"),
+  parsedStatus: text("parsed_status"),
+  parsedNextSteps: text("parsed_next_steps"),
   benefits: text("benefits"),
-  scope: text("scope"),
+  scope: text("scope"), // Legacy - maps to scopeIn
   risks: text("risks"),
   comments: text("comments"),
   lastUpdateText: text("last_update_text"),
-  
-  // Extra fields stored as JSON for any unmapped columns
   extraFields: jsonb("extra_fields").$type<Record<string, unknown>>().default({}),
-  
-  // PMO Scoring fields (from Excel columns AA-AO)
-  totalValor: integer("total_valor"), // Strategic value score (300-500)
-  totalEsfuerzo: integer("total_esfuerzo"), // Execution ease score (400-510, higher = less effort)
-  puntajeTotal: integer("puntaje_total"), // Total score (totalValor + totalEsfuerzo)
-  ranking: integer("ranking"), // Prioritization order
-  
-  // Draft project flags for soft errors
+  totalValor: integer("total_valor"),
+  totalEsfuerzo: integer("total_esfuerzo"),
+  puntajeTotal: integer("puntaje_total"),
+  ranking: integer("ranking"),
   esBorradorIncompleto: boolean("es_borrador_incompleto").default(false),
   requiereNombre: boolean("requiere_nombre").default(false),
   fechaInvalida: boolean("fecha_invalida").default(false),
   catalogoPendienteMapeo: boolean("catalogo_pendiente_mapeo").default(false),
-  
-  // Data Health Validator fields
-  dataHealthScore: integer("data_health_score").default(0), // 0-100 score
-  validationErrors: jsonb("validation_errors").$type<Record<string, string>>().default({}), // Field-level errors
-  isClean: boolean("is_clean").default(false), // True if no validation errors
-  
-  // Tracking
+  dataHealthScore: integer("data_health_score").default(0),
+  validationErrors: jsonb("validation_errors").$type<Record<string, string>>().default({}),
+  isClean: boolean("is_clean").default(false),
   sourceVersionId: integer("source_version_id").references(() => excelVersions.id),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
