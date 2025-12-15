@@ -810,7 +810,7 @@ export function SmartProjectGrid() {
   const columns = useMemo<ColumnDef<Project, any>[]>(
     () => [
       columnHelper.accessor("legacyId", {
-        header: "ID Proyecto",
+        header: "ID",
         cell: (info) => (
           <span className="text-xs text-muted-foreground font-mono" data-testid={`cell-project-id-${info.row.original.id}`}>
             {info.getValue() || "-"}
@@ -821,7 +821,7 @@ export function SmartProjectGrid() {
         meta: { filterType: "text" },
       }),
       columnHelper.accessor("projectName", {
-        header: "Nombre del Proyecto",
+        header: "Nombre",
         cell: ({ row, getValue }) => {
           const rowId = row.original.id;
           const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "projectName";
@@ -840,36 +840,12 @@ export function SmartProjectGrid() {
             />
           );
         },
-        size: 280,
-        filterFn: "includesString",
-        meta: { filterType: "text" },
-      }),
-      columnHelper.accessor("responsible", {
-        header: "Responsable",
-        cell: ({ row, getValue }) => {
-          const rowId = row.original.id;
-          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "responsible";
-          const error = getCellError(rowId, "responsible");
-
-          return (
-            <TextCell
-              value={getValue()}
-              isEditing={isEditing}
-              onEdit={() => handleCellEdit(rowId, "responsible")}
-              onSave={(val) => handleCellSave(rowId, "responsible", val)}
-              onCancel={handleCellCancel}
-              hasError={!!error}
-              errorMessage={error?.message}
-              autoCapitalize={true}
-            />
-          );
-        },
-        size: 180,
+        size: 240,
         filterFn: "includesString",
         meta: { filterType: "text" },
       }),
       columnHelper.accessor("departmentName", {
-        header: "Departamento",
+        header: "Área",
         cell: ({ row, getValue }) => {
           const rowId = row.original.id;
           const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "departmentName";
@@ -888,7 +864,7 @@ export function SmartProjectGrid() {
             />
           );
         },
-        size: 160,
+        size: 140,
         filterFn: "includesString",
         meta: { filterType: "text" },
       }),
@@ -911,7 +887,7 @@ export function SmartProjectGrid() {
             />
           );
         },
-        size: 140,
+        size: 130,
         filterFn: (row, columnId, filterValue) => {
           if (!filterValue) return true;
           return row.getValue(columnId) === filterValue;
@@ -937,7 +913,7 @@ export function SmartProjectGrid() {
             />
           );
         },
-        size: 200,
+        size: 180,
         filterFn: (row, columnId, filterValue) => {
           if (!filterValue) return true;
           const [min, max] = filterValue as [number, number];
@@ -946,8 +922,84 @@ export function SmartProjectGrid() {
         },
         meta: { filterType: "range" },
       }),
+      columnHelper.accessor("priority", {
+        header: "Prioridad",
+        cell: ({ row, getValue }) => {
+          const value = getValue();
+          const lower = (value || "").toLowerCase();
+          let priorityColor = "bg-muted text-muted-foreground border-border";
+          if (lower.includes("alta") || lower.includes("high")) {
+            priorityColor = "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30";
+          } else if (lower.includes("media") || lower.includes("medium")) {
+            priorityColor = "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
+          } else if (lower.includes("baja") || lower.includes("low")) {
+            priorityColor = "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30";
+          }
+
+          return (
+            <Badge
+              variant="outline"
+              className={cn("font-normal", priorityColor)}
+              data-testid={`cell-priority-${row.original.id}`}
+            >
+              {value || "-"}
+            </Badge>
+          );
+        },
+        size: 100,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("responsible", {
+        header: "Líder",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "responsible";
+          const error = getCellError(rowId, "responsible");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "responsible")}
+              onSave={(val) => handleCellSave(rowId, "responsible", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={true}
+            />
+          );
+        },
+        size: 150,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
+      columnHelper.accessor("sponsor", {
+        header: "Sponsor",
+        cell: ({ row, getValue }) => {
+          const rowId = row.original.id;
+          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "sponsor";
+          const error = getCellError(rowId, "sponsor");
+
+          return (
+            <TextCell
+              value={getValue()}
+              isEditing={isEditing}
+              onEdit={() => handleCellEdit(rowId, "sponsor")}
+              onSave={(val) => handleCellSave(rowId, "sponsor", val)}
+              onCancel={handleCellCancel}
+              hasError={!!error}
+              errorMessage={error?.message}
+              autoCapitalize={true}
+            />
+          );
+        },
+        size: 150,
+        filterFn: "includesString",
+        meta: { filterType: "text" },
+      }),
       columnHelper.accessor("startDate", {
-        header: "Fecha Inicio",
+        header: "Inicio",
         cell: ({ row, getValue }) => {
           const rowId = row.original.id;
           const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "startDate";
@@ -965,11 +1017,11 @@ export function SmartProjectGrid() {
             />
           );
         },
-        size: 140,
+        size: 120,
         meta: { filterType: "date" },
       }),
       columnHelper.accessor("endDateEstimated", {
-        header: "Fecha Fin Est.",
+        header: "Fin Est.",
         cell: ({ row, getValue }) => {
           const rowId = row.original.id;
           const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "endDateEstimated";
@@ -987,30 +1039,45 @@ export function SmartProjectGrid() {
             />
           );
         },
-        size: 140,
+        size: 120,
         meta: { filterType: "date" },
       }),
-      columnHelper.accessor("totalValor", {
-        header: "Valor Total",
-        cell: ({ row, getValue }) => {
-          const rowId = row.original.id;
-          const isEditing = editingCell?.rowId === rowId && editingCell?.columnId === "totalValor";
-          const error = getCellError(rowId, "totalValor");
-
+      columnHelper.display({
+        id: "budget",
+        header: "Presupuesto",
+        cell: ({ row }) => {
+          const extraFields = row.original.extraFields as Record<string, unknown> | null;
+          const budgetValue = extraFields?.["Presupuesto"] ?? extraFields?.["Budget"] ?? extraFields?.["budget"] ?? null;
+          
+          if (budgetValue === null || budgetValue === undefined || budgetValue === "") {
+            return (
+              <span className="text-muted-foreground" data-testid={`cell-budget-${row.original.id}`}>
+                -
+              </span>
+            );
+          }
+          
+          const numValue = typeof budgetValue === "number" 
+            ? budgetValue 
+            : typeof budgetValue === "string" 
+              ? parseFloat(budgetValue.replace(/[^0-9.-]/g, ""))
+              : null;
+          
+          if (numValue === null || isNaN(numValue)) {
+            return (
+              <span className="text-muted-foreground" data-testid={`cell-budget-${row.original.id}`}>
+                {String(budgetValue)}
+              </span>
+            );
+          }
+          
           return (
-            <CurrencyCell
-              value={getValue()}
-              isEditing={isEditing}
-              onEdit={() => handleCellEdit(rowId, "totalValor")}
-              onSave={(val) => handleCellSave(rowId, "totalValor", val)}
-              onCancel={handleCellCancel}
-              hasError={!!error}
-              errorMessage={error?.message}
-            />
+            <span className="font-mono text-sm" data-testid={`cell-budget-${row.original.id}`}>
+              {formatCurrency(numValue)}
+            </span>
           );
         },
         size: 130,
-        meta: { filterType: "text" },
       }),
       columnHelper.display({
         id: "actions",
