@@ -11,6 +11,7 @@ import {
   CalendarX2,
   Trash2,
   Loader2,
+  ShieldCheck,
 } from "lucide-react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
@@ -263,6 +264,30 @@ export default function Dashboard() {
     },
   });
 
+  const auditMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/projects/audit-all", { method: "POST" });
+      if (!response.ok) throw new Error("Error al ejecutar auditoría");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Auditoría PMO Completada",
+        description: `${data.audited} proyectos auditados. Saludables: ${data.healthy}, Advertencias: ${data.warning}, Críticos: ${data.critical}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/health/stats"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al ejecutar auditoría",
+        variant: "destructive",
+      });
+    },
+  });
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -299,13 +324,28 @@ export default function Dashboard() {
               Vista general de proyectos de mejora continua
             </p>
           </div>
-          <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" data-testid="button-reset-database">
-                <Trash2 className="mr-2 h-4 w-4" />
-                BORRAR TODO (RESET)
-              </Button>
-            </AlertDialogTrigger>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => auditMutation.mutate()}
+              disabled={auditMutation.isPending}
+              data-testid="button-run-pmo-audit"
+            >
+              {auditMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="mr-2 h-4 w-4" />
+              )}
+              Ejecutar Auditoría PMO
+            </Button>
+            <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" data-testid="button-reset-database">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  BORRAR TODO (RESET)
+                </Button>
+              </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>BORRAR TODOS LOS PROYECTOS</AlertDialogTitle>
@@ -333,7 +373,8 @@ export default function Dashboard() {
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
-          </AlertDialog>
+            </AlertDialog>
+          </div>
         </div>
         <HealthBar />
         <FilterBar />

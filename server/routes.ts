@@ -25,6 +25,7 @@ import { routePmoQuery, isDeterministicRoute } from "./services/pmoQueryRouter";
 import { generateDeterministicAnswer, generateOwnerDelayedProjectsAnswer, type OwnerDelayedProjectsAnswer } from "./services/pmoDeterministicAnswer";
 import { isCircuitOpen, recordSuccess, recordFailure, getCircuitStatus, getLlmTimeoutMs, withTimeout } from "./services/circuitBreaker";
 import { runFullAudit, getHealthStats, getDirtyProjects, validateAndUpdateProject } from "./services/data-validator";
+import { auditAllProjects, auditSingleProject } from "./services/auditor";
 
 // Validation schemas
 const sendMessageSchema = z.object({
@@ -1063,6 +1064,52 @@ export async function registerRoutes(
         success: false,
         message: "Error al importar archivo Excel", 
         error: String(error) 
+      });
+    }
+  });
+
+  // ===== PMO AUDIT ENDPOINTS =====
+  app.post("/api/projects/audit-all", isAuthenticated, isEditor, async (req, res) => {
+    try {
+      const result = await auditAllProjects();
+      
+      res.json({
+        success: true,
+        message: `Auditoría PMO completada. ${result.audited} proyectos auditados.`,
+        ...result,
+      });
+    } catch (error) {
+      console.error("PMO Audit error:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Error al ejecutar auditoría PMO" 
+      });
+    }
+  });
+
+  app.post("/api/projects/:id/audit", isAuthenticated, isEditor, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+      }
+
+      const result = await auditSingleProject(id);
+      
+      if (!result) {
+        return res.status(404).json({ message: "Proyecto no encontrado" });
+      }
+
+      res.json({
+        success: true,
+        projectId: id,
+        ...result,
+      });
+    } catch (error) {
+      console.error("Single project audit error:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Error al auditar proyecto" 
       });
     }
   });

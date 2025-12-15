@@ -597,6 +597,7 @@ export function ProjectsGrid() {
                   <SortIcon field="endDateEstimated" />
                 </button>
               </TableHead>
+              <TableHead className="w-20 text-center">Salud</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -614,12 +615,13 @@ export function ProjectsGrid() {
                   <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-12" /></TableCell>
                   <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                 </TableRow>
               ))
             ) : paginatedProjects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={12} className="h-32 text-center text-muted-foreground">
                   No se encontraron proyectos
                 </TableCell>
               </TableRow>
@@ -729,6 +731,47 @@ export function ProjectsGrid() {
                     </TableCell>
                     <TableCell className="text-muted-foreground tabular-nums">
                       {formatDate(project.endDate || project.endDateEstimated)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {(() => {
+                        const score = project.healthScore ?? 100;
+                        const flags = (project.auditFlags as string[]) || [];
+                        let variant: "default" | "secondary" | "destructive" = "default";
+                        let bgClass = "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30";
+                        
+                        if (score < 50) {
+                          variant = "destructive";
+                          bgClass = "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30";
+                        } else if (score < 80) {
+                          variant = "secondary";
+                          bgClass = "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
+                        }
+                        
+                        return (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge 
+                                variant={variant}
+                                className={cn("font-normal cursor-help", bgClass)}
+                                data-testid={`badge-health-${project.id}`}
+                              >
+                                {score}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="max-w-xs">
+                              {flags.length > 0 ? (
+                                <ul className="text-xs space-y-1">
+                                  {flags.map((flag, idx) => (
+                                    <li key={idx}>{flag}</li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-xs">Sin problemas detectados</p>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Button

@@ -128,6 +128,10 @@ export const projects = pgTable("projects", {
   dataHealthScore: integer("data_health_score").default(0),
   validationErrors: jsonb("validation_errors").$type<Record<string, string>>().default({}),
   isClean: boolean("is_clean").default(false),
+  
+  // === PMO AUDIT FIELDS ===
+  healthScore: integer("health_score").default(100), // 0-100 PMO health score
+  auditFlags: jsonb("audit_flags").$type<string[]>().default([]), // List of audit flags/warnings
   sourceVersionId: integer("source_version_id").references(() => excelVersions.id),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
