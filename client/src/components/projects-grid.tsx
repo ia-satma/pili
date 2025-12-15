@@ -736,27 +736,23 @@ export function ProjectsGrid() {
                       {(() => {
                         const score = project.healthScore ?? 100;
                         const flags = (project.auditFlags as string[]) || [];
-                        let variant: "default" | "secondary" | "destructive" = "default";
-                        let bgClass = "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30";
+                        let bgClass = "bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/30";
                         
                         if (score < 50) {
-                          variant = "destructive";
-                          bgClass = "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30";
+                          bgClass = "bg-red-500/20 text-red-700 dark:text-red-400 border border-red-500/30";
                         } else if (score < 80) {
-                          variant = "secondary";
-                          bgClass = "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
+                          bgClass = "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-500/30";
                         }
                         
                         return (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Badge 
-                                variant={variant}
-                                className={cn("font-normal cursor-help", bgClass)}
+                              <span
+                                className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium cursor-help", bgClass)}
                                 data-testid={`badge-health-${project.id}`}
                               >
                                 {score}
-                              </Badge>
+                              </span>
                             </TooltipTrigger>
                             <TooltipContent side="left" className="max-w-xs">
                               {flags.length > 0 ? (
