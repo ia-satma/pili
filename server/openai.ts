@@ -5,6 +5,7 @@ import OpenAI from "openai";
 import pLimit from "p-limit";
 import pRetry, { AbortError } from "p-retry";
 import type { Project } from "@shared/schema";
+import { getPortfolioSummary, formatSummaryForLLM } from "./services/chatService";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const MODEL = "gpt-5";
@@ -129,74 +130,33 @@ export async function generatePMOBotResponse(
   return limit(() =>
     pRetry(
       async () => {
-        // Build context from projects with matrix logic
-        const projectsSummary = context.projects.map((p) => {
-          // Determine risk classification based on matrix logic
-          const capex = p.capexTier;
-          const financial = p.financialImpact;
-          let clasificacion = "SIN_CLASIFICAR";
-          
-          if (capex === "HIGH_COST" && (financial === "LOW_REVENUE" || financial === "NONE" || !financial)) {
-            clasificacion = "ZOMBIE_ALTO_RIESGO";
-          } else if ((capex === "LOW_COST" || capex === "ZERO_COST") && financial === "HIGH_REVENUE") {
-            clasificacion = "QUICK_WIN";
-          } else if (capex === "HIGH_COST" && financial === "HIGH_REVENUE") {
-            clasificacion = "BIG_BET";
-          } else if ((capex === "LOW_COST" || capex === "ZERO_COST") && (financial === "LOW_REVENUE" || financial === "NONE")) {
-            clasificacion = "FILL_IN";
-          }
-          
-          return {
-            id: p.id,
-            nombre: p.projectName || "Sin nombre",
-            descripcion: p.description && p.description.length > 10 ? p.description.substring(0, 200) + "..." : "Sin detalles proporcionados",
-            estado: p.status || "Sin estado",
-            departamento: p.departmentName || "Sin departamento",
-            responsable: p.responsible || "Sin asignar",
-            sponsor: p.sponsor || "Sin sponsor",
-            avance: p.percentComplete || 0,
-            fechaFin: p.endDateEstimatedTbd ? "TBD" : (p.endDateEstimated || "Sin fecha"),
-            capex_tier: p.capexTier || "SIN_CLASIFICAR",
-            financial_impact: p.financialImpact || "SIN_CLASIFICAR",
-            strategic_fit: p.strategicFit || "SIN_CLASIFICAR",
-            health_score: p.healthScore ?? null,
-            audit_flags: p.auditFlags || [],
-            clasificacion_matriz: clasificacion,
-          };
-        });
-
-        // Pre-compute portfolio statistics
-        const zombies = projectsSummary.filter(p => p.clasificacion_matriz === "ZOMBIE_ALTO_RIESGO");
-        const quickWins = projectsSummary.filter(p => p.clasificacion_matriz === "QUICK_WIN");
-        const bigBets = projectsSummary.filter(p => p.clasificacion_matriz === "BIG_BET");
-        const fillIns = projectsSummary.filter(p => p.clasificacion_matriz === "FILL_IN");
-        const sinClasificar = projectsSummary.filter(p => p.clasificacion_matriz === "SIN_CLASIFICAR");
-        const criticalHealth = projectsSummary.filter(p => p.health_score !== null && p.health_score < 50);
+        // SQL-FIRST OPTIMIZATION: Get pre-aggregated summary instead of sending 200+ raw rows
+        // This reduces prompt size by ~90% and gives LLM structured data to work with
+        const portfolioSummary = await getPortfolioSummary();
+        const sqlAggregatedContext = formatSummaryForLLM(portfolioSummary);
+        
+        // For specific project queries, we may still need some project details
+        // But only send a small relevant subset, not all 200+ rows
+        const relevantProjects = context.projects.slice(0, 20).map((p) => ({
+          id: p.id,
+          nombre: p.projectName || "Sin nombre",
+          estado: p.status || "Sin estado",
+          departamento: p.departmentName || "Sin departamento",
+          responsable: p.responsible || "Sin asignar",
+          avance: p.percentComplete || 0,
+          capex_tier: p.capexTier || null,
+          financial_impact: p.financialImpact || null,
+          strategic_fit: p.strategicFit || null,
+        }));
         
         const dataContext = `
-DATOS ACTUALES DEL PORTAFOLIO (Version: ${context.versionFileName || "Sin version"}):
-Total de proyectos: ${context.projects.length}
+${sqlAggregatedContext}
 
-=== RESUMEN EJECUTIVO DE MATRIZ ===
-- ZOMBIES/ALTO RIESGO (Alto Costo + Bajo Valor): ${zombies.length} proyectos
-- QUICK WINS (Bajo Costo + Alto Valor): ${quickWins.length} proyectos
-- BIG BETS (Alto Costo + Alto Valor): ${bigBets.length} proyectos
-- FILL-INS (Bajo Costo + Bajo Valor): ${fillIns.length} proyectos
-- SIN CLASIFICAR (Faltan datos): ${sinClasificar.length} proyectos
-- SALUD CRITICA (score < 50): ${criticalHealth.length} proyectos
+--- MUESTRA DE PROYECTOS (Primeros 20 para referencia) ---
+${JSON.stringify(relevantProjects, null, 2)}
 
-${zombies.length > 0 ? `
-=== PROYECTOS ZOMBIE (REVISAR URGENTE) ===
-${zombies.map(z => `- ${z.nombre} | Dept: ${z.departamento} | CAPEX: ${z.capex_tier} | Impacto: ${z.financial_impact}`).join('\n')}
-` : ''}
-
-${quickWins.length > 0 ? `
-=== QUICK WINS (OPORTUNIDADES) ===
-${quickWins.map(q => `- ${q.nombre} | Dept: ${q.departamento} | CAPEX: ${q.capex_tier} | Impacto: ${q.financial_impact}`).join('\n')}
-` : ''}
-
-=== DETALLE DE TODOS LOS PROYECTOS ===
-${JSON.stringify(projectsSummary, null, 2)}
+NOTA: Para preguntas sobre proyectos especificos por nombre, usa los datos del resumen.
+Para conteos y estadisticas, usa SIEMPRE los numeros del resumen SQL (son exactos).
 `;
 
         const response = await openai.chat.completions.create({
