@@ -557,13 +557,14 @@ export function ProjectsGrid() {
                 />
               </TableHead>
               <TableHead className="w-10"></TableHead>
+              <TableHead className="w-24">ID</TableHead>
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
                   onClick={() => handleSort("projectName")}
                   data-testid="sort-project-name"
                 >
-                  Proyecto
+                  Nombre
                   <SortIcon field="projectName" />
                 </button>
               </TableHead>
@@ -573,11 +574,10 @@ export function ProjectsGrid() {
                   onClick={() => handleSort("departmentName")}
                   data-testid="sort-department"
                 >
-                  Departamento
+                  Área
                   <SortIcon field="departmentName" />
                 </button>
               </TableHead>
-              <TableHead>Responsable</TableHead>
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
@@ -591,16 +591,6 @@ export function ProjectsGrid() {
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
-                  onClick={() => handleSort("endDateEstimated")}
-                  data-testid="sort-end-date"
-                >
-                  Fecha Fin
-                  <SortIcon field="endDateEstimated" />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  className="flex items-center font-medium hover:text-foreground"
                   onClick={() => handleSort("percentComplete")}
                   data-testid="sort-progress"
                 >
@@ -608,6 +598,21 @@ export function ProjectsGrid() {
                   <SortIcon field="percentComplete" />
                 </button>
               </TableHead>
+              <TableHead>Prioridad</TableHead>
+              <TableHead>Líder</TableHead>
+              <TableHead>Sponsor</TableHead>
+              <TableHead>Fecha Inicio</TableHead>
+              <TableHead>
+                <button
+                  className="flex items-center font-medium hover:text-foreground"
+                  onClick={() => handleSort("endDateEstimated")}
+                  data-testid="sort-end-date"
+                >
+                  Fecha Fin
+                  <SortIcon field="endDateEstimated" />
+                </button>
+              </TableHead>
+              <TableHead>Presupuesto</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -617,18 +622,23 @@ export function ProjectsGrid() {
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-4 w-4 rounded" /></TableCell>
                   <TableCell><Skeleton className="h-3 w-3 rounded-full" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-48" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-2 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                 </TableRow>
               ))
             ) : paginatedProjects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={14} className="h-32 text-center text-muted-foreground">
                   No se encontraron proyectos
                 </TableCell>
               </TableRow>
@@ -666,14 +676,14 @@ export function ProjectsGrid() {
                     <TableCell>
                       <TrafficLight status={trafficLight} size="sm" />
                     </TableCell>
+                    <TableCell className="text-xs text-muted-foreground font-mono" data-testid={`cell-id-${project.id}`}>
+                      {project.legacyId || "—"}
+                    </TableCell>
                     <TableCell className="font-medium max-w-[200px] truncate">
                       {project.projectName}
                     </TableCell>
                     <TableCell className="text-muted-foreground max-w-[120px] truncate">
                       {project.departmentName || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[120px] truncate">
-                      {project.responsible || "—"}
                     </TableCell>
                     <TableCell>
                       {project.status ? (
@@ -682,13 +692,6 @@ export function ProjectsGrid() {
                         </Badge>
                       ) : (
                         "—"
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      {project.endDateEstimatedTbd ? (
-                        <Badge variant="outline" className="text-xs font-normal">TBD</Badge>
-                      ) : (
-                        formatDate(project.endDateEstimated)
                       )}
                     </TableCell>
                     <TableCell>
@@ -703,6 +706,62 @@ export function ProjectsGrid() {
                           {project.percentComplete || 0}%
                         </span>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {project.priority ? (
+                        <Badge 
+                          variant="outline" 
+                          className={cn(
+                            "font-normal",
+                            project.priority.toLowerCase().includes("alta") && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
+                            project.priority.toLowerCase().includes("media") && "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
+                            project.priority.toLowerCase().includes("baja") && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30"
+                          )}
+                          data-testid={`cell-priority-${project.id}`}
+                        >
+                          {project.priority}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[120px] truncate">
+                      {project.responsible || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[120px] truncate">
+                      {project.sponsor || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {formatDate(project.startDate)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {project.endDateEstimatedTbd ? (
+                        <Badge variant="outline" className="text-xs font-normal">TBD</Badge>
+                      ) : (
+                        formatDate(project.endDateEstimated)
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-sm">
+                      {(() => {
+                        const extraFields = project.extraFields as Record<string, unknown> | null;
+                        const budgetValue = extraFields?.["Presupuesto"] ?? extraFields?.["Budget"] ?? extraFields?.["budget"] ?? null;
+                        if (budgetValue === null || budgetValue === undefined || budgetValue === "") {
+                          return "—";
+                        }
+                        const numValue = typeof budgetValue === "number" 
+                          ? budgetValue 
+                          : typeof budgetValue === "string" 
+                            ? parseFloat(budgetValue.replace(/[^0-9.-]/g, ""))
+                            : null;
+                        if (numValue === null || isNaN(numValue)) {
+                          return String(budgetValue);
+                        }
+                        return new Intl.NumberFormat("es-MX", {
+                          style: "currency",
+                          currency: "MXN",
+                          minimumFractionDigits: 0,
+                        }).format(numValue);
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Button
