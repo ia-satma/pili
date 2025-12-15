@@ -37,6 +37,9 @@ import {
   Scatter,
   ZAxis,
   ReferenceLine,
+  RadialBarChart,
+  RadialBar,
+  PolarAngleAxis,
 } from "recharts";
 import type { Project } from "@shared/schema";
 
@@ -103,6 +106,13 @@ interface DashboardData {
   staleProjectsList: StaleProject[];
 }
 
+interface HealthStats {
+  totalProjects: number;
+  cleanProjects: number;
+  dirtyProjects: number;
+  averageScore: number;
+}
+
 const CHART_COLORS = [
   "hsl(217, 91%, 48%)",  // primary blue
   "hsl(142, 71%, 35%)",  // green
@@ -125,6 +135,70 @@ const QUADRANT_COLORS = {
   moneyPit: "hsl(0, 84%, 60%)",      // Red
 };
 
+const DMAIC_COLORS = {
+  define: "hsl(217, 91%, 48%)",     // Blue
+  measure: "hsl(262, 52%, 52%)",    // Purple
+  analyze: "hsl(32, 95%, 48%)",     // Orange
+  improve: "hsl(142, 71%, 35%)",    // Green
+  control: "hsl(340, 82%, 45%)",    // Pink
+};
+
+function mapStatusesToDMAIC(statusData: { name: string; count: number }[]): { phase: string; count: number; color: string }[] {
+  const excludedStatuses = new Set(["cancelado", "cancelled", "canceled"]);
+  
+  const dmaicMap: Record<string, { phase: string; color: string }> = {
+    "nuevo": { phase: "Define", color: DMAIC_COLORS.define },
+    "proyecto nuevo": { phase: "Define", color: DMAIC_COLORS.define },
+    "new": { phase: "Define", color: DMAIC_COLORS.define },
+    "abierto": { phase: "Define", color: DMAIC_COLORS.define },
+    "sin estado": { phase: "Define", color: DMAIC_COLORS.define },
+    
+    "análisis": { phase: "Measure", color: DMAIC_COLORS.measure },
+    "analisis": { phase: "Measure", color: DMAIC_COLORS.measure },
+    "medición": { phase: "Measure", color: DMAIC_COLORS.measure },
+    
+    "pruebas": { phase: "Analyze", color: DMAIC_COLORS.analyze },
+    "testing": { phase: "Analyze", color: DMAIC_COLORS.analyze },
+    "evaluación": { phase: "Analyze", color: DMAIC_COLORS.analyze },
+    
+    "desarrollo": { phase: "Improve", color: DMAIC_COLORS.improve },
+    "implementación": { phase: "Improve", color: DMAIC_COLORS.improve },
+    "implementacion": { phase: "Improve", color: DMAIC_COLORS.improve },
+    "on going": { phase: "Improve", color: DMAIC_COLORS.improve },
+    "en progreso": { phase: "Improve", color: DMAIC_COLORS.improve },
+    
+    "terminado": { phase: "Control", color: DMAIC_COLORS.control },
+    "cerrado": { phase: "Control", color: DMAIC_COLORS.control },
+    "completado": { phase: "Control", color: DMAIC_COLORS.control },
+    "closed": { phase: "Control", color: DMAIC_COLORS.control },
+  };
+  
+  const phaseCounts: Record<string, { count: number; color: string }> = {
+    "Define": { count: 0, color: DMAIC_COLORS.define },
+    "Measure": { count: 0, color: DMAIC_COLORS.measure },
+    "Analyze": { count: 0, color: DMAIC_COLORS.analyze },
+    "Improve": { count: 0, color: DMAIC_COLORS.improve },
+    "Control": { count: 0, color: DMAIC_COLORS.control },
+  };
+  
+  statusData.forEach((item) => {
+    const normalized = item.name.toLowerCase().trim();
+    if (excludedStatuses.has(normalized)) {
+      return;
+    }
+    const mapping = dmaicMap[normalized];
+    if (mapping) {
+      phaseCounts[mapping.phase].count += item.count;
+    }
+  });
+  
+  return Object.entries(phaseCounts).map(([phase, data]) => ({
+    phase,
+    count: data.count,
+    color: data.color,
+  }));
+}
+
 export default function Dashboard() {
   useDocumentTitle("Dashboard");
   const { buildQueryString, hasActiveFilters } = useFilters();
@@ -138,6 +212,11 @@ export default function Dashboard() {
   const { data: scoringData, isLoading: scoringLoading } = useQuery<ScoringMatrixData>({
     queryKey: ["/api/scoring/matrix", queryString],
     queryFn: () => fetch(`/api/scoring/matrix${queryString ? `?${queryString}` : ""}`).then(r => r.json()),
+  });
+
+  const { data: healthStats, isLoading: healthLoading } = useQuery<HealthStats>({
+    queryKey: ["/api/health/stats"],
+    refetchInterval: 30000,
   });
 
   if (error) {
@@ -217,6 +296,146 @@ export default function Dashboard() {
             />
           </>
         )}
+      </div>
+
+      {/* Quality Pulse & Stagnation Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Quality Pulse Gauge */}
+        <Card className="overflow-visible" data-testid="quality-pulse-widget">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Pulso de Calidad
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">Salud promedio de datos del portafolio</p>
+          </CardHeader>
+          <CardContent>
+            {healthLoading ? (
+              <Skeleton className="h-48 w-full" />
+            ) : (
+              <div className="flex flex-col items-center" data-testid="gauge-quality-pulse">
+                <div className="relative w-48 h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadialBarChart
+                      cx="50%"
+                      cy="50%"
+                      innerRadius="60%"
+                      outerRadius="100%"
+                      barSize={16}
+                      data={[{
+                        name: "Salud",
+                        value: healthStats?.averageScore || 0,
+                        fill: (healthStats?.averageScore || 0) >= 90
+                          ? TRAFFIC_COLORS.green
+                          : (healthStats?.averageScore || 0) >= 70
+                            ? TRAFFIC_COLORS.yellow
+                            : TRAFFIC_COLORS.red
+                      }]}
+                      startAngle={180}
+                      endAngle={0}
+                    >
+                      <PolarAngleAxis
+                        type="number"
+                        domain={[0, 100]}
+                        angleAxisId={0}
+                        tick={false}
+                      />
+                      <RadialBar
+                        background={{ fill: "hsl(var(--muted))" }}
+                        dataKey="value"
+                        cornerRadius={8}
+                      />
+                    </RadialBarChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pt-6">
+                    <span 
+                      className="text-4xl font-bold"
+                      style={{
+                        color: (healthStats?.averageScore || 0) >= 90
+                          ? TRAFFIC_COLORS.green
+                          : (healthStats?.averageScore || 0) >= 70
+                            ? TRAFFIC_COLORS.yellow
+                            : TRAFFIC_COLORS.red
+                      }}
+                      data-testid="text-health-score"
+                    >
+                      {healthStats?.averageScore || 0}%
+                    </span>
+                    <span className="text-xs text-muted-foreground">Salud Promedio</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 w-full mt-4 text-center">
+                  <div>
+                    <div className="text-lg font-semibold" data-testid="text-total-projects">{healthStats?.totalProjects || 0}</div>
+                    <div className="text-xs text-muted-foreground">Total</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-semibold text-traffic-green" data-testid="text-clean-projects">{healthStats?.cleanProjects || 0}</div>
+                    <div className="text-xs text-muted-foreground">Limpios</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-semibold text-traffic-yellow" data-testid="text-dirty-projects">{healthStats?.dirtyProjects || 0}</div>
+                    <div className="text-xs text-muted-foreground">Incompletos</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Placeholder for Stagnation Radar - Task dash-2 */}
+        <Card className="lg:col-span-2 overflow-visible" data-testid="stagnation-radar-widget">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <CalendarX2 className="h-5 w-5 text-traffic-yellow" />
+              Radar de Estancamiento
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">Proyectos sin actualizar por más de 14 días</p>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-48 w-full" />
+            ) : (data?.staleProjectsList || []).length === 0 ? (
+              <div className="h-48 flex flex-col items-center justify-center text-muted-foreground">
+                <CheckCircle2 className="h-12 w-12 mb-2 text-traffic-green" />
+                <p className="text-sm">Todos los proyectos están actualizados</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {(data?.staleProjectsList || []).slice(0, 5).map((project) => (
+                  <div
+                    key={project.id}
+                    className="flex items-center justify-between p-3 rounded-md bg-muted/50 hover-elevate"
+                    data-testid={`stale-project-${project.id}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{project.projectName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {project.departmentName || "Sin departamento"} · {project.daysSinceUpdate} días sin actualizar
+                      </p>
+                    </div>
+                    <Link href={`/project-master?id=${project.id}`}>
+                      <Badge 
+                        variant="outline" 
+                        className="cursor-pointer text-xs border-traffic-yellow text-traffic-yellow hover:bg-traffic-yellow/10"
+                        data-testid={`button-update-${project.id}`}
+                      >
+                        Actualizar
+                      </Badge>
+                    </Link>
+                  </div>
+                ))}
+                {(data?.staleProjectsList || []).length > 5 && (
+                  <Link href="/project-master?filter=stale">
+                    <p className="text-xs text-center text-primary hover:underline cursor-pointer mt-2">
+                      Ver {(data?.staleProjectsList || []).length - 5} proyectos más...
+                    </p>
+                  </Link>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Charts Row */}
@@ -312,6 +531,65 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* DMAIC Methodology Breakdown */}
+      <Card className="overflow-visible" data-testid="chart-dmaic-breakdown">
+        <CardHeader>
+          <CardTitle className="text-base">Distribución por Fase DMAIC</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Define, Measure, Analyze, Improve, Control - Metodología Six Sigma
+          </p>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-64 w-full" />
+          ) : (
+            (() => {
+              const dmaicData = mapStatusesToDMAIC(data?.projectsByStatus || []);
+              const total = dmaicData.reduce((sum, d) => sum + d.count, 0);
+              return total === 0 ? (
+                <div className="h-64 flex flex-col items-center justify-center text-muted-foreground">
+                  <p>No hay datos de metodología disponibles</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart
+                    data={dmaicData}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis 
+                      dataKey="phase" 
+                      tick={{ fontSize: 12 }}
+                    />
+                    <YAxis 
+                      allowDecimals={false}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "6px",
+                      }}
+                      formatter={(value: number) => [value, "Proyectos"]}
+                    />
+                    <Bar
+                      dataKey="count"
+                      radius={[4, 4, 0, 0]}
+                      name="Proyectos"
+                    >
+                      {dmaicData.map((entry, index) => (
+                        <Cell key={`dmaic-cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              );
+            })()
+          )}
+        </CardContent>
+      </Card>
 
       {/* Value/Effort Matrix - Scatter Plot */}
       <Card className="overflow-visible" data-testid="value-effort-matrix">

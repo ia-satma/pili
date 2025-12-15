@@ -1051,6 +1051,23 @@ export const insertOutputRunSchema = createInsertSchema(outputRuns).omit({ id: t
 export type OutputRun = typeof outputRuns.$inferSelect;
 export type InsertOutputRun = z.infer<typeof insertOutputRunSchema>;
 
+// ===== Chaser Notifications Table =====
+
+export const chaserNotifications = pgTable("chaser_notifications", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  projectId: integer("project_id").references(() => projects.id).notNull(),
+  recipientEmail: text("recipient_email"),
+  recipientName: text("recipient_name"),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("pending"), // pending, sent, failed
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  sentAt: timestamp("sent_at"),
+});
+
+export const insertChaserNotificationSchema = createInsertSchema(chaserNotifications).omit({ id: true });
+export type ChaserNotification = typeof chaserNotifications.$inferSelect;
+export type InsertChaserNotification = z.infer<typeof insertChaserNotificationSchema>;
+
 // Traffic light status enum for frontend
 export type TrafficLightStatus = 'green' | 'yellow' | 'red' | 'gray';
 

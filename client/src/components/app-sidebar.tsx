@@ -46,6 +46,19 @@ const mainNavItems = [
     title: "Dashboard",
     url: "/",
     icon: LayoutDashboard,
+    description: "Vista general",
+  },
+  {
+    title: "Smart Grid",
+    url: "/project-master",
+    icon: Grid3X3,
+    description: "Editor de proyectos",
+  },
+  {
+    title: "Limpieza de Datos",
+    url: "/admin/data-cleaning",
+    icon: Activity,
+    description: "Validación y corrección",
   },
   {
     title: "Proyectos",
@@ -71,11 +84,6 @@ const mainNavItems = [
     title: "Alertas",
     url: "/alerts",
     icon: AlertTriangle,
-  },
-  {
-    title: "Project Master",
-    url: "/project-master",
-    icon: Grid3X3,
   },
 ];
 
@@ -227,7 +235,7 @@ export function AppSidebar() {
                         isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
                       )}
                     >
-                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase()}`}>
+                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
                         {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
@@ -262,7 +270,7 @@ export function AppSidebar() {
                         isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
                       )}
                     >
-                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(' ', '-')}`}>
+                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
                         {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
@@ -293,7 +301,7 @@ export function AppSidebar() {
                           isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
                         )}
                       >
-                        <Link href={item.url} data-testid="link-admin-users">
+                        <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
                           {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
