@@ -375,7 +375,10 @@ export function AppSidebar() {
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />
               <span>System Active</span>
             </div>
-            <span className="text-[9px] opacity-80">Last Update: 16 Dec, 08:10 AM</span>
+            <div className="flex flex-col gap-0.5 opacity-80 scale-90">
+              <span>Last: 16 Dec, 08:12 AM</span>
+              <span className="font-semibold">By: Antigravity</span>
+            </div>
           </Badge>
         </div>
       </SidebarFooter>
