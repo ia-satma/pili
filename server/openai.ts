@@ -2,8 +2,7 @@
 // This uses Replit's AI Integrations service, which provides OpenAI-compatible API access
 // without requiring your own API key. Charges are billed to your Replit credits.
 import OpenAI from "openai";
-import pLimit from "p-limit";
-import pRetry, { AbortError } from "p-retry";
+import OpenAI from "openai";
 import type { Project } from "@shared/schema";
 import { getPortfolioSummary, formatSummaryForLLM } from "./services/chatService";
 
@@ -113,31 +112,29 @@ export async function generatePMOBotResponse(
     };
   }
 
-  const limit = pLimit(1);
+  // NATIVE RETRY LOGIC - Removed p-retry/p-limit to ensure stability
+  let lastError: unknown;
+  const maxRetries = 3;
 
-  return limit(() =>
-    pRetry(
-      async () => {
-        // SQL-FIRST OPTIMIZATION: Get pre-aggregated summary instead of sending 200+ raw rows
-        // This reduces prompt size by ~90% and gives LLM structured data to work with
-        const portfolioSummary = await getPortfolioSummary();
-        const sqlAggregatedContext = formatSummaryForLLM(portfolioSummary);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // SQL-FIRST OPTIMIZATION
+      const portfolioSummary = await getPortfolioSummary();
+      const sqlAggregatedContext = formatSummaryForLLM(portfolioSummary);
 
-        // For specific project queries, we may still need some project details
-        // But only send a small relevant subset, not all 200+ rows
-        const relevantProjects = context.projects.slice(0, 20).map((p) => ({
-          id: p.id,
-          nombre: p.projectName || "Sin nombre",
-          estado: p.status || "Sin estado",
-          departamento: p.departmentName || "Sin departamento",
-          responsable: p.responsible || "Sin asignar",
-          avance: p.percentComplete || 0,
-          capex_tier: p.capexTier || null,
-          financial_impact: p.financialImpact || null,
-          strategic_fit: p.strategicFit || null,
-        }));
+      const relevantProjects = context.projects.slice(0, 20).map((p) => ({
+        id: p.id,
+        nombre: p.projectName || "Sin nombre",
+        estado: p.status || "Sin estado",
+        departamento: p.departmentName || "Sin departamento",
+        responsable: p.responsible || "Sin asignar",
+        avance: p.percentComplete || 0,
+        capex_tier: p.capexTier || null,
+        financial_impact: p.financialImpact || null,
+        strategic_fit: p.strategicFit || null,
+      }));
 
-        const dataContext = `
+      const dataContext = `
 ${sqlAggregatedContext}
 
 --- MUESTRA DE PROYECTOS (Primeros 20 para referencia) ---
@@ -147,45 +144,50 @@ NOTA: Para preguntas sobre proyectos especificos por nombre, usa los datos del r
 Para conteos y estadisticas, usa SIEMPRE los numeros del resumen SQL (son exactos).
 `;
 
-        const response = await openai.chat.completions.create({
-          model: MODEL,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "system", content: dataContext },
-            { role: "user", content: userMessage },
-          ],
-          max_completion_tokens: 2048,
-          response_format: { type: "json_object" },
-        });
+      const response = await openai.chat.completions.create({
+        model: MODEL,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: dataContext },
+          { role: "user", content: userMessage },
+        ],
+        max_completion_tokens: 2048,
+        response_format: { type: "json_object" },
+      });
 
-        const content = response.choices[0]?.message?.content || "";
+      const content = response.choices[0]?.message?.content || "";
 
-        try {
-          const parsed = JSON.parse(content);
-          return {
-            content: parsed.respuesta || parsed.response || parsed.content || content,
-            citations: (parsed.citas || parsed.citations || []).map((c: any) => ({
-              sheet: c.sheet || c.hoja,
-              row: c.row || c.fila,
-              column: c.column || c.columna,
-              value: c.value || c.valor,
-            })),
-          };
-        } catch {
-          // If JSON parsing fails, return raw content
-          return {
-            content: content,
-            citations: [],
-          };
-        }
-      },
-      {
-        retries: 3,
-        minTimeout: 1000,
-        maxTimeout: 10000,
-        factor: 2,
-        // Removed strict AbortError logic to allow retries on 5xx and network errors
+      try {
+        const parsed = JSON.parse(content);
+        return {
+          content: parsed.respuesta || parsed.response || parsed.content || content,
+          citations: (parsed.citas || parsed.citations || []).map((c: any) => ({
+            sheet: c.sheet || c.hoja,
+            row: c.row || c.fila,
+            column: c.column || c.columna,
+            value: c.value || c.valor,
+          })),
+        };
+      } catch {
+        return {
+          content: content,
+          citations: [],
+        };
       }
-    )
-  );
+
+    } catch (error) {
+      console.error(`[PMO Bot] Attempt ${attempt} failed:`, error);
+      lastError = error;
+
+      // Don't wait on last attempt
+      if (attempt < maxRetries) {
+        // Exponential backoff: 1s, 2s, 4s
+        const delay = 1000 * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // If we get here, all retries failed
+  throw lastError;
 }
