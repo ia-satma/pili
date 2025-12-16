@@ -18,7 +18,7 @@ A Project Management Office (PMO) dashboard designed for managing continuous imp
 -   **Authentication**: Email/Password with `passport-local` + `bcrypt`
 -   **UI Components**: `shadcn/ui` + Tailwind CSS
 -   **Charts**: Recharts
--   **AI**: OpenAI GPT-5 via Replit AI Integrations
+-   **AI**: Google Gemini 2.5 Pro via Replit AI Integrations
 
 ### Core Architectural Decisions
 -   **Deterministic Excel Parsing**: Implemented a strict two-sheet parser ("Proyectos PGP" and "Indicadores") with row-level error handling to ensure high data integrity during ingestion.
@@ -47,6 +47,6 @@ A Project Management Office (PMO) dashboard designed for managing continuous imp
 
 ## External Dependencies
 -   **PostgreSQL (Neon)**: Cloud-hosted relational database for all persistent data storage.
--   **OpenAI GPT-5**: Utilized for the PMO Chatbot and AI Agent functionality, adhering to strict zero-hallucination policies.
+-   **Google Gemini 2.5 Pro**: Utilized for the PMO Chatbot (Pilar) and AI Agent functionality, adhering to strict zero-hallucination policies. Migrated from OpenAI GPT-5 on Dec 16, 2025.
 -   **Replit AI Integrations**: Platform services used for integrating AI functionalities within the Replit environment.
 -   **Replit Auth**: OpenID Connect-based authentication for user management and secure access.

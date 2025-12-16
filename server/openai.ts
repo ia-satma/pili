@@ -1,16 +1,22 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// Using Replit AI Integrations for Gemini
+// This uses Replit's AI Integrations service, which provides Gemini-compatible API access
+// without requiring your own API key. Charges are billed to your Replit credits.
+import { GoogleGenAI } from "@google/genai";
 import type { Project } from "@shared/schema";
 import { getPortfolioSummary, formatSummaryForLLM } from "./services/chatService";
 
-// Use Gemini 1.5 Pro for maximum reasoning capability
-const MODEL_NAME = "gemini-1.5-pro";
+// Use Gemini 2.5 Pro for maximum reasoning capability
+const MODEL_NAME = "gemini-2.5-pro";
 
-const API_KEY = process.env.GEMINI_API_KEY;
-const genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null;
-const model = genAI ? genAI.getGenerativeModel({ model: MODEL_NAME, generationConfig: { responseMimeType: "application/json" } }) : null;
+const isConfigured = !!(process.env.AI_INTEGRATIONS_GEMINI_BASE_URL && process.env.AI_INTEGRATIONS_GEMINI_API_KEY);
+
+const genAI = isConfigured ? new GoogleGenAI({
+  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY!,
+  httpOptions: { baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL },
+}) : null;
 
 export function isOpenAIConfigured(): boolean {
-  return !!API_KEY;
+  return isConfigured;
 }
 
 export interface ChatContext {
@@ -88,9 +94,9 @@ export async function generatePMOBotResponse(
   userMessage: string,
   context: ChatContext
 ): Promise<PMOBotResponse> {
-  if (!model) {
+  if (!genAI) {
     return {
-      content: "El asistente PMO Bot no está configurado (Falta GEMINI_API_KEY). Por favor contacta al administrador.",
+      content: "El asistente PMO Bot no está configurado. Por favor contacta al administrador para habilitar la integración con Gemini.",
       citations: [],
     };
   }
@@ -129,9 +135,15 @@ Para conteos y estadisticas, usa SIEMPRE los numeros del resumen SQL (son exacto
 
       const prompt = `${SYSTEM_PROMPT}\n\nCONTEXTO DE DATOS:\n${dataContext}\n\nPREGUNTA USUARIO:\n${userMessage}`;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const response = await genAI.models.generateContent({
+        model: MODEL_NAME,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+        },
+      });
+
+      const text = response.text || "";
 
       try {
         const parsed = JSON.parse(text);
