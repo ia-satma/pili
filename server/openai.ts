@@ -1,33 +1,16 @@
-// Using javascript_openai_ai_integrations blueprint
-// This uses Replit's AI Integrations service, which provides OpenAI-compatible API access
-// without requiring your own API key. Charges are billed to your Replit credits.
-import OpenAI from "openai";
-
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { Project } from "@shared/schema";
 import { getPortfolioSummary, formatSummaryForLLM } from "./services/chatService";
 
-// Switched to gpt-4o for better performance/latency as requested by user
-const MODEL = "gpt-4o";
+// Use Gemini 1.5 Pro for maximum reasoning capability
+const MODEL_NAME = "gemini-1.5-pro";
 
-const isConfigured = !!(process.env.AI_INTEGRATIONS_OPENAI_BASE_URL && process.env.AI_INTEGRATIONS_OPENAI_API_KEY);
-
-const openai = isConfigured ? new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY
-}) : null;
+const API_KEY = process.env.GEMINI_API_KEY;
+const genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null;
+const model = genAI ? genAI.getGenerativeModel({ model: MODEL_NAME, generationConfig: { responseMimeType: "application/json" } }) : null;
 
 export function isOpenAIConfigured(): boolean {
-  return isConfigured;
-}
-
-function isRateLimitError(error: unknown): boolean {
-  const errorMsg = error instanceof Error ? error.message : String(error);
-  return (
-    errorMsg.includes("429") ||
-    errorMsg.includes("RATELIMIT_EXCEEDED") ||
-    errorMsg.toLowerCase().includes("quota") ||
-    errorMsg.toLowerCase().includes("rate limit")
-  );
+  return !!API_KEY;
 }
 
 export interface ChatContext {
@@ -105,14 +88,14 @@ export async function generatePMOBotResponse(
   userMessage: string,
   context: ChatContext
 ): Promise<PMOBotResponse> {
-  if (!openai) {
+  if (!model) {
     return {
-      content: "El asistente PMO Bot no está configurado actualmente. Por favor contacta al administrador para habilitar la integración con OpenAI.",
+      content: "El asistente PMO Bot no está configurado (Falta GEMINI_API_KEY). Por favor contacta al administrador.",
       citations: [],
     };
   }
 
-  // NATIVE RETRY LOGIC - Removed p-retry/p-limit to ensure stability
+  // NATIVE RETRY LOGIC
   let lastError: unknown;
   const maxRetries = 3;
 
@@ -144,23 +127,16 @@ NOTA: Para preguntas sobre proyectos especificos por nombre, usa los datos del r
 Para conteos y estadisticas, usa SIEMPRE los numeros del resumen SQL (son exactos).
 `;
 
-      const response = await openai.chat.completions.create({
-        model: MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "system", content: dataContext },
-          { role: "user", content: userMessage },
-        ],
-        max_completion_tokens: 2048,
-        response_format: { type: "json_object" },
-      });
+      const prompt = `${SYSTEM_PROMPT}\n\nCONTEXTO DE DATOS:\n${dataContext}\n\nPREGUNTA USUARIO:\n${userMessage}`;
 
-      const content = response.choices[0]?.message?.content || "";
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
 
       try {
-        const parsed = JSON.parse(content);
+        const parsed = JSON.parse(text);
         return {
-          content: parsed.respuesta || parsed.response || parsed.content || content,
+          content: parsed.respuesta || parsed.response || parsed.content || text,
           citations: (parsed.citas || parsed.citations || []).map((c: any) => ({
             sheet: c.sheet || c.hoja,
             row: c.row || c.fila,
@@ -170,24 +146,21 @@ Para conteos y estadisticas, usa SIEMPRE los numeros del resumen SQL (son exacto
         };
       } catch {
         return {
-          content: content,
+          content: text,
           citations: [],
         };
       }
 
     } catch (error) {
-      console.error(`[PMO Bot] Attempt ${attempt} failed:`, error);
+      console.error(`[PMO Bot] Gemini Attempt ${attempt} failed:`, error);
       lastError = error;
 
-      // Don't wait on last attempt
       if (attempt < maxRetries) {
-        // Exponential backoff: 1s, 2s, 4s
         const delay = 1000 * Math.pow(2, attempt - 1);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
 
-  // If we get here, all retries failed
   throw lastError;
 }
