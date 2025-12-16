@@ -6,8 +6,8 @@ import OpenAI from "openai";
 import type { Project } from "@shared/schema";
 import { getPortfolioSummary, formatSummaryForLLM } from "./services/chatService";
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const MODEL = "gpt-5";
+// Switched to gpt-4o for better performance/latency as requested by user
+const MODEL = "gpt-4o";
 
 const isConfigured = !!(process.env.AI_INTEGRATIONS_OPENAI_BASE_URL && process.env.AI_INTEGRATIONS_OPENAI_API_KEY);
 
