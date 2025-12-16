@@ -6,7 +6,7 @@ import type { Project } from "@shared/schema";
 import { getPortfolioSummary, formatSummaryForLLM } from "./services/chatService";
 
 // Use Gemini 2.5 Pro for maximum reasoning capability
-const MODEL_NAME = "gemini-2.5-pro";
+const MODEL_NAME = "gemini-1.5-pro";
 
 const isConfigured = !!(process.env.AI_INTEGRATIONS_GEMINI_BASE_URL && process.env.AI_INTEGRATIONS_GEMINI_API_KEY);
 
