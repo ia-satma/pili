@@ -197,13 +197,13 @@ async function runCouncilReviews(agentRunId: number): Promise<CouncilReview[]> {
   });
   reviews.push(chairmanReview);
 
-  const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+  const hasAnthropicKey = !!process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
   if (!hasAnthropicKey) {
     const criticReview = await storage.createCouncilReview({
       agentRunId,
       reviewerType: "CRITIC",
       status: "BLOCKED",
-      notes: "ANTHROPIC_API_KEY no configurada - revisión no disponible",
+      notes: "Claude (Anthropic) no configurado - revisión no disponible",
     });
     reviews.push(criticReview);
   } else {
@@ -216,13 +216,13 @@ async function runCouncilReviews(agentRunId: number): Promise<CouncilReview[]> {
     reviews.push(criticReview);
   }
 
-  const hasGoogleKey = !!process.env.GOOGLE_API_KEY;
+  const hasGoogleKey = !!process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
   if (!hasGoogleKey) {
     const quantReview = await storage.createCouncilReview({
       agentRunId,
       reviewerType: "QUANT",
       status: "BLOCKED",
-      notes: "GOOGLE_API_KEY no configurada - revisión no disponible",
+      notes: "Gemini (Google) no configurado - revisión no disponible",
     });
     reviews.push(quantReview);
   } else {

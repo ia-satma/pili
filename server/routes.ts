@@ -2809,10 +2809,10 @@ Responde SOLO con el resumen narrativo, sin agregar información adicional.`;
   // Get agent health status
   app.get("/api/agents/health", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      // Check API keys
+      // Check API keys (Replit AI Integrations)
       const openaiKey = !!process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
-      const anthropicKey = !!process.env.ANTHROPIC_API_KEY;
-      const googleKey = !!process.env.GOOGLE_API_KEY;
+      const anthropicKey = !!process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
+      const googleKey = !!process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
 
       const keys = {
         openai: { name: "OpenAI (GPT)", configured: openaiKey },
