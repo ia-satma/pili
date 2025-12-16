@@ -216,7 +216,7 @@ export function AppSidebar() {
           </div>
         </div>
       </SidebarHeader>
-      
+
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wide text-muted-foreground px-4 py-2">
@@ -256,11 +256,11 @@ export function AppSidebar() {
             <SidebarMenu>
               {managementItems.map((item) => {
                 const isActive = location === item.url;
-                const hasAccess = !item.requiredRole || 
+                const hasAccess = !item.requiredRole ||
                   (item.requiredRole === "editor" && isEditor);
-                
+
                 if (!hasAccess) return null;
-                
+
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
@@ -336,8 +336,8 @@ export function AppSidebar() {
                 <span className="text-xs font-medium truncate" data-testid="text-user-name">
                   {getUserName()}
                 </span>
-                <Badge 
-                  variant={getRoleBadgeVariant(user.role)} 
+                <Badge
+                  variant={getRoleBadgeVariant(user.role)}
                   className="w-fit text-[10px] px-1.5 py-0"
                   data-testid="badge-user-role"
                 >
@@ -368,6 +368,13 @@ export function AppSidebar() {
             Iniciar sesión
           </Button>
         )}
+
+        <div className="mt-4 pt-2 border-t border-sidebar-border text-center">
+          <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-700 border-green-200 hover:bg-green-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />
+            v2.1 - PMO Bot: Tags Active
+          </Badge>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );
