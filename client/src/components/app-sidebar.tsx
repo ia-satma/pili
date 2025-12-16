@@ -376,7 +376,7 @@ export function AppSidebar() {
               <span>System Active</span>
             </div>
             <div className="flex flex-col gap-0.5 opacity-80 scale-90">
-              <span>Last: 16 Dec, 08:12 AM</span>
+              <span>Last: 16 Dec, 09:35 AM</span>
               <span className="font-semibold">By: Antigravity</span>
             </div>
           </Badge>
