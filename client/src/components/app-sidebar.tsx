@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Table2,
@@ -170,6 +170,23 @@ function getRoleLabel(role: string): string {
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
   const { user, isLoading, isAuthenticated, isAdmin, isEditor } = useAuth();
+
+  // Automate System Status Badge (Auto-detects Server Restarts)
+  const { data: systemHealth } = useQuery({
+    queryKey: ["/api/health"],
+    queryFn: async () => {
+      const res = await fetch("/api/health");
+      if (!res.ok) throw new Error("Health check failed");
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  const formattedTime = systemHealth?.startupTime
+    ? new Date(systemHealth.startupTime).toLocaleString('en-US', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+    })
+    : "Connecting...";
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -376,8 +393,8 @@ export function AppSidebar() {
               <span>System Active</span>
             </div>
             <div className="flex flex-col gap-0.5 opacity-80 scale-90">
-              <span>Last: 16 Dec, 09:35 AM</span>
-              <span className="font-semibold">By: Antigravity</span>
+              <span>Last: {formattedTime}</span>
+              <span className="font-semibold">By: {systemHealth?.model ? "Antigravity + Gemini" : "Antigravity"}</span>
             </div>
           </Badge>
         </div>
