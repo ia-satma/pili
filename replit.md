@@ -18,7 +18,7 @@ A Project Management Office (PMO) dashboard designed for managing continuous imp
 -   **Authentication**: Email/Password with `passport-local` + `bcrypt`
 -   **UI Components**: `shadcn/ui` + Tailwind CSS
 -   **Charts**: Recharts
--   **AI**: Google Gemini 2.5 Pro via Replit AI Integrations
+-   **AI**: Google Gemini 1.5 Pro via Replit AI Integrations
 
 ### Core Architectural Decisions
 -   **Deterministic Excel Parsing**: Implemented a strict two-sheet parser ("Proyectos PGP" and "Indicadores") with row-level error handling to ensure high data integrity during ingestion.

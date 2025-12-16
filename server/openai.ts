@@ -5,8 +5,9 @@ import { GoogleGenAI } from "@google/genai";
 import type { Project } from "@shared/schema";
 import { getPortfolioSummary, formatSummaryForLLM } from "./services/chatService";
 
-// Use Gemini 2.5 Pro for maximum reasoning capability
+// Use Gemini 1.5 Pro (2.5-pro is not supported currently)
 const MODEL_NAME = "gemini-1.5-pro";
+console.log("[PMO Bot] Initializing Gemini with model:", MODEL_NAME);
 
 const isConfigured = !!(process.env.AI_INTEGRATIONS_GEMINI_BASE_URL && process.env.AI_INTEGRATIONS_GEMINI_API_KEY);
 
