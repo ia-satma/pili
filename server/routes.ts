@@ -97,10 +97,22 @@ const createProjectSchema = z.object({
   comments: z.string().optional().nullable(),
 });
 
-cb(null, true);
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 15 * 1024 * 1024, // 15MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+    ];
+    if (allowedMimes.includes(file.mimetype) || file.originalname.endsWith(".xlsx") || file.originalname.endsWith(".xls")) {
+      cb(null, true);
     } else {
-  cb(new Error("Invalid file type. Only Excel files are allowed."));
-}
+      cb(new Error("Invalid file type. Only Excel files are allowed."));
+    }
   },
 });
 
