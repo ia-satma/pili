@@ -2,7 +2,7 @@
 // This uses Replit's AI Integrations service, which provides OpenAI-compatible API access
 // without requiring your own API key. Charges are billed to your Replit credits.
 import OpenAI from "openai";
-import OpenAI from "openai";
+
 import type { Project } from "@shared/schema";
 import { getPortfolioSummary, formatSummaryForLLM } from "./services/chatService";
 

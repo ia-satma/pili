@@ -22,7 +22,7 @@ const CONFIG = {
   FAILURE_THRESHOLD: 3,        // Number of failures before opening circuit
   FAILURE_WINDOW_MS: 2 * 60 * 1000, // 2 minutes window for counting failures
   OPEN_DURATION_MS: 60 * 1000,      // 60 seconds circuit stays open
-  LLM_TIMEOUT_MS: 10 * 1000,        // 10 second timeout for LLM calls
+  LLM_TIMEOUT_MS: 45 * 1000,        // 45 second timeout for LLM calls (increased from 10s)
 };
 
 /**
@@ -30,7 +30,7 @@ const CONFIG = {
  */
 export function isCircuitOpen(): boolean {
   if (!state.isOpen) return false;
-  
+
   // Check if open duration has passed
   const timeSinceOpen = Date.now() - state.openedAt;
   if (timeSinceOpen >= CONFIG.OPEN_DURATION_MS) {
@@ -39,7 +39,7 @@ export function isCircuitOpen(): boolean {
     state.failures = 0;
     return false;
   }
-  
+
   return true;
 }
 
@@ -56,15 +56,15 @@ export function recordSuccess(): void {
  */
 export function recordFailure(): void {
   const now = Date.now();
-  
+
   // Reset count if outside failure window
   if (now - state.lastFailureTime > CONFIG.FAILURE_WINDOW_MS) {
     state.failures = 0;
   }
-  
+
   state.failures++;
   state.lastFailureTime = now;
-  
+
   // Open circuit if threshold reached
   if (state.failures >= CONFIG.FAILURE_THRESHOLD) {
     state.isOpen = true;
@@ -84,7 +84,7 @@ export function getCircuitStatus(): {
   const secondsUntilReset = state.isOpen
     ? Math.max(0, Math.ceil((CONFIG.OPEN_DURATION_MS - (Date.now() - state.openedAt)) / 1000))
     : 0;
-    
+
   return {
     isOpen: state.isOpen,
     failures: state.failures,
@@ -107,7 +107,7 @@ export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMess
     const timeoutId = setTimeout(() => {
       reject(new Error(errorMessage));
     }, timeoutMs);
-    
+
     promise
       .then(result => {
         clearTimeout(timeoutId);
