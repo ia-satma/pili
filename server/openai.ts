@@ -184,12 +184,7 @@ Para conteos y estadisticas, usa SIEMPRE los numeros del resumen SQL (son exacto
         minTimeout: 1000,
         maxTimeout: 10000,
         factor: 2,
-        onFailedAttempt: (failedAttempt) => {
-          const originalError = failedAttempt.error || failedAttempt;
-          if (!isRateLimitError(originalError)) {
-            throw new AbortError(String(originalError));
-          }
-        },
+        // Removed strict AbortError logic to allow retries on 5xx and network errors
       }
     )
   );
