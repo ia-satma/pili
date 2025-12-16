@@ -38,9 +38,14 @@ export interface AuditResult {
  * IGNORE LIST: Fields with historically low density (>70% empty)
  * These fields are NOT flagged when empty to prevent Alert Fatigue.
  */
+/**
+ * IGNORE LIST: Fields with historically low density (>70% empty)
+ * These fields are NOT flagged when empty to prevent Alert Fatigue.
+ */
 const IGNORE_LIST = new Set([
   "legacy_id_powersteering",  // 90% empty historically
   "legacy_id_devops",         // Legacy system reference
+  "legacy_id",                // Legacy ID field
   "soft_savings",             // Rarely tracked
   "monthly_breakdowns",       // Optional detail
   "scope_out",                // Often left empty intentionally
@@ -56,27 +61,22 @@ const STRICT_FIELDS: Array<{
   label: string;
   check: (project: Project) => boolean;
 }> = [
-  {
-    field: "projectName",
-    label: "Sin nombre de proyecto",
-    check: (p) => !p.projectName || p.projectName.trim().length < 3,
-  },
-  {
-    field: "description",
-    label: "Sin descripción",
-    check: (p) => !p.description || p.description.trim().length < 10,
-  },
-  {
-    field: "capexTier",
-    label: "Sin clasificación CAPEX (Inversión)",
-    check: (p) => !(p as any).capexTier,
-  },
-  {
-    field: "financialImpact",
-    label: "Sin clasificación de beneficio financiero",
-    check: (p) => !(p as any).financialImpact,
-  },
-];
+    {
+      field: "projectName",
+      label: "Sin nombre de proyecto",
+      check: (p) => !p.projectName || p.projectName.trim().length < 3,
+    },
+    {
+      field: "description",
+      label: "Sin descripción",
+      check: (p) => !p.description || p.description.trim().length < 10,
+    },
+    {
+      field: "capexTier",
+      label: "Sin clasificación CAPEX (Inversión)",
+      check: (p) => !p.capexTier,
+    },
+  ];
 
 // ============================================================================
 // CONFIGURATION: SEMANTIC CONSISTENCY RULES
@@ -118,7 +118,7 @@ const SEMANTIC_CHECKS: SemanticCheck[] = [
       const startDate = project.startDate ? new Date(project.startDate) : null;
       const endDate = project.endDate || project.endDateEstimated;
       const parsedEnd = endDate ? new Date(endDate) : null;
-      
+
       if (startDate && parsedEnd && !isNaN(startDate.getTime()) && !isNaN(parsedEnd.getTime())) {
         return startDate > parsedEnd;
       }
@@ -129,13 +129,13 @@ const SEMANTIC_CHECKS: SemanticCheck[] = [
     name: "FREE_LUNCH_FALLACY",
     flag: "Posible costo oculto detectado en descripción",
     check: (project) => {
-      const capexTier = (project as any).capexTier;
+      const capexTier = project.capexTier;
       if (capexTier !== "ZERO_COST") return false;
-      
+
       const description = (project.description || "").toLowerCase();
       const projectName = (project.projectName || "").toLowerCase();
       const combined = `${description} ${projectName}`;
-      
+
       return COST_KEYWORDS.some(keyword => combined.includes(keyword));
     },
   },
@@ -143,9 +143,9 @@ const SEMANTIC_CHECKS: SemanticCheck[] = [
     name: "VAGUE_PROMISE",
     flag: "Beneficio alto sin sustento detallado",
     check: (project) => {
-      const financialImpact = (project as any).financialImpact;
+      const financialImpact = project.financialImpact;
       if (financialImpact !== "HIGH_REVENUE") return false;
-      
+
       const description = (project.description || "").trim();
       return description.length < 20;
     },
@@ -157,7 +157,7 @@ const SEMANTIC_CHECKS: SemanticCheck[] = [
       const responsible = (project.responsible || "").trim().toLowerCase();
       const leader = (project.leader || "").trim().toLowerCase();
       const tbd = ["tbd", "por definir", "pendiente", "n/a", ""];
-      
+
       return tbd.includes(responsible) && tbd.includes(leader);
     },
   },
@@ -167,20 +167,20 @@ const SEMANTIC_CHECKS: SemanticCheck[] = [
     check: (project) => {
       const status = (project.status || "").toLowerCase();
       const isActive = status.includes("progreso") || status.includes("abierto");
-      
+
       if (!isActive) return false;
-      
+
       const percent = project.percentComplete || 0;
       const endDate = project.endDateEstimated ? new Date(project.endDateEstimated) : null;
       const now = new Date();
-      
+
       if (endDate && !isNaN(endDate.getTime())) {
         const isPastDue = endDate < now;
         if (isPastDue && percent < 90) {
           return true;
         }
       }
-      
+
       return false;
     },
   },
@@ -228,7 +228,7 @@ export function calculateProjectHealth(project: Project): AuditResult {
   // -------------------------------------------------------------------------
   // PHASE 3: LEGACY RULES (maintained for backwards compatibility)
   // -------------------------------------------------------------------------
-  
+
   // The Blank Check: scope_in is empty (scope_out is now in IGNORE_LIST)
   const scopeIn = (project.scopeIn || "").trim();
   if (!scopeIn) {
@@ -277,7 +277,7 @@ export async function auditAllProjects(): Promise<{
 
   for (const project of allProjects) {
     const { score, flags } = calculateProjectHealth(project);
-    
+
     await db
       .update(projects)
       .set({
@@ -288,7 +288,7 @@ export async function auditAllProjects(): Promise<{
       .where(eq(projects.id, project.id));
 
     totalFlags += flags.length;
-    
+
     for (const flag of flags) {
       flagBreakdown[flag] = (flagBreakdown[flag] || 0) + 1;
     }
@@ -325,7 +325,7 @@ export async function auditAllProjects(): Promise<{
 
 export async function auditSingleProject(projectId: number): Promise<AuditResult | null> {
   const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
-  
+
   if (!project) {
     return null;
   }

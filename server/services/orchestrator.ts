@@ -66,9 +66,9 @@ interface ProjectContext {
 
 const openai = process.env.AI_INTEGRATIONS_OPENAI_API_KEY
   ? new OpenAI({
-      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-      apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-    })
+    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  })
   : null;
 
 function getModePrompt(mode: OrchestratorMode): string {
@@ -183,7 +183,7 @@ function buildProjectPrompt(ctx: ProjectContext): { prompt: string; isFallback: 
     const descText = ctx.description || "(vacio)";
     lines.push("Texto disponible: " + descText);
     lines.push("");
-    lines.push("INSTRUCCION ESPECIAL: Dado que la descripcion es breve, usa el TITULO del proyecto como base para inferir el proposito y generar ideas. Se creativo pero realista.");
+    lines.push("INSTRUCCION ESPECIAL: La descripcion es breve. Usa el TITULO, el IMPACTO FINANCIERO (financial_impact) y el NIVEL DE INVERSION (capex_tier) para inferir el alcance y generar ideas alineadas con esa magnitud. Si es HIGH_REVENUE, piensa en grande.");
   } else {
     lines.push("## Descripción del Proyecto");
     lines.push(ctx.description || "");
@@ -218,7 +218,7 @@ export async function runOrchestrator(req: OrchestratorRequest): Promise<Orchest
   let projectContext: ProjectContext | null = null;
   let projectPrompt = "";
   let isFallback = false;
-  
+
   // Fetch project context if ID provided
   if (req.projectId) {
     projectContext = await fetchProjectContext(req.projectId);
@@ -228,10 +228,10 @@ export async function runOrchestrator(req: OrchestratorRequest): Promise<Orchest
       isFallback = result.isFallback;
     }
   }
-  
+
   const hasContext = projectContext !== null;
   const modeInstruction = getModePrompt(req.mode);
-  
+
   const systemPromptLines = [
     "Eres un Socio de Innovacion Estrategica (Strategic Innovation Partner) para la PMO.",
     "Tu mision es ayudar a los lideres de proyecto a pensar mas alla de lo obvio.",
@@ -350,9 +350,9 @@ export async function searchProjectsForBrainstorm(query: string): Promise<Array<
     .where(eq(projects.isActive, true));
 
   const queryLower = query.toLowerCase();
-  
+
   return allProjects
-    .filter(p => 
+    .filter(p =>
       (p.projectName?.toLowerCase().includes(queryLower)) ||
       (p.description?.toLowerCase().includes(queryLower))
     )

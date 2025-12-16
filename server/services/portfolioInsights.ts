@@ -67,9 +67,9 @@ export async function getPortfolioInsights(): Promise<PortfolioInsightsResult> {
   const valueBets: PortfolioInsight[] = [];
 
   for (const project of allProjects) {
-    const capexTier = (project as any).capexTier as string | null;
-    const financialImpact = (project as any).financialImpact as string | null;
-    const strategicFit = (project as any).strategicFit as string | null;
+    const capexTier = project.capexTier;
+    const financialImpact = project.financialImpact;
+    const strategicFit = project.strategicFit;
     const status = (project.status || "").toLowerCase();
 
     const insight: PortfolioInsight = {
@@ -144,14 +144,14 @@ export async function getPortfolioInsights(): Promise<PortfolioInsightsResult> {
 
   // Calculate portfolio health score
   const totalWithData = allProjects.filter(p => {
-    const capex = (p as any).capexTier;
-    const impact = (p as any).financialImpact;
+    const capex = p.capexTier;
+    const impact = p.financialImpact;
     return capex || impact;
   }).length;
 
   const problematicCount = zombiesToKill.length + strategicMisalignment.length;
   const positiveCount = quickWins.length + valueBets.length;
-  
+
   let portfolioHealthScore = 50; // Neutral baseline
   if (totalWithData > 0) {
     const positiveRatio = positiveCount / totalWithData;
@@ -182,9 +182,9 @@ export async function getPortfolioInsights(): Promise<PortfolioInsightsResult> {
  * Returns structured recommendations for the PMO chatbot
  */
 export function getMatrixContextForAI(project: Project): string {
-  const capexTier = (project as any).capexTier as string | null;
-  const financialImpact = (project as any).financialImpact as string | null;
-  const strategicFit = (project as any).strategicFit as string | null;
+  const capexTier = project.capexTier;
+  const financialImpact = project.financialImpact;
+  const strategicFit = project.strategicFit;
 
   const lines: string[] = [];
 
