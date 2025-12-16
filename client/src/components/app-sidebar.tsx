@@ -370,9 +370,12 @@ export function AppSidebar() {
         )}
 
         <div className="mt-4 pt-2 border-t border-sidebar-border text-center">
-          <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-700 border-green-200 hover:bg-green-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />
-            v2.1 - PMO Bot: Tags Active
+          <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-700 border-green-200 hover:bg-green-500/20 flex flex-col gap-1 py-1 h-auto">
+            <div className="flex items-center">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />
+              <span>System Active</span>
+            </div>
+            <span className="text-[9px] opacity-80">Last Update: 16 Dec, 08:10 AM</span>
           </Badge>
         </div>
       </SidebarFooter>
