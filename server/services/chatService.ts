@@ -71,8 +71,8 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
     departmentsSummary,
   ] = await Promise.all([
     // Total projects
-    db.select({ count: count() }).from(projects),
-    
+    db.select({ count: count() }).from(projects).where(eq(projects.isActive, true)),
+
     // Investment profile (capex_tier)
     db.execute(sql`
       SELECT 
@@ -82,8 +82,9 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
         COUNT(*) FILTER (WHERE capex_tier = 'ZERO_COST') as zero_cost,
         COUNT(*) FILTER (WHERE capex_tier IS NULL OR capex_tier = '') as unclassified
       FROM projects
+      WHERE is_active = true
     `),
-    
+
     // Value profile (financial_impact)
     db.execute(sql`
       SELECT 
@@ -93,8 +94,9 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
         COUNT(*) FILTER (WHERE financial_impact = 'NONE') as junk,
         COUNT(*) FILTER (WHERE financial_impact IS NULL OR financial_impact = '') as unclassified
       FROM projects
+      WHERE is_active = true
     `),
-    
+
     // Strategy profile (strategic_fit)
     db.execute(sql`
       SELECT 
@@ -103,8 +105,9 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
         COUNT(*) FILTER (WHERE strategic_fit = 'NONE') as misaligned,
         COUNT(*) FILTER (WHERE strategic_fit IS NULL OR strategic_fit = '') as unclassified
       FROM projects
+      WHERE is_active = true
     `),
-    
+
     // Health profile
     db.execute(sql`
       SELECT 
@@ -113,8 +116,9 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
         COUNT(*) FILTER (WHERE health_score < 50 AND health_score IS NOT NULL) as critical,
         COUNT(*) FILTER (WHERE health_score IS NULL) as no_score
       FROM projects
+      WHERE is_active = true
     `),
-    
+
     // Matrix classification counts
     db.execute(sql`
       SELECT 
@@ -135,23 +139,25 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
           AND (financial_impact = 'LOW_REVENUE' OR financial_impact = 'NONE')
         ) as fill_ins
       FROM projects
+      WHERE is_active = true
     `),
-    
+
     // Top 5 Quick Wins (Low Cost + High Revenue)
     db.select({
       id: projects.id,
       name: projects.projectName,
       department: projects.departmentName,
     })
-    .from(projects)
-    .where(
-      and(
-        or(eq(projects.capexTier, 'LOW_COST'), eq(projects.capexTier, 'ZERO_COST')),
-        eq(projects.financialImpact, 'HIGH_REVENUE')
+      .from(projects)
+      .where(
+        and(
+          eq(projects.isActive, true),
+          or(eq(projects.capexTier, 'LOW_COST'), eq(projects.capexTier, 'ZERO_COST')),
+          eq(projects.financialImpact, 'HIGH_REVENUE')
+        )
       )
-    )
-    .limit(5),
-    
+      .limit(5),
+
     // Top 5 Zombies (High Cost + Low/No Value)
     db.select({
       id: projects.id,
@@ -159,41 +165,44 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
       department: projects.departmentName,
       capex: projects.capexTier,
     })
-    .from(projects)
-    .where(
-      and(
-        eq(projects.capexTier, 'HIGH_COST'),
-        or(
-          eq(projects.financialImpact, 'LOW_REVENUE'),
-          eq(projects.financialImpact, 'NONE'),
-          isNull(projects.financialImpact)
+      .from(projects)
+      .where(
+        and(
+          eq(projects.isActive, true),
+          eq(projects.capexTier, 'HIGH_COST'),
+          or(
+            eq(projects.financialImpact, 'LOW_REVENUE'),
+            eq(projects.financialImpact, 'NONE'),
+            isNull(projects.financialImpact)
+          )
         )
       )
-    )
-    .limit(5),
-    
+      .limit(5),
+
     // Top 5 Critical Health (score < 50)
     db.select({
       id: projects.id,
       name: projects.projectName,
       health_score: projects.healthScore,
     })
-    .from(projects)
-    .where(
-      and(
-        isNotNull(projects.healthScore),
-        lt(projects.healthScore, 50)
+      .from(projects)
+      .where(
+        and(
+          eq(projects.isActive, true),
+          isNotNull(projects.healthScore),
+          lt(projects.healthScore, 50)
+        )
       )
-    )
-    .orderBy(projects.healthScore)
-    .limit(5),
-    
+      .orderBy(projects.healthScore)
+      .limit(5),
+
     // Departments summary
     db.execute(sql`
       SELECT 
         COALESCE(department_name, 'Sin departamento') as department,
         COUNT(*) as count
       FROM projects
+      WHERE is_active = true
       GROUP BY department_name
       ORDER BY count DESC
       LIMIT 10
@@ -209,10 +218,10 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
   const depts = (departmentsSummary.rows || []) as any[];
 
   // Calculate unclassified for matrix
-  const classifiedCount = 
-    Number(matrix.zombies || 0) + 
-    Number(matrix.quick_wins || 0) + 
-    Number(matrix.big_bets || 0) + 
+  const classifiedCount =
+    Number(matrix.zombies || 0) +
+    Number(matrix.quick_wins || 0) +
+    Number(matrix.big_bets || 0) +
     Number(matrix.fill_ins || 0);
   const totalCount = totalResult[0]?.count || 0;
 
