@@ -202,38 +202,73 @@ def parse_date(value: Any) -> Optional[str]:
 def map_column_name(col_name: str) -> Optional[str]:
     """
     Map Excel column headers to database schema fields using fuzzy matching.
+    Uses EXACT matches first, then partial matches for general columns.
     """
     col_lower = normalize_text(col_name)
     
-    mappings = [
-        (['iniciativa', 'nombre proyecto', 'proyecto', 'nombre', 'name'], 'projectName'),
-        (['descripcion', 'descripción', 'problema', 'planteamiento', 'problem statement'], 'problemStatement'),
-        (['dueño', 'dueno', 'owner', 'sponsor', 'patrocinador'], 'sponsor'),
-        (['lider', 'líder', 'leader', 'responsable'], 'leader'),
+    # EXACT MATCH MAPPINGS (check these first to avoid false positives)
+    # These columns have keywords that could match other columns if not checked first
+    exact_mappings = {
+        'iniciativa': 'projectName',
+        'tipo de iniciativa': 'status',
+        'estatus al día': 'estatusAlDia',
+        'estatus al dia': 'estatusAlDia',
+        'proceso de negocio': 'departmentName',
+        'líder o solicitante': 'leader',
+        'lider o solicitante': 'leader',
+        'total valor': 'totalValor',
+        'total esfuerzo': 'totalEsfuerzo',
+        'puntaje total': 'puntajeTotal',
+        'ranking': 'ranking',
+        'id power steering': 'legacyId',
+        'card id devops': 'legacyId',
+        'fecha de registro': 'registrationDate',
+        'fecha inicio': 'startDate',
+        'fecha de término / real o estimada': 'endDateEstimated',
+        'fecha de termino / real o estimada': 'endDateEstimated',
+        'estatus y siguientes pasos': 'statusText',
+        'valor / diferenciador': 'description',
+        'dueño del proceso': 'sponsor',
+        'business process analyst': 'bpAnalyst',
+    }
+    
+    # Check exact match first
+    if col_lower in exact_mappings:
+        return exact_mappings[col_lower]
+    
+    # Check if column starts with certain prefixes (for long headers)
+    prefix_mappings = [
+        ('fase:', 'fase'),
+        ('estatus y siguientes', 'statusText'),
+        ('business impact', 'benefits'),
+    ]
+    
+    for prefix, field in prefix_mappings:
+        if col_lower.startswith(prefix):
+            return field
+    
+    # PARTIAL MATCH MAPPINGS (for general columns)
+    # These are checked after exact matches to avoid conflicts
+    partial_mappings = [
+        (['descripcion', 'descripción', 'problema', 'planteamiento'], 'problemStatement'),
+        (['sponsor', 'patrocinador'], 'sponsor'),
         (['analista', 'bp analyst', 'bp_analyst', 'analyst'], 'bpAnalyst'),
-        (['total esfuerzo', 'esfuerzo', 'effort', 'presupuesto', 'budget', 'costo', 'cost'], 'budget'),
-        (['fecha inicio', 'fecha_inicio', 'start date', 'inicio', 'start'], 'startDate'),
-        (['fecha fin', 'fecha_fin', 'end date', 'fin', 'end', 'fecha estimada'], 'endDateEstimated'),
-        (['estado', 'status', 'estatus'], 'status'),
-        (['departamento', 'department', 'area', 'área'], 'departmentName'),
         (['region', 'región'], 'region'),
         (['objetivo', 'objective', 'goal'], 'objective'),
         (['alcance', 'scope', 'scope in', 'dentro alcance'], 'scopeIn'),
         (['fuera alcance', 'scope out', 'fuera de alcance'], 'scopeOut'),
-        (['tipo impacto', 'impact type', 'impacto'], 'impactType'),
+        (['tipo impacto', 'impact type'], 'impactType'),
         (['kpi', 'kpis', 'indicadores'], 'kpis'),
         (['prioridad', 'priority'], 'priority'),
         (['categoria', 'categoría', 'category'], 'category'),
         (['comentarios', 'comments', 'notas', 'notes'], 'comments'),
-        (['beneficios', 'benefits'], 'benefits'),
         (['riesgos', 'risks'], 'risks'),
         (['% avance', 'porcentaje', 'percent complete', 'avance', '% completado'], 'percentComplete'),
-        (['total valor', 'valor', 'value'], 'totalValor'),
     ]
     
-    for keywords, field_name in mappings:
+    for keywords, field_name in partial_mappings:
         for keyword in keywords:
-            if keyword in col_lower or col_lower in keyword:
+            if keyword in col_lower:
                 return field_name
     
     return None
@@ -338,8 +373,11 @@ def parse_excel(file_path: str, sheet_name: Optional[str] = None) -> Dict[str, A
                     
                     if db_field == 'budget':
                         project[db_field] = clean_numeric(value) or 0
-                    elif db_field == 'totalValor':
-                        project[db_field] = clean_numeric(value)
+                    elif db_field in ['totalValor', 'totalEsfuerzo', 'puntajeTotal', 'ranking']:
+                        # Numeric fields - parse as integer
+                        num_val = clean_numeric(value)
+                        if num_val is not None:
+                            project[db_field] = int(num_val)
                     elif db_field == 'percentComplete':
                         pct = clean_numeric(value)
                         if pct is not None:
@@ -348,7 +386,7 @@ def parse_excel(file_path: str, sheet_name: Optional[str] = None) -> Dict[str, A
                             else:
                                 pct = pct * 100
                             project[db_field] = int(pct)
-                    elif db_field in ['startDate', 'endDateEstimated']:
+                    elif db_field in ['startDate', 'endDateEstimated', 'registrationDate']:
                         project[db_field] = parse_date(value)
                     elif db_field == 'impactType':
                         if pd.notna(value):

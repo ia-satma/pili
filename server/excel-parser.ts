@@ -20,6 +20,7 @@ export interface ParsedProject {
   departmentId?: number | null;
   departmentName?: string | null;
   responsible?: string | null;
+  leader?: string | null;
   sponsor?: string | null;
   status?: string | null;
   estatusAlDia?: string | null; // From "ESTATUS AL DÍA" column - On time, Delayed, etc.
@@ -56,6 +57,8 @@ export interface ParsedProject {
   totalEsfuerzo?: number | null;
   puntajeTotal?: number | null;
   ranking?: number | null;
+  // New fields for PMO Excel columns
+  fase?: string | null;
 }
 
 export interface ParsedExcelData {
@@ -296,8 +299,8 @@ const PROJECT_NAME_PARTIAL = [
 ];
 
 const LEGACY_ID_COLUMNS = [
-  "card id devops",
   "id power steering",
+  "card id devops",
   "id",
   "código",
   "codigo",
@@ -309,7 +312,7 @@ const LEGACY_ID_COLUMNS = [
   "folio",
   "clave",
   "key",
-  "ranking",
+  // NOTE: "ranking" removed - it should map to ranking field, not legacyId
 ];
 
 // Column name mapping - maps various column headers to our schema fields
@@ -325,7 +328,6 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "código": "legacyId",
   "codigo": "legacyId",
   "id power steering": "legacyId",
-  "card id devops": "legacyId",
   
   // Project name - handled separately via PROJECT_NAME_COLUMNS priority
   "iniciativa": "projectName",
@@ -344,7 +346,7 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "description": "description",
   "descripción": "description",
   
-  // Department
+  // Department - "Proceso de Negocio"
   "departamento": "departmentName",
   "department": "departmentName",
   "dept": "departmentName",
@@ -352,21 +354,23 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "área": "departmentName",
   "proceso de negocio": "departmentName",
   
-  // Responsible
+  // Leader - "Líder o Solicitante"
+  "líder o solicitante": "leader",
+  "lider o solicitante": "leader",
+  "lider": "leader",
+  "líder": "leader",
+  "leader": "leader",
+  
+  // Responsible (legacy, map to leader)
   "responsable": "responsible",
   "responsible": "responsible",
   "owner": "responsible",
-  "lider": "responsible",
-  "líder": "responsible",
-  "líder o solicitante": "responsible",
-  "lider o solicitante": "responsible",
-  "dueño del proceso": "sponsor",
   
-  // Sponsor
+  // Sponsor / Dueño del Proceso - goes to extraFields now
   "sponsor": "sponsor",
   "patrocinador": "sponsor",
   
-  // Status (Tipo de Iniciativa / Fase)
+  // Status - "Tipo de Iniciativa"
   "estado": "status",
   "status": "status",
   "estatus": "status",
@@ -403,7 +407,7 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "project_type": "projectType",
   "projecttype": "projectType",
   
-  // Start date
+  // Start date - "Fecha Inicio"
   "fecha inicio": "startDate",
   "fecha_inicio": "startDate",
   "fechainicio": "startDate",
@@ -411,7 +415,7 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "startdate": "startDate",
   "inicio": "startDate",
   
-  // End date estimated
+  // End date estimated - "Fecha de Término / real o estimada"
   "fecha fin estimada": "endDateEstimated",
   "fecha_fin_estimada": "endDateEstimated",
   "fechafinestimada": "endDateEstimated",
@@ -431,11 +435,12 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "end_date_actual": "endDateActual",
   "fin real": "endDateActual",
   
-  // Registration date
+  // Registration date - "Fecha de Registro"
   "fecha registro": "registrationDate",
   "fecha_registro": "registrationDate",
   "registration_date": "registrationDate",
   "fecha alta": "registrationDate",
+  "fecha de registro": "registrationDate",
   
   // Percent complete
   "avance": "percentComplete",
@@ -446,7 +451,7 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "progress": "percentComplete",
   "progreso": "percentComplete",
   
-  // S/N field
+  // S/N field - "ESTATUS Y SIGUIENTES PASOS (S/N)"
   "s/n": "statusText",
   "s:n:": "statusText",
   "actualizacion": "statusText",
@@ -455,8 +460,10 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "status update": "statusText",
   "status/next steps": "statusText",
   "estatus/siguientes pasos": "statusText",
+  "estatus y siguientes pasos (s/n)": "statusText",
+  "estatus y siguientes pasos": "statusText",
   
-  // Benefits
+  // Benefits - "Valor / Diferenciador"
   "beneficios": "benefits",
   "benefits": "benefits",
   "valor / diferenciador": "benefits",
@@ -491,6 +498,19 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "total score": "puntajeTotal",
   "ranking": "ranking",
   "rank": "ranking",
+  
+  // Fase - multiple variants including the long header from the Excel
+  "fase": "fase",
+  "phase": "fase",
+  "etapa": "fase",
+  "fase: nuevo / análisis / desarrollo / pruebas/ implementado / terminado": "fase",
+  "fase: nuevo / analisis / desarrollo / pruebas/ implementado / terminado": "fase",
+};
+
+// Special header patterns that need prefix matching (for long headers like "Fase: Nuevo / Análisis...")
+const HEADER_PREFIX_MAPPINGS: Record<string, ProjectField> = {
+  "fase:": "fase",
+  "business impact": "benefits", // Multiple business impact columns, use as benefits
 };
 
 function normalizeColumnName(name: string): string {
@@ -499,7 +519,20 @@ function normalizeColumnName(name: string): string {
 
 function mapColumnToField(columnName: string): ProjectField | null {
   const normalized = normalizeColumnName(columnName);
-  return COLUMN_MAPPINGS[normalized] || null;
+  
+  // First try exact match
+  if (COLUMN_MAPPINGS[normalized]) {
+    return COLUMN_MAPPINGS[normalized];
+  }
+  
+  // Then try prefix matching for long headers
+  for (const [prefix, field] of Object.entries(HEADER_PREFIX_MAPPINGS)) {
+    if (normalized.startsWith(prefix.toLowerCase())) {
+      return field;
+    }
+  }
+  
+  return null;
 }
 
 // Check if a row is completely empty
@@ -920,6 +953,7 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
             case "description":
             case "departmentName":
             case "responsible":
+            case "leader":
             case "sponsor":
             case "status":
             case "estatusAlDia":
@@ -930,6 +964,7 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
             case "scope":
             case "risks":
             case "comments":
+            case "fase":
               (project as any)[field] = getString(value);
               break;
               

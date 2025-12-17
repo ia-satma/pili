@@ -1043,6 +1043,18 @@ export async function registerRoutes(
             percentComplete: project.percentComplete || 0,
             totalValor: project.totalValor || null,
             totalEsfuerzo: project.totalEsfuerzo || null,
+            // Additional PMO fields from Excel parsing
+            ranking: project.ranking || null,
+            puntajeTotal: project.puntajeTotal || null,
+            legacyId: project.legacyId || null,
+            estatusAlDia: project.estatusAlDia || null,
+            statusText: project.statusText || null,
+            description: project.description || null,
+            fase: project.fase || null,
+            registrationDate: project.registrationDate || null,
+            capexTier: project.capexTier || null,
+            financialImpact: project.financialImpact || null,
+            strategicFit: project.strategicFit || null,
           };
 
           await storage.createProject(projectData as any);

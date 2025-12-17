@@ -21,7 +21,7 @@ A Project Management Office (PMO) dashboard designed for managing continuous imp
 -   **AI**: Google Gemini 1.5 Pro via Replit AI Integrations
 
 ### Core Architectural Decisions
--   **Deterministic Excel Parsing**: Implemented a strict two-sheet parser ("Proyectos PGP" and "Indicadores") with row-level error handling to ensure high data integrity during ingestion.
+-   **Deterministic Excel Parsing**: Implemented a Python-based parser (`server/utils/excel_parser.py`) with EXACT column mapping precedence to prevent false positives (e.g., "Tipo de Iniciativa" vs "Iniciativa"). Uses anchor row detection (looks for "Iniciativa" keyword) and supports 60+ columns including PMO scoring fields (Ranking, Total Valor, Total Esfuerzo, Puntaje Total). Numeric fields are parsed as integers. The import route in `routes.ts` persists all PMO fields including ranking, puntajeTotal, legacyId, estatusAlDia, statusText, fase, capexTier, financialImpact, and strategicFit.
 -   **Role-Based Access Control (RBAC)**: Enforced at the API level using middleware, defining granular permissions for Admin, Editor, and Viewer roles across various endpoints and functionalities (e.g., system configuration, agent management, data exports).
 -   **Database Schema**: Designed comprehensively to support project management, user authentication, detailed change logging, KPI tracking, and conversational AI history. It includes tables for initiatives, snapshots, delta events, governance alerts, agent definitions, runs, and council reviews.
 -   **Immutable Snapshot History**: The system captures immutable point-in-time snapshots of initiatives, enabling robust version control and time-travel capabilities without overwriting historical data.

@@ -664,7 +664,8 @@ export function ProjectsGrid() {
                 />
               </TableHead>
               <TableHead className="w-10"></TableHead>
-              <TableHead className="w-[80px]">ID</TableHead>
+              <TableHead className="w-[60px] text-center">Ranking</TableHead>
+              <TableHead className="w-[100px]">ID Power Steering</TableHead>
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
@@ -675,51 +676,33 @@ export function ProjectsGrid() {
                   <SortIcon field="projectName" />
                 </button>
               </TableHead>
+              <TableHead>ESTATUS AL DÍA</TableHead>
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
                   onClick={() => handleSort("departmentName")}
                   data-testid="sort-department"
                 >
-                  Proceso / Área
+                  Proceso de Negocio
                   <SortIcon field="departmentName" />
                 </button>
               </TableHead>
-              <TableHead>Líder</TableHead>
-              <TableHead>Sponsor</TableHead>
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
                   onClick={() => handleSort("status")}
                   data-testid="sort-status"
                 >
-                  Fase
+                  Tipo de Iniciativa
                   <SortIcon field="status" />
                 </button>
               </TableHead>
-              <TableHead>Estatus al Día</TableHead>
-              <TableHead className="max-w-[200px]">S/N</TableHead>
-              <TableHead className="text-center">
-                <button
-                  className="flex items-center font-medium hover:text-foreground"
-                  onClick={() => handleSort("percentComplete")}
-                  data-testid="sort-percent"
-                >
-                  % Avance
-                  <SortIcon field="percentComplete" />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  className="flex items-center font-medium hover:text-foreground"
-                  onClick={() => handleSort("endDateEstimated")}
-                  data-testid="sort-end-date"
-                >
-                  Fecha Término
-                  <SortIcon field="endDateEstimated" />
-                </button>
-              </TableHead>
+              <TableHead>Líder o Solicitante</TableHead>
               <TableHead className="text-right">Total Valor</TableHead>
+              <TableHead className="text-right">Total Esfuerzo</TableHead>
+              <TableHead className="text-right">Puntaje Total</TableHead>
+              <TableHead className="max-w-[250px]">ESTATUS Y SIGUIENTES PASOS (S/N)</TableHead>
+              <TableHead>Fase</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -729,23 +712,24 @@ export function ProjectsGrid() {
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-4 w-4 rounded" /></TableCell>
                   <TableCell><Skeleton className="h-3 w-3 rounded-full" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-8" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                 </TableRow>
               ))
             ) : paginatedProjects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={14} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={15} className="h-32 text-center text-muted-foreground">
                   No se encontraron proyectos
                 </TableCell>
               </TableRow>
@@ -757,6 +741,11 @@ export function ProjectsGrid() {
                   project.status,
                   project.estatusAlDia
                 );
+                
+                const extraFields = project.extraFields as Record<string, unknown> | null;
+                const fase = extraFields?.["Fase"] as string | undefined || 
+                             extraFields?.["fase"] as string | undefined ||
+                             (project as any).fase;
                 
                 return (
                   <TableRow
@@ -783,40 +772,14 @@ export function ProjectsGrid() {
                     <TableCell>
                       <TrafficLight status={trafficLight} size="sm" />
                     </TableCell>
-                    <TableCell className="w-[80px] font-mono text-xs text-muted-foreground" data-testid={`cell-id-${project.id}`}>
-                      {project.legacyId || project.ranking || "—"}
+                    <TableCell className="text-center font-mono text-xs tabular-nums" data-testid={`cell-ranking-${project.id}`}>
+                      {project.ranking || "—"}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground" data-testid={`cell-id-${project.id}`}>
+                      {project.legacyId || "—"}
                     </TableCell>
                     <TableCell className="font-bold max-w-[250px] truncate" data-testid={`cell-project-name-${project.id}`}>
                       {project.projectName || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[150px] truncate" data-testid={`cell-department-${project.id}`}>
-                      {project.departmentName || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[120px] truncate" data-testid={`cell-leader-${project.id}`}>
-                      {project.responsible || project.leader || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[120px] truncate" data-testid={`cell-sponsor-${project.id}`}>
-                      {project.sponsor || "—"}
-                    </TableCell>
-                    <TableCell>
-                      {project.status ? (
-                        <Badge 
-                          variant="secondary" 
-                          className={cn(
-                            "font-normal",
-                            project.status.toLowerCase().includes("abierto") && "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30",
-                            project.status.toLowerCase().includes("progreso") && "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
-                            project.status.toLowerCase().includes("cerrado") && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
-                            project.status.toLowerCase().includes("cancelado") && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
-                            project.status.toLowerCase().includes("pausa") && "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/30"
-                          )}
-                          data-testid={`cell-status-${project.id}`}
-                        >
-                          {project.status}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
                     </TableCell>
                     <TableCell data-testid={`cell-estatus-al-dia-${project.id}`}>
                       {project.estatusAlDia ? (
@@ -835,13 +798,59 @@ export function ProjectsGrid() {
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="max-w-[200px]" data-testid={`cell-status-text-${project.id}`}>
+                    <TableCell className="text-muted-foreground max-w-[150px] truncate" data-testid={`cell-department-${project.id}`}>
+                      {project.departmentName || "—"}
+                    </TableCell>
+                    <TableCell data-testid={`cell-status-${project.id}`}>
+                      {project.status ? (
+                        <Badge 
+                          variant="secondary" 
+                          className={cn(
+                            "font-normal",
+                            project.status.toLowerCase().includes("abierto") && "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30",
+                            project.status.toLowerCase().includes("progreso") && "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
+                            project.status.toLowerCase().includes("cerrado") && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
+                            project.status.toLowerCase().includes("cancelado") && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
+                            project.status.toLowerCase().includes("pausa") && "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/30"
+                          )}
+                        >
+                          {project.status}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[120px] truncate" data-testid={`cell-leader-${project.id}`}>
+                      {project.leader || project.responsible || "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums" data-testid={`cell-total-valor-${project.id}`}>
+                      {project.totalValor != null ? (
+                        <span className="font-medium">{project.totalValor}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums" data-testid={`cell-total-esfuerzo-${project.id}`}>
+                      {project.totalEsfuerzo != null ? (
+                        <span className="font-medium">{project.totalEsfuerzo}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums" data-testid={`cell-puntaje-total-${project.id}`}>
+                      {project.puntajeTotal != null ? (
+                        <span className="font-bold text-primary">{project.puntajeTotal}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-[250px]" data-testid={`cell-status-text-${project.id}`}>
                       {project.statusText ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span className="text-xs text-muted-foreground truncate block cursor-help">
-                              {project.statusText.length > 200 
-                                ? `${project.statusText.substring(0, 200)}...` 
+                              {project.statusText.length > 100 
+                                ? `${project.statusText.substring(0, 100)}...` 
                                 : project.statusText}
                             </span>
                           </TooltipTrigger>
@@ -853,28 +862,13 @@ export function ProjectsGrid() {
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-center tabular-nums" data-testid={`cell-percent-${project.id}`}>
-                      {project.percentComplete != null ? (
-                        <span className={cn(
-                          "font-medium",
-                          project.percentComplete >= 100 && "text-green-600 dark:text-green-400",
-                          project.percentComplete >= 50 && project.percentComplete < 100 && "text-blue-600 dark:text-blue-400",
-                          project.percentComplete < 50 && "text-muted-foreground"
-                        )}>
-                          {project.percentComplete}%
-                        </span>
+                    <TableCell className="text-muted-foreground" data-testid={`cell-fase-${project.id}`}>
+                      {fase ? (
+                        <Badge variant="outline" className="font-normal text-xs">
+                          {fase}
+                        </Badge>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums" data-testid={`cell-end-date-${project.id}`}>
-                      {formatDate(project.endDate || project.endDateEstimated)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums" data-testid={`cell-total-valor-${project.id}`}>
-                      {project.totalValor != null ? (
-                        <span className="font-medium">{project.totalValor.toLocaleString()}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </TableCell>
                     <TableCell>
