@@ -134,6 +134,48 @@ export const projects = pgTable("projects", {
   financialImpact: text("financial_impact"), // HIGH_REVENUE, MEDIUM_REVENUE, LOW_REVENUE, NONE
   strategicFit: text("strategic_fit"), // FULL, PARTIAL, NONE
   
+  // === EXCEL ADDITIONAL FIELDS (from Excel template) ===
+  previo: text("previo"), // "Previo"
+  cardIdDevops: text("card_id_devops"), // "Card ID DevOps"
+  valorDiferenciador: text("valor_diferenciador"), // "Valor / Diferenciador"
+  tiempoCicloDias: integer("tiempo_ciclo_dias"), // "T. de Ciclo en días"
+  ingresadaEnPbot: text("ingresada_en_pbot"), // "Ingresada en PBOT"
+  grupoTecnicoAsignado: text("grupo_tecnico_asignado"), // "Grupo Técnico Asignado"
+  
+  // === DEPENDENCIES (Dependencias) ===
+  dependenciasItLocal: boolean("dependencias_it_local").default(false), // "Dependencias: IT Local"
+  dependenciasTDigital: boolean("dependencias_t_digital").default(false), // "Dependencias: T. Digital"
+  dependenciasDigitalizacionSsc: boolean("dependencias_digitalizacion_ssc").default(false), // "Dependencias: Digitalización SSC"
+  dependenciasExterno: boolean("dependencias_externo").default(false), // "Dependencias: Externo"
+  
+  // === TEAM ROLES ===
+  citizenDeveloper: text("citizen_developer"), // "Citizen Developer / Creator"
+  dtcLead: text("dtc_lead"), // "DTC Lead"
+  blackBeltLead: text("black_belt_lead"), // "Black Belt Lead"
+  
+  // === BUSINESS CONTEXT ===
+  direccionNegocioUsuario: text("direccion_negocio_usuario"), // "Dirección de Negocio del Usuario"
+  impactaGasesEnvasados: text("impacta_gases_envasados"), // "¿Impacta a Gases Envasados?"
+  areaProductividad: text("area_productividad"), // "Área de Productividad"
+  
+  // === SCORING MATRIX EXTENDED (Matriz de Priorización) ===
+  scoringNivelDemanda: text("scoring_nivel_demanda"), // "¿De qué nivel es demanda la necesidad?"
+  scoringTieneSponsor: text("scoring_tiene_sponsor"), // "¿Tiene un sponsor o dueño?"
+  scoringPersonasAfecta: text("scoring_personas_afecta"), // "¿A cuántas personas afecta?"
+  scoringEsReplicable: text("scoring_es_replicable"), // "¿Es replicable?"
+  scoringEsEstrategico: text("scoring_es_estrategico"), // "¿Es proyecto estratégico?"
+  scoringTiempoDesarrollo: text("scoring_tiempo_desarrollo"), // "¿Cuál es el tiempo de desarrollo?"
+  scoringCalidadInformacion: text("scoring_calidad_informacion"), // "¿Cuál es la Calidad de la información?"
+  scoringTiempoConseguirInfo: text("scoring_tiempo_conseguir_info"), // "¿Cuál es el Tiempo para conseguir la información?"
+  scoringComplejidadTecnica: text("scoring_complejidad_tecnica"), // "¿Qué tan compleja es la implementación técnica?"
+  scoringComplejidadCambio: text("scoring_complejidad_cambio"), // "Complejidad del cambio a personas"
+  
+  // === BUSINESS IMPACT ===
+  accionesAcelerar: text("acciones_acelerar"), // "Acciones a ejecutar para Acelerar"
+  businessImpactGrowth: text("business_impact_growth"), // "Business Impact USD$ Growth / year Estimated"
+  businessImpactCostos: text("business_impact_costos"), // "Business Impact USD$ Costos"
+  businessImpactOther: text("business_impact_other"), // "Business Impact (Time, Control, Compliance, Quality of data analysis, data security)"
+  
   // === PMO AUDIT FIELDS ===
   healthScore: integer("health_score").default(100), // 0-100 PMO health score
   auditFlags: jsonb("audit_flags").$type<string[]>().default([]), // List of audit flags/warnings
