@@ -193,7 +193,7 @@ export function ExcelImporter() {
           </div>
 
           {result && (
-            <div 
+            <div
               className={`p-4 rounded-lg ${result.success ? "bg-green-50 dark:bg-green-950/20" : "bg-red-50 dark:bg-red-950/20"}`}
               data-testid="container-excel-result"
             >
@@ -218,8 +218,8 @@ export function ExcelImporter() {
                       <p className="text-muted-foreground mb-1">Columnas mapeadas:</p>
                       <div className="flex flex-wrap gap-1">
                         {Object.entries(result.metadata.columns_mapped).map(([excel, db], i) => (
-                          <span 
-                            key={i} 
+                          <span
+                            key={i}
                             className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200"
                             data-testid={`badge-mapped-${i}`}
                           >
@@ -234,8 +234,8 @@ export function ExcelImporter() {
                       <p className="text-muted-foreground mb-1">Columnas ignoradas:</p>
                       <div className="flex flex-wrap gap-1">
                         {result.metadata.columns_unmapped.slice(0, 10).map((col, i) => (
-                          <span 
-                            key={i} 
+                          <span
+                            key={i}
                             className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
                             data-testid={`badge-unmapped-${i}`}
                           >
@@ -253,15 +253,15 @@ export function ExcelImporter() {
                 </div>
               )}
 
-              {result.errors.length > 0 && (
+              {(result.errors?.length ?? 0) > 0 && (
                 <div className="mt-3 text-sm text-red-600 dark:text-red-400" data-testid="container-excel-errors">
                   <p className="font-medium">Errores/Advertencias:</p>
                   <ul className="list-disc list-inside mt-1">
-                    {result.errors.slice(0, 5).map((err, i) => (
+                    {(result.errors ?? []).slice(0, 5).map((err, i) => (
                       <li key={i} className="text-xs" data-testid={`text-excel-error-${i}`}>{err}</li>
                     ))}
-                    {result.errors.length > 5 && (
-                      <li className="text-xs">...y {result.errors.length - 5} más</li>
+                    {(result.errors?.length ?? 0) > 5 && (
+                      <li className="text-xs">...y {(result.errors?.length ?? 0) - 5} más</li>
                     )}
                   </ul>
                 </div>
