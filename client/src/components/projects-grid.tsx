@@ -671,37 +671,55 @@ export function ProjectsGrid() {
                   onClick={() => handleSort("projectName")}
                   data-testid="sort-project-name"
                 >
-                  Proyecto
+                  Iniciativa
                   <SortIcon field="projectName" />
                 </button>
               </TableHead>
-              <TableHead>Problema</TableHead>
-              <TableHead>Analista (BP)</TableHead>
+              <TableHead>
+                <button
+                  className="flex items-center font-medium hover:text-foreground"
+                  onClick={() => handleSort("departmentName")}
+                  data-testid="sort-department"
+                >
+                  Proceso / Área
+                  <SortIcon field="departmentName" />
+                </button>
+              </TableHead>
+              <TableHead>Líder</TableHead>
+              <TableHead>Sponsor</TableHead>
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
                   onClick={() => handleSort("status")}
                   data-testid="sort-status"
                 >
-                  Status
+                  Fase
                   <SortIcon field="status" />
                 </button>
               </TableHead>
-              <TableHead>Impacto</TableHead>
-              <TableHead className="text-center">Inversión</TableHead>
-              <TableHead className="text-center">Beneficio</TableHead>
-              <TableHead className="text-center">Alineación</TableHead>
+              <TableHead>Estatus al Día</TableHead>
+              <TableHead className="max-w-[200px]">S/N</TableHead>
+              <TableHead className="text-center">
+                <button
+                  className="flex items-center font-medium hover:text-foreground"
+                  onClick={() => handleSort("percentComplete")}
+                  data-testid="sort-percent"
+                >
+                  % Avance
+                  <SortIcon field="percentComplete" />
+                </button>
+              </TableHead>
               <TableHead>
                 <button
                   className="flex items-center font-medium hover:text-foreground"
                   onClick={() => handleSort("endDateEstimated")}
                   data-testid="sort-end-date"
                 >
-                  Fin Estimado
+                  Fecha Término
                   <SortIcon field="endDateEstimated" />
                 </button>
               </TableHead>
-              <TableHead className="w-24 text-center">Salud de Datos</TableHead>
+              <TableHead className="text-right">Total Valor</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -713,15 +731,15 @@ export function ProjectsGrid() {
                   <TableCell><Skeleton className="h-3 w-3 rounded-full" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-12" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-12" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                 </TableRow>
               ))
@@ -766,22 +784,19 @@ export function ProjectsGrid() {
                       <TrafficLight status={trafficLight} size="sm" />
                     </TableCell>
                     <TableCell className="w-[80px] font-mono text-xs text-muted-foreground" data-testid={`cell-id-${project.id}`}>
-                      {project.legacyId || "—"}
+                      {project.legacyId || project.ranking || "—"}
                     </TableCell>
                     <TableCell className="font-bold max-w-[250px] truncate" data-testid={`cell-project-name-${project.id}`}>
                       {project.projectName || "—"}
                     </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[200px] truncate" title={project.problemStatement || project.description || ""}>
-                      {project.problemStatement || project.description || "—"}
+                    <TableCell className="text-muted-foreground max-w-[150px] truncate" data-testid={`cell-department-${project.id}`}>
+                      {project.departmentName || "—"}
                     </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[150px] truncate">
-                      {(() => {
-                        const bpAnalyst = project.bpAnalyst;
-                        if (bpAnalyst) return bpAnalyst;
-                        const extraFields = project.extraFields as Record<string, unknown> | null;
-                        const analyst = extraFields?.["Business Process Analyst"] as string | undefined;
-                        return analyst || "—";
-                      })()}
+                    <TableCell className="text-muted-foreground max-w-[120px] truncate" data-testid={`cell-leader-${project.id}`}>
+                      {project.responsible || project.leader || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[120px] truncate" data-testid={`cell-sponsor-${project.id}`}>
+                      {project.sponsor || "—"}
                     </TableCell>
                     <TableCell>
                       {project.status ? (
@@ -803,183 +818,77 @@ export function ProjectsGrid() {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const impactArray = project.impactType as string[] | null;
-                        if (!impactArray || impactArray.length === 0) return <span className="text-muted-foreground">—</span>;
-                        return (
-                          <div className="flex flex-wrap gap-1">
-                            {impactArray.slice(0, 3).map((impact, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs font-normal">
-                                {impact}
-                              </Badge>
-                            ))}
-                            {impactArray.length > 3 && (
-                              <Badge variant="outline" className="text-xs font-normal">
-                                +{impactArray.length - 3}
-                              </Badge>
-                            )}
-                          </div>
-                        );
-                      })()}
+                    <TableCell data-testid={`cell-estatus-al-dia-${project.id}`}>
+                      {project.estatusAlDia ? (
+                        <Badge 
+                          variant="outline" 
+                          className={cn(
+                            "font-normal text-xs",
+                            project.estatusAlDia.toLowerCase().includes("tiempo") && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
+                            project.estatusAlDia.toLowerCase().includes("retras") && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
+                            project.estatusAlDia.toLowerCase().includes("riesgo") && "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30"
+                          )}
+                        >
+                          {project.estatusAlDia}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
                     </TableCell>
-                    {/* Inversión (CAPEX Tier) */}
-                    <TableCell className="text-center">
-                      {(() => {
-                        const tier = (project as any).capexTier;
-                        if (!tier) return <span className="text-muted-foreground text-xs">—</span>;
-                        
-                        const config: Record<string, { label: string; tooltip: string; className: string }> = {
-                          HIGH_COST: { label: "Alto", tooltip: "> $100k USD inversión", className: "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30" },
-                          MEDIUM_COST: { label: "Medio", tooltip: "$20k - $100k USD", className: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30" },
-                          LOW_COST: { label: "Bajo", tooltip: "< $20k USD", className: "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30" },
-                          ZERO_COST: { label: "Nulo", tooltip: "Sin inversión requerida", className: "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30" },
-                        };
-                        const { label, tooltip, className } = config[tier] || { label: tier, tooltip: "", className: "" };
-                        
-                        return (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge variant="outline" className={cn("text-xs cursor-help", className)} data-testid={`badge-capex-${project.id}`}>
-                                {label}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent>{tooltip}</TooltipContent>
-                          </Tooltip>
-                        );
-                      })()}
-                    </TableCell>
-                    {/* Beneficio (Financial Impact) */}
-                    <TableCell className="text-center">
-                      {(() => {
-                        const impact = (project as any).financialImpact;
-                        if (!impact) return <span className="text-muted-foreground text-xs">—</span>;
-                        
-                        const config: Record<string, { label: string; tooltip: string; className: string }> = {
-                          HIGH_REVENUE: { label: "Alto", tooltip: "> $300k USD beneficio esperado", className: "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30" },
-                          MEDIUM_REVENUE: { label: "Medio", tooltip: "$100k - $300k USD", className: "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30" },
-                          LOW_REVENUE: { label: "Bajo", tooltip: "< $100k USD", className: "bg-gray-500/20 text-gray-600 dark:text-gray-400 border-gray-500/30" },
-                          NONE: { label: "Ninguno", tooltip: "Sin beneficio financiero directo", className: "bg-gray-500/20 text-gray-600 dark:text-gray-400 border-gray-500/30" },
-                        };
-                        const { label, tooltip, className } = config[impact] || { label: impact, tooltip: "", className: "" };
-                        
-                        return (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge variant="outline" className={cn("text-xs cursor-help", className)} data-testid={`badge-impact-${project.id}`}>
-                                {label}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent>{tooltip}</TooltipContent>
-                          </Tooltip>
-                        );
-                      })()}
-                    </TableCell>
-                    {/* Alineación (Strategic Fit) */}
-                    <TableCell className="text-center">
-                      {(() => {
-                        const fit = (project as any).strategicFit;
-                        if (!fit) return <span className="text-muted-foreground text-xs">—</span>;
-                        
-                        const config: Record<string, { label: string; icon: string; tooltip: string; className: string }> = {
-                          FULL: { label: "Sí", icon: "✓", tooltip: "Alineado a objetivos estratégicos", className: "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30" },
-                          PARTIAL: { label: "Parcial", icon: "◐", tooltip: "Alineación parcial a objetivos", className: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30" },
-                          NONE: { label: "No", icon: "✗", tooltip: "Sin alineación estratégica", className: "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30" },
-                        };
-                        const { label, icon, tooltip, className } = config[fit] || { label: fit, icon: "?", tooltip: "", className: "" };
-                        
-                        return (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge variant="outline" className={cn("text-xs cursor-help", className)} data-testid={`badge-alignment-${project.id}`}>
-                                <span className="mr-1">{icon}</span>
-                                {label}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent>{tooltip}</TooltipContent>
-                          </Tooltip>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      {formatDate(project.endDate || project.endDateEstimated)}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {(() => {
-                        const score = project.healthScore ?? 100;
-                        const flags = (project.auditFlags as string[]) || [];
-                        let bgClass = "bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/30";
-                        let label = "Sólido";
-                        
-                        if (score < 50) {
-                          bgClass = "bg-red-500/20 text-red-700 dark:text-red-400 border border-red-500/30";
-                          label = "Crítico";
-                        } else if (score < 80) {
-                          bgClass = "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-500/30";
-                          label = "Revisar";
-                        }
-                        
-                        return (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium cursor-help", bgClass)}
-                                data-testid={`badge-health-${project.id}`}
-                              >
-                                {label}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="left" className="max-w-xs">
-                              <p className="font-medium mb-1">Puntaje: {score}/100</p>
-                              {flags.length > 0 ? (
-                                <ul className="text-xs space-y-1">
-                                  {flags.map((flag, idx) => (
-                                    <li key={idx}>{flag}</li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <p className="text-xs">Sin problemas detectados</p>
-                              )}
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
+                    <TableCell className="max-w-[200px]" data-testid={`cell-status-text-${project.id}`}>
+                      {project.statusText ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEnrichProject(project.id);
-                              }}
-                              disabled={enrichingProjectId === project.id}
-                              data-testid={`button-enrich-project-${project.id}`}
-                            >
-                              {enrichingProjectId === project.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Sparkles className="h-4 w-4" />
-                              )}
-                            </Button>
+                            <span className="text-xs text-muted-foreground truncate block cursor-help">
+                              {project.statusText.length > 200 
+                                ? `${project.statusText.substring(0, 200)}...` 
+                                : project.statusText}
+                            </span>
                           </TooltipTrigger>
-                          <TooltipContent>Mejorar con IA</TooltipContent>
+                          <TooltipContent side="left" className="max-w-md">
+                            <p className="text-sm whitespace-pre-wrap">{project.statusText}</p>
+                          </TooltipContent>
                         </Tooltip>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedProjectId(project.id);
-                          }}
-                          data-testid={`button-view-project-${project.id}`}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums" data-testid={`cell-percent-${project.id}`}>
+                      {project.percentComplete != null ? (
+                        <span className={cn(
+                          "font-medium",
+                          project.percentComplete >= 100 && "text-green-600 dark:text-green-400",
+                          project.percentComplete >= 50 && project.percentComplete < 100 && "text-blue-600 dark:text-blue-400",
+                          project.percentComplete < 50 && "text-muted-foreground"
+                        )}>
+                          {project.percentComplete}%
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums" data-testid={`cell-end-date-${project.id}`}>
+                      {formatDate(project.endDate || project.endDateEstimated)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums" data-testid={`cell-total-valor-${project.id}`}>
+                      {project.totalValor != null ? (
+                        <span className="font-medium">{project.totalValor.toLocaleString()}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedProjectId(project.id);
+                        }}
+                        data-testid={`button-view-project-${project.id}`}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );

@@ -1107,7 +1107,7 @@ export function parseIndicatorsSheet(buffer: ArrayBuffer): ParsedIndicatorsData 
   }
   
   // Row 3 (index 2) contains dates, Row 4+ contains indicator data
-  const dateRow = data[2] as (number | string | null)[];
+  const dateRow = data[2] as (number | string | Date | null)[];
   const indicators: ParsedIndicator[] = [];
   
   // Parse dates from row 3 (Excel serial dates)
@@ -1118,7 +1118,7 @@ export function parseIndicatorsSheet(buffer: ArrayBuffer): ParsedIndicatorsData 
       // Convert Excel serial date to ISO string
       const date = new Date((cell - 25569) * 86400 * 1000);
       dates.push(date.toISOString().split("T")[0]);
-    } else if (cell instanceof Date) {
+    } else if (cell && typeof cell === "object" && cell instanceof Date) {
       dates.push(cell.toISOString().split("T")[0]);
     }
   }
