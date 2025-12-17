@@ -40,6 +40,9 @@ interface IndicatorsData {
   avgDuration: number;
   onTimeDelivery: number;
   totalBenefits: number;
+  activeProjects: number;
+  successRate: number;
+  isEmpty: boolean;
 }
 
 const CHART_COLORS = [
@@ -82,6 +85,19 @@ export default function Indicators() {
           Exportar
         </Button>
       </div>
+
+      {/* Empty State Message */}
+      {data?.isEmpty && (
+        <Card className="overflow-visible border-dashed">
+          <CardContent className="p-8 text-center">
+            <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-medium mb-2">Sin datos de indicadores</h3>
+            <p className="text-muted-foreground mb-4">
+              Importe un archivo Excel con datos de proyectos para ver las métricas y gráficas del PMO.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Key Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -136,7 +152,7 @@ export default function Indicators() {
                   <div>
                     <p className="text-sm text-muted-foreground">Tasa de Éxito</p>
                     <p className="text-3xl font-semibold tabular-nums">
-                      {data?.completionRate?.[data.completionRate.length - 1]?.rate || 0}%
+                      {data?.successRate ?? 0}%
                     </p>
                   </div>
                 </div>
@@ -152,7 +168,7 @@ export default function Indicators() {
                   <div>
                     <p className="text-sm text-muted-foreground">Proyectos Activos</p>
                     <p className="text-3xl font-semibold tabular-nums">
-                      {data?.projectsByMonth?.[data.projectsByMonth.length - 1]?.count || 0}
+                      {data?.activeProjects ?? 0}
                     </p>
                   </div>
                 </div>

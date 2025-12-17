@@ -1667,31 +1667,63 @@ export async function registerRoutes(
       const kpis = await storage.getLatestKpiValues();
       const allProjects = await storage.getProjects();
 
-      // Calculate category distribution
-      const categoryCounts: Record<string, number> = {};
-      allProjects.forEach(p => {
-        const cat = p.category || "Sin categoría";
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-      });
-
-      // Mock timeline data (in a real app, you'd aggregate from actual data)
-      const now = new Date();
-      const months = [];
-      for (let i = 5; i >= 0; i--) {
-        const date = new Date(now);
-        date.setMonth(date.getMonth() - i);
-        months.push({
-          month: date.toLocaleDateString("es-MX", { month: "short" }),
-          count: Math.floor(Math.random() * 10) + 5,
-          closed: Math.floor(Math.random() * 5) + 2,
+      // If no projects, return empty state
+      if (allProjects.length === 0) {
+        return res.json({
+          kpis: [],
+          projectsByMonth: [],
+          projectsByCategory: [],
+          completionRate: [],
+          avgDuration: 0,
+          onTimeDelivery: 0,
+          totalBenefits: 0,
+          activeProjects: 0,
+          successRate: 0,
+          isEmpty: true,
         });
       }
 
-      // Mock completion rate trend
-      const completionRate = months.map((m, i) => ({
-        month: m.month,
-        rate: 70 + Math.floor(Math.random() * 20),
-      }));
+      // Calculate category distribution from REAL data
+      const categoryCounts: Record<string, number> = {};
+      allProjects.forEach(p => {
+        const cat = p.category || p.departmentName || "Sin categoría";
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+      });
+
+      // Calculate projects by month from REAL start dates
+      const monthCounts: Record<string, { count: number; closed: number }> = {};
+      allProjects.forEach(p => {
+        if (p.startDate) {
+          const date = new Date(p.startDate);
+          const monthKey = date.toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
+          if (!monthCounts[monthKey]) {
+            monthCounts[monthKey] = { count: 0, closed: 0 };
+          }
+          monthCounts[monthKey].count++;
+          
+          const statusLower = (p.status || "").toLowerCase();
+          if (statusLower === "cerrado" || statusLower === "closed") {
+            monthCounts[monthKey].closed++;
+          }
+        }
+      });
+
+      const projectsByMonth = Object.entries(monthCounts)
+        .map(([month, data]) => ({ month, ...data }))
+        .slice(-6); // Last 6 months
+
+      // Calculate REAL completion rate from project percentComplete
+      const completionRate = projectsByMonth.map(m => {
+        const projectsInMonth = allProjects.filter(p => {
+          if (!p.startDate) return false;
+          const date = new Date(p.startDate);
+          return date.toLocaleDateString("es-MX", { month: "short", year: "2-digit" }) === m.month;
+        });
+        const avgRate = projectsInMonth.length > 0
+          ? Math.round(projectsInMonth.reduce((sum, p) => sum + (p.percentComplete || 0), 0) / projectsInMonth.length)
+          : 0;
+        return { month: m.month, rate: avgRate };
+      });
 
       // Calculate average duration for closed projects
       const closedProjects = allProjects.filter(p => {
@@ -1709,19 +1741,44 @@ export async function registerRoutes(
         avgDuration = Math.round(totalDays / closedProjects.length);
       }
 
-      // On-time delivery calculation
-      const onTimeDelivery = kpis.find(k => k.kpiName === "Entrega a Tiempo")?.kpiValue || "100%";
+      // Calculate REAL on-time delivery rate
+      const kpiOnTime = kpis.find(k => k.kpiName === "Entrega a Tiempo");
+      let onTimeDelivery = 0;
+      if (kpiOnTime?.kpiValue) {
+        onTimeDelivery = parseInt(kpiOnTime.kpiValue.replace("%", "")) || 0;
+      } else if (closedProjects.length > 0) {
+        // Calculate from actual data: projects completed on or before estimated date
+        const onTimeCount = closedProjects.filter(p => {
+          if (!p.endDateActual || !p.endDateEstimated) return false;
+          return new Date(p.endDateActual) <= new Date(p.endDateEstimated);
+        }).length;
+        onTimeDelivery = Math.round((onTimeCount / closedProjects.length) * 100);
+      }
+
+      // Calculate active projects (not closed/cancelled)
+      const activeProjects = allProjects.filter(p => {
+        const lower = (p.status || "").toLowerCase();
+        return lower !== "cerrado" && lower !== "closed" && lower !== "cancelado" && lower !== "cancelled";
+      }).length;
+
+      // Calculate success rate from closed projects
+      const successRate = closedProjects.length > 0
+        ? Math.round((closedProjects.length / allProjects.length) * 100)
+        : 0;
 
       res.json({
         kpis,
-        projectsByMonth: months,
+        projectsByMonth,
         projectsByCategory: Object.entries(categoryCounts)
           .map(([name, count]) => ({ name, count }))
           .sort((a, b) => b.count - a.count),
         completionRate,
         avgDuration,
-        onTimeDelivery: parseInt(onTimeDelivery.replace("%", "")) || 100,
+        onTimeDelivery,
         totalBenefits: 0,
+        activeProjects,
+        successRate,
+        isEmpty: false,
       });
     } catch (error) {
       console.error("Indicators error:", error);

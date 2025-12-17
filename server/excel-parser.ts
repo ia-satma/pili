@@ -374,9 +374,18 @@ const COLUMN_MAPPINGS: Record<string, ProjectField> = {
   "fase: nuevo / análisis / desarrollo / pruebas/ implementado / terminado": "status",
   "fase: nuevo / analisis / desarrollo / pruebas/ implementado / terminado": "status",
   
-  // ESTATUS AL DÍA - This is the REAL traffic light status from Excel
+  // ESTATUS AL DÍA - This is the REAL traffic light status from Excel (semaphore: En tiempo, Retrasado, etc.)
+  // Multiple variants to handle accents, case, and spacing differences
   "estatus al dia": "estatusAlDia",
   "estatus al día": "estatusAlDia",
+  "estatus al dìa": "estatusAlDia",
+  "status al dia": "estatusAlDia",
+  "status al día": "estatusAlDia",
+  "al dia": "estatusAlDia",
+  "al día": "estatusAlDia",
+  "semaforo": "estatusAlDia",
+  "semáforo": "estatusAlDia",
+  "traffic light": "estatusAlDia",
   
   // Priority
   "prioridad": "priority",
@@ -506,14 +515,49 @@ function isRowEmpty(row: RawExcelRow): boolean {
   return true;
 }
 
+// Exclusion patterns for project name column detection
+// These patterns indicate the column is NOT a project name column even if it contains "iniciativa"
+const PROJECT_NAME_EXCLUSION_PATTERNS = [
+  "tipo de iniciativa",
+  "tipo iniciativa",
+  "tipo",
+  "ranking",
+  "rank",
+  "puntaje",
+  "score",
+  "valor",
+  "esfuerzo",
+];
+
 // Find the best column for a field based on priority list
 // Uses aggressive normalization to match headers with different formats
-function findPriorityColumn(headers: string[], priorityList: string[], partialList?: string[]): string | null {
+// forProjectName: if true, apply stricter matching with exclusion patterns
+function findPriorityColumn(
+  headers: string[], 
+  priorityList: string[], 
+  partialList?: string[],
+  forProjectName: boolean = false
+): string | null {
+  console.log(`[Excel Parser] findPriorityColumn called with ${headers.length} headers, forProjectName=${forProjectName}`);
+  console.log(`[Excel Parser] Priority list: ${priorityList.slice(0, 5).join(", ")}...`);
+  
   // First try exact match (case insensitive, trimmed)
   for (const priority of priorityList) {
     for (const header of headers) {
-      if (normalizeColumnName(header) === priority) {
-        console.log(`[Excel Parser] Found exact match column: "${header}" for priority "${priority}"`);
+      const normalizedHeader = normalizeColumnName(header);
+      if (normalizedHeader === priority) {
+        // For projectName, check exclusion patterns
+        if (forProjectName) {
+          const headerLower = normalizedHeader.toLowerCase();
+          const isExcluded = PROJECT_NAME_EXCLUSION_PATTERNS.some(pattern => 
+            headerLower.includes(pattern.toLowerCase())
+          );
+          if (isExcluded) {
+            console.log(`[Excel Parser] REJECTED exact match: "${header}" contains exclusion pattern`);
+            continue;
+          }
+        }
+        console.log(`[Excel Parser] ✓ Found exact match column: "${header}" for priority "${priority}"`);
         return header;
       }
     }
@@ -525,26 +569,63 @@ function findPriorityColumn(headers: string[], priorityList: string[], partialLi
     for (const header of headers) {
       const normalizedHeader = normalizeForMatching(header);
       if (normalizedHeader === normalizedPriority) {
-        console.log(`[Excel Parser] Found normalized match column: "${header}" matches "${priority}"`);
+        // For projectName, check exclusion patterns
+        if (forProjectName) {
+          const headerLower = normalizeColumnName(header).toLowerCase();
+          const isExcluded = PROJECT_NAME_EXCLUSION_PATTERNS.some(pattern => 
+            headerLower.includes(pattern.toLowerCase())
+          );
+          if (isExcluded) {
+            console.log(`[Excel Parser] REJECTED normalized match: "${header}" contains exclusion pattern`);
+            continue;
+          }
+        }
+        console.log(`[Excel Parser] ✓ Found normalized match column: "${header}" matches "${priority}"`);
         return header;
       }
     }
   }
   
   // Try partial matching with aggressive normalization
+  // For projectName, ONLY do partial matching if we truly need it, and apply strict filters
   if (partialList) {
     for (const partial of partialList) {
       const normalizedPartial = normalizeForMatching(partial);
       for (const header of headers) {
         const normalizedHeader = normalizeForMatching(header);
-        if (normalizedHeader.includes(normalizedPartial) || normalizedPartial.includes(normalizedHeader)) {
-          console.log(`[Excel Parser] Found partial match column: "${header}" contains "${partial}"`);
+        
+        // Check if partial match
+        const hasPartialMatch = normalizedHeader.includes(normalizedPartial) || 
+                                normalizedPartial.includes(normalizedHeader);
+        
+        if (hasPartialMatch) {
+          // For projectName, apply STRICT exclusion - reject any column with exclusion patterns
+          if (forProjectName) {
+            const headerLower = normalizeColumnName(header).toLowerCase();
+            const isExcluded = PROJECT_NAME_EXCLUSION_PATTERNS.some(pattern => 
+              headerLower.includes(pattern.toLowerCase())
+            );
+            if (isExcluded) {
+              console.log(`[Excel Parser] REJECTED partial match: "${header}" contains exclusion pattern (searching for "${partial}")`);
+              continue;
+            }
+            
+            // Additional check: the header should be a reasonable length for a project name column
+            // "Iniciativa" or "Proyecto" etc. - not a long phrase
+            if (normalizedHeader.split(" ").length > 3) {
+              console.log(`[Excel Parser] REJECTED partial match: "${header}" is too long (${normalizedHeader.split(" ").length} words)`);
+              continue;
+            }
+          }
+          
+          console.log(`[Excel Parser] ✓ Found partial match column: "${header}" contains "${partial}"`);
           return header;
         }
       }
     }
   }
   
+  console.log(`[Excel Parser] ✗ No matching column found`);
   return null;
 }
 
@@ -768,8 +849,9 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
   }
   
   // Find priority columns for project name and legacy ID (with partial matching fallback)
-  const projectNameColumn = findPriorityColumn(headers, PROJECT_NAME_COLUMNS, PROJECT_NAME_PARTIAL);
-  const legacyIdColumn = findPriorityColumn(headers, LEGACY_ID_COLUMNS);
+  // For projectName, use strict matching with exclusion patterns to avoid "Tipo de Iniciativa" etc.
+  const projectNameColumn = findPriorityColumn(headers, PROJECT_NAME_COLUMNS, PROJECT_NAME_PARTIAL, true);
+  const legacyIdColumn = findPriorityColumn(headers, LEGACY_ID_COLUMNS, undefined, false);
   
   console.log(`[Excel Parser] Project name column: ${projectNameColumn || "NOT FOUND"}`);
   console.log(`[Excel Parser] Legacy ID column: ${legacyIdColumn || "NOT FOUND"}`);
@@ -840,6 +922,7 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
             case "responsible":
             case "sponsor":
             case "status":
+            case "estatusAlDia":
             case "priority":
             case "category":
             case "projectType":
@@ -1021,6 +1104,8 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
   
   // Log summary
   console.log(`[Excel Parser] === PARSING SUMMARY ===`);
+  console.log(`[Excel Parser] Detected column for projectName: "${projectNameColumn || "NOT FOUND"}"`);
+  console.log(`[Excel Parser] Detected column for legacyId: "${legacyIdColumn || "NOT FOUND"}"`);
   console.log(`[Excel Parser] Total rows processed: ${totalRows}`);
   console.log(`[Excel Parser] Projects created (complete): ${proyectosCreados}`);
   console.log(`[Excel Parser] Projects created (draft/incomplete): ${proyectosBorradorIncompleto}`);
@@ -1030,7 +1115,7 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
   // DEBUG: Show first 5 project names for verification
   console.log(`[Excel Parser] === FIRST 5 PROJECT NAMES ===`);
   projects.slice(0, 5).forEach((p, i) => {
-    console.log(`[Excel Parser]   ${i + 1}. "${p.projectName}" (ID: ${p.legacyId})`);
+    console.log(`[Excel Parser]   ${i + 1}. "${p.projectName}" (ID: ${p.legacyId}, status: ${p.status || "-"}, estatusAlDia: ${p.estatusAlDia || "-"})`);
   });
   
   // Important rule: If there's at least one non-empty row, we must have at least 1 processed
