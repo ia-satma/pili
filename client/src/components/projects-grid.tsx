@@ -69,6 +69,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { TrafficLight, calculateTrafficLight } from "./traffic-light";
 import { ProjectDetailDrawer } from "./project-detail-drawer";
 import type { Project, ProjectUpdate, Milestone, ChangeLog, FilterPreset } from "@shared/schema";
@@ -91,13 +92,92 @@ interface FilterPresetsResponse {
   presets: FilterPreset[];
 }
 
-type SortField = "projectName" | "departmentName" | "status" | "endDateEstimated" | "percentComplete";
+type SortField = "projectName" | "departmentName" | "status" | "endDateEstimated" | "percentComplete" | "ranking" | "totalValor" | "totalEsfuerzo" | "puntajeTotal";
 type SortDirection = "asc" | "desc";
 
 const STATUS_OPTIONS = ["Abierto", "En Progreso", "Cerrado", "Cancelado", "En Pausa"];
 const PRIORITY_OPTIONS = ["Alta", "Media", "Baja"];
 
 type BulkField = "status" | "priority" | "responsible";
+
+interface ColumnConfig {
+  key: string;
+  header: string;
+  width?: string;
+  sticky?: boolean;
+  stickyLeft?: number;
+  sortable?: boolean;
+  sortField?: SortField;
+  align?: "left" | "center" | "right";
+  type?: "text" | "date" | "number" | "badge" | "boolean" | "longtext";
+}
+
+const COLUMN_ORDER: ColumnConfig[] = [
+  { key: "_checkbox", header: "", width: "40px", sticky: true, stickyLeft: 0 },
+  { key: "_trafficLight", header: "", width: "40px", sticky: true, stickyLeft: 40 },
+  { key: "previo", header: "Previo", width: "80px", sticky: true, stickyLeft: 80 },
+  { key: "ranking", header: "Ranking", width: "70px", sticky: true, stickyLeft: 160, sortable: true, sortField: "ranking", align: "center", type: "number" },
+  { key: "projectName", header: "Iniciativa", width: "250px", sticky: true, stickyLeft: 230, sortable: true, sortField: "projectName" },
+  { key: "legacyId", header: "ID Power Steering", width: "120px" },
+  { key: "cardIdDevops", header: "Card ID DevOps", width: "120px" },
+  { key: "problemStatement", header: "Descripción", width: "200px", type: "longtext" },
+  { key: "valorDiferenciador", header: "Valor / Diferenciador", width: "180px", type: "longtext" },
+  { key: "registrationDate", header: "Fecha de Registro", width: "120px", type: "date" },
+  { key: "startDate", header: "Fecha Inicio", width: "110px", type: "date" },
+  { key: "endDateEstimated", header: "Fecha de Término", width: "120px", type: "date", sortable: true, sortField: "endDateEstimated" },
+  { key: "tiempoCicloDias", header: "T. de Ciclo en días", width: "110px", align: "center", type: "number" },
+  { key: "estatusAlDia", header: "ESTATUS AL DÍA", width: "130px", type: "badge" },
+  { key: "departmentName", header: "Proceso de Negocio", width: "160px", sortable: true, sortField: "departmentName" },
+  { key: "ingresadaEnPbot", header: "Ingresada en PBOT", width: "130px" },
+  { key: "grupoTecnicoAsignado", header: "Grupo Técnico Asignado", width: "160px" },
+  { key: "status", header: "Tipo de Iniciativa", width: "140px", sortable: true, sortField: "status", type: "badge" },
+  { key: "citizenDeveloper", header: "Citizen Developer", width: "140px" },
+  { key: "sponsor", header: "Dueño del Proceso", width: "140px" },
+  { key: "leader", header: "Líder o Solicitante", width: "140px" },
+  { key: "dtcLead", header: "DTC Lead", width: "120px" },
+  { key: "blackBeltLead", header: "Black Belt Lead", width: "130px" },
+  { key: "bpAnalyst", header: "Business Process Analyst", width: "160px" },
+  { key: "totalValor", header: "Total Valor", width: "100px", align: "right", type: "number", sortable: true, sortField: "totalValor" },
+  { key: "totalEsfuerzo", header: "Total Esfuerzo", width: "110px", align: "right", type: "number", sortable: true, sortField: "totalEsfuerzo" },
+  { key: "puntajeTotal", header: "Puntaje Total", width: "110px", align: "right", type: "number", sortable: true, sortField: "puntajeTotal" },
+  { key: "statusText", header: "ESTATUS Y SIGUIENTES PASOS", width: "250px", type: "longtext" },
+  { key: "accionesAcelerar", header: "Acciones a Ejecutar", width: "200px", type: "longtext" },
+  { key: "businessImpactGrowth", header: "Business Impact Growth", width: "160px" },
+  { key: "businessImpactCostos", header: "Business Impact Costos", width: "160px" },
+  { key: "businessImpactOther", header: "Business Impact Other", width: "160px" },
+  { key: "fase", header: "Fase", width: "100px", type: "badge" },
+  { key: "dependenciasItLocal", header: "Dep: IT Local", width: "100px", type: "boolean" },
+  { key: "dependenciasTDigital", header: "Dep: T. Digital", width: "110px", type: "boolean" },
+  { key: "dependenciasDigitalizacionSsc", header: "Dep: Digitalización SSC", width: "150px", type: "boolean" },
+  { key: "dependenciasExterno", header: "Dep: Externo", width: "100px", type: "boolean" },
+  { key: "direccionNegocioUsuario", header: "Dirección de Negocio", width: "160px" },
+  { key: "impactaGasesEnvasados", header: "Impacta Gases Envasados", width: "160px" },
+  { key: "areaProductividad", header: "Área de Productividad", width: "150px" },
+  { key: "scoringNivelDemanda", header: "Nivel de Demanda", width: "140px" },
+  { key: "scoringTieneSponsor", header: "¿Tiene Sponsor?", width: "120px" },
+  { key: "scoringPersonasAfecta", header: "Personas Afecta", width: "130px" },
+  { key: "scoringEsReplicable", header: "¿Es Replicable?", width: "120px" },
+  { key: "scoringEsEstrategico", header: "¿Es Estratégico?", width: "120px" },
+  { key: "scoringTiempoDesarrollo", header: "Tiempo Desarrollo", width: "130px" },
+  { key: "scoringCalidadInformacion", header: "Calidad Información", width: "140px" },
+  { key: "scoringTiempoConseguirInfo", header: "Tiempo Conseguir Info", width: "150px" },
+  { key: "scoringComplejidadTecnica", header: "Complejidad Técnica", width: "140px" },
+  { key: "scoringComplejidadCambio", header: "Complejidad Cambio", width: "140px" },
+  { key: "objective", header: "Objetivo", width: "180px", type: "longtext" },
+  { key: "scopeIn", header: "Qué SÍ incluye", width: "180px", type: "longtext" },
+  { key: "scopeOut", header: "Qué NO incluye", width: "180px", type: "longtext" },
+  { key: "benefits", header: "Beneficios", width: "180px", type: "longtext" },
+  { key: "risks", header: "Riesgos", width: "180px", type: "longtext" },
+  { key: "kpis", header: "Indicadores", width: "160px", type: "longtext" },
+  { key: "region", header: "Región", width: "100px" },
+  { key: "priority", header: "Prioridad", width: "100px", type: "badge" },
+  { key: "category", header: "Categoría", width: "120px" },
+  { key: "projectType", header: "Tipo de Proyecto", width: "130px" },
+  { key: "percentComplete", header: "% Completado", width: "110px", align: "center", type: "number", sortable: true, sortField: "percentComplete" },
+  { key: "healthScore", header: "Health Score", width: "100px", align: "center", type: "number" },
+  { key: "comments", header: "Comentarios", width: "180px", type: "longtext" },
+  { key: "_actions", header: "", width: "50px" },
+];
 
 export function ProjectsGrid() {
   const { filters, setFilters, hasActiveFilters, clearFilters: clearGlobalFilters, buildQueryString } = useFilters();
@@ -139,7 +219,6 @@ export function ProjectsGrid() {
   const { toast } = useToast();
   const { isAdmin, isEditor } = useAuth();
   
-  // Reset page when filters change
   useEffect(() => {
     setPage(1);
   }, [filters.q, filters.estado, filters.depto, filters.analista]);
@@ -330,7 +409,6 @@ export function ProjectsGrid() {
     });
   };
 
-  // Extract unique statuses, departments, responsibles, and Business Process Analysts for filters
   const { statuses, departments, responsibles, businessProcessAnalysts } = useMemo(() => {
     if (!data?.projects) return { statuses: [], departments: [], responsibles: [], businessProcessAnalysts: [] };
     
@@ -344,7 +422,6 @@ export function ProjectsGrid() {
       if (p.departmentName) deptSet.add(p.departmentName);
       if (p.responsible) respSet.add(p.responsible);
       
-      // Extract Business Process Analyst from extraFields
       const extraFields = p.extraFields as Record<string, unknown> | null;
       if (extraFields) {
         const analyst = extraFields["Business Process Analyst"] as string | undefined;
@@ -362,12 +439,10 @@ export function ProjectsGrid() {
     };
   }, [data?.projects]);
 
-  // Filter and sort projects using global filter context
   const filteredProjects = useMemo(() => {
     if (!data?.projects) return [];
 
     let filtered = data.projects.filter((project) => {
-      // Search filter (using global q)
       if (filters.q) {
         const searchLower = filters.q.toLowerCase();
         const matchesSearch =
@@ -378,17 +453,14 @@ export function ProjectsGrid() {
         if (!matchesSearch) return false;
       }
 
-      // Status filter (using global estado)
       if (filters.estado !== "all" && project.status !== filters.estado) {
         return false;
       }
 
-      // Department filter (using global depto)
       if (filters.depto !== "all" && project.departmentName !== filters.depto) {
         return false;
       }
 
-      // Business Process Analyst filter (using global analista)
       if (filters.analista !== "all") {
         const extraFields = project.extraFields as Record<string, unknown> | null;
         const analyst = extraFields?.["Business Process Analyst"] as string | undefined;
@@ -400,7 +472,6 @@ export function ProjectsGrid() {
       return true;
     });
 
-    // Sort
     filtered.sort((a, b) => {
       let aVal = a[sortField];
       let bVal = b[sortField];
@@ -421,7 +492,6 @@ export function ProjectsGrid() {
     return filtered;
   }, [data?.projects, filters.q, filters.estado, filters.depto, filters.analista, sortField, sortDirection]);
 
-  // Paginate
   const paginatedProjects = useMemo(() => {
     const start = (page - 1) * pageSize;
     return filteredProjects.slice(start, start + pageSize);
@@ -429,7 +499,6 @@ export function ProjectsGrid() {
 
   const totalPages = Math.ceil(filteredProjects.length / pageSize);
 
-  // Selection helpers (must be after paginatedProjects)
   const visibleProjectIds = useMemo(() => {
     return paginatedProjects.map(p => p.id);
   }, [paginatedProjects]);
@@ -588,7 +657,6 @@ export function ProjectsGrid() {
   const formatDate = (date: string | null | undefined) => {
     if (!date) return "—";
     try {
-      // Add T12:00:00 to avoid timezone issues with date-only strings
       const dateStr = date.includes("T") ? date : `${date}T12:00:00`;
       return format(new Date(dateStr), "dd/MM/yy", { locale: es });
     } catch {
@@ -607,6 +675,138 @@ export function ProjectsGrid() {
     );
   };
 
+  const getProjectValue = (project: Project, key: string): unknown => {
+    if (key === "fase") {
+      const extraFields = project.extraFields as Record<string, unknown> | null;
+      return extraFields?.["Fase"] || extraFields?.["fase"] || (project as Record<string, unknown>).fase;
+    }
+    if (key === "leader") {
+      return project.leader || project.responsible;
+    }
+    return (project as Record<string, unknown>)[key];
+  };
+
+  const renderCellContent = (project: Project, col: ColumnConfig) => {
+    const value = getProjectValue(project, col.key);
+    
+    if (col.type === "date") {
+      return (
+        <span className="text-muted-foreground text-xs tabular-nums whitespace-nowrap">
+          {formatDate(value as string | null)}
+        </span>
+      );
+    }
+    
+    if (col.type === "number") {
+      if (value === null || value === undefined) {
+        return <span className="text-muted-foreground">—</span>;
+      }
+      if (col.key === "puntajeTotal") {
+        return <span className="font-bold text-primary tabular-nums">{value}</span>;
+      }
+      if (col.key === "percentComplete") {
+        return <span className="tabular-nums">{value}%</span>;
+      }
+      return <span className="font-medium tabular-nums">{value}</span>;
+    }
+    
+    if (col.type === "boolean") {
+      return value ? (
+        <Check className="h-4 w-4 text-green-600" />
+      ) : (
+        <span className="text-muted-foreground text-xs">—</span>
+      );
+    }
+    
+    if (col.type === "badge") {
+      if (!value) return <span className="text-muted-foreground text-xs">—</span>;
+      
+      const strValue = String(value);
+      let badgeClass = "font-normal text-xs";
+      
+      if (col.key === "estatusAlDia") {
+        if (strValue.toLowerCase().includes("tiempo")) {
+          badgeClass += " bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30";
+        } else if (strValue.toLowerCase().includes("retras")) {
+          badgeClass += " bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30";
+        } else if (strValue.toLowerCase().includes("riesgo")) {
+          badgeClass += " bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
+        }
+      } else if (col.key === "status") {
+        if (strValue.toLowerCase().includes("abierto")) {
+          badgeClass += " bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30";
+        } else if (strValue.toLowerCase().includes("progreso")) {
+          badgeClass += " bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
+        } else if (strValue.toLowerCase().includes("cerrado")) {
+          badgeClass += " bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30";
+        } else if (strValue.toLowerCase().includes("cancelado")) {
+          badgeClass += " bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30";
+        } else if (strValue.toLowerCase().includes("pausa")) {
+          badgeClass += " bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/30";
+        }
+      } else if (col.key === "priority") {
+        if (strValue.toLowerCase() === "alta") {
+          badgeClass += " bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30";
+        } else if (strValue.toLowerCase() === "media") {
+          badgeClass += " bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
+        } else if (strValue.toLowerCase() === "baja") {
+          badgeClass += " bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30";
+        }
+      }
+      
+      return (
+        <Badge variant="outline" className={badgeClass}>
+          {strValue}
+        </Badge>
+      );
+    }
+    
+    if (col.type === "longtext") {
+      const strValue = String(value || "");
+      if (!strValue) return <span className="text-muted-foreground text-xs">—</span>;
+      
+      if (strValue.length > 80) {
+        return (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-xs text-muted-foreground truncate block cursor-help max-w-[200px]">
+                {strValue.substring(0, 80)}...
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="max-w-md">
+              <p className="text-sm whitespace-pre-wrap">{strValue}</p>
+            </TooltipContent>
+          </Tooltip>
+        );
+      }
+      return <span className="text-xs text-muted-foreground">{strValue}</span>;
+    }
+    
+    if (!value) return <span className="text-muted-foreground text-xs">—</span>;
+    
+    if (col.key === "projectName") {
+      return (
+        <span className="font-bold truncate block max-w-[240px]" title={String(value)}>
+          {String(value)}
+        </span>
+      );
+    }
+    
+    if (col.key === "legacyId" || col.key === "cardIdDevops") {
+      return (
+        <span className="font-mono text-xs text-muted-foreground">
+          {String(value)}
+        </span>
+      );
+    }
+    
+    return (
+      <span className="text-muted-foreground truncate block max-w-[150px]" title={String(value)}>
+        {String(value)}
+      </span>
+    );
+  };
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -617,7 +817,6 @@ export function ProjectsGrid() {
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 items-start">
         <div className="flex-1 w-full">
           <FilterBar showResultCount resultCount={filteredProjects.length} />
@@ -649,250 +848,209 @@ export function ProjectsGrid() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-md border border-border overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead className="w-10">
-                <Checkbox
-                  checked={allVisibleSelected}
-                  onCheckedChange={handleSelectAll}
-                  aria-label="Seleccionar todos"
-                  data-testid="checkbox-select-all"
-                  className={someVisibleSelected ? "data-[state=checked]:bg-primary/50" : ""}
-                />
-              </TableHead>
-              <TableHead className="w-10"></TableHead>
-              <TableHead className="w-[60px] text-center">Ranking</TableHead>
-              <TableHead className="w-[100px]">ID Power Steering</TableHead>
-              <TableHead>
-                <button
-                  className="flex items-center font-medium hover:text-foreground"
-                  onClick={() => handleSort("projectName")}
-                  data-testid="sort-project-name"
-                >
-                  Iniciativa
-                  <SortIcon field="projectName" />
-                </button>
-              </TableHead>
-              <TableHead>ESTATUS AL DÍA</TableHead>
-              <TableHead>
-                <button
-                  className="flex items-center font-medium hover:text-foreground"
-                  onClick={() => handleSort("departmentName")}
-                  data-testid="sort-department"
-                >
-                  Proceso de Negocio
-                  <SortIcon field="departmentName" />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  className="flex items-center font-medium hover:text-foreground"
-                  onClick={() => handleSort("status")}
-                  data-testid="sort-status"
-                >
-                  Tipo de Iniciativa
-                  <SortIcon field="status" />
-                </button>
-              </TableHead>
-              <TableHead>Líder o Solicitante</TableHead>
-              <TableHead className="text-right">Total Valor</TableHead>
-              <TableHead className="text-right">Total Esfuerzo</TableHead>
-              <TableHead className="text-right">Puntaje Total</TableHead>
-              <TableHead className="max-w-[250px]">ESTATUS Y SIGUIENTES PASOS (S/N)</TableHead>
-              <TableHead>Fase</TableHead>
-              <TableHead className="w-10"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell><Skeleton className="h-4 w-4 rounded" /></TableCell>
-                  <TableCell><Skeleton className="h-3 w-3 rounded-full" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-8" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-8 w-8" /></TableCell>
-                </TableRow>
-              ))
-            ) : paginatedProjects.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={15} className="h-32 text-center text-muted-foreground">
-                  No se encontraron proyectos
-                </TableCell>
-              </TableRow>
-            ) : (
-              paginatedProjects.map((project) => {
-                const trafficLight = calculateTrafficLight(
-                  project.endDateEstimated,
-                  project.endDateEstimatedTbd,
-                  project.status,
-                  project.estatusAlDia
-                );
-                
-                const extraFields = project.extraFields as Record<string, unknown> | null;
-                const fase = extraFields?.["Fase"] as string | undefined || 
-                             extraFields?.["fase"] as string | undefined ||
-                             (project as any).fase;
-                
-                return (
-                  <TableRow
-                    key={project.id}
-                    className={cn(
-                      "hover-elevate cursor-pointer",
-                      selectedProjectId === project.id && "bg-muted/50",
-                      selectedIds.has(project.id) && "bg-primary/5"
-                    )}
-                    onClick={() => setSelectedProjectId(project.id)}
-                    data-testid={`project-row-${project.id}`}
-                  >
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIds.has(project.id)}
-                        onCheckedChange={(checked) => {
-                          handleSelectProject(project.id, checked === true);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label={`Seleccionar ${project.projectName}`}
-                        data-testid={`checkbox-select-project-${project.id}`}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TrafficLight status={trafficLight} size="sm" />
-                    </TableCell>
-                    <TableCell className="text-center font-mono text-xs tabular-nums" data-testid={`cell-ranking-${project.id}`}>
-                      {project.ranking || "—"}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground" data-testid={`cell-id-${project.id}`}>
-                      {project.legacyId || "—"}
-                    </TableCell>
-                    <TableCell className="font-bold max-w-[250px] truncate" data-testid={`cell-project-name-${project.id}`}>
-                      {project.projectName || "—"}
-                    </TableCell>
-                    <TableCell data-testid={`cell-estatus-al-dia-${project.id}`}>
-                      {project.estatusAlDia ? (
-                        <Badge 
-                          variant="outline" 
-                          className={cn(
-                            "font-normal text-xs",
-                            project.estatusAlDia.toLowerCase().includes("tiempo") && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
-                            project.estatusAlDia.toLowerCase().includes("retras") && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
-                            project.estatusAlDia.toLowerCase().includes("riesgo") && "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30"
-                          )}
+      <div className="rounded-md border border-border">
+        <ScrollArea className="w-full whitespace-nowrap">
+          <div className="min-w-max">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  {COLUMN_ORDER.map((col) => {
+                    const stickyStyle = col.sticky ? {
+                      position: "sticky" as const,
+                      left: col.stickyLeft,
+                      zIndex: 20,
+                      backgroundColor: "hsl(var(--muted) / 0.5)",
+                    } : {};
+                    
+                    if (col.key === "_checkbox") {
+                      return (
+                        <TableHead 
+                          key={col.key} 
+                          className="w-10 bg-muted/50" 
+                          style={stickyStyle}
                         >
-                          {project.estatusAlDia}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[150px] truncate" data-testid={`cell-department-${project.id}`}>
-                      {project.departmentName || "—"}
-                    </TableCell>
-                    <TableCell data-testid={`cell-status-${project.id}`}>
-                      {project.status ? (
-                        <Badge 
-                          variant="secondary" 
-                          className={cn(
-                            "font-normal",
-                            project.status.toLowerCase().includes("abierto") && "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30",
-                            project.status.toLowerCase().includes("progreso") && "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
-                            project.status.toLowerCase().includes("cerrado") && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
-                            project.status.toLowerCase().includes("cancelado") && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30",
-                            project.status.toLowerCase().includes("pausa") && "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/30"
-                          )}
+                          <Checkbox
+                            checked={allVisibleSelected}
+                            onCheckedChange={handleSelectAll}
+                            aria-label="Seleccionar todos"
+                            data-testid="checkbox-select-all"
+                            className={someVisibleSelected ? "data-[state=checked]:bg-primary/50" : ""}
+                          />
+                        </TableHead>
+                      );
+                    }
+                    
+                    if (col.key === "_trafficLight") {
+                      return (
+                        <TableHead 
+                          key={col.key} 
+                          className="w-10 bg-muted/50" 
+                          style={stickyStyle}
+                        />
+                      );
+                    }
+                    
+                    if (col.key === "_actions") {
+                      return <TableHead key={col.key} className="w-10" />;
+                    }
+                    
+                    if (col.sortable && col.sortField) {
+                      return (
+                        <TableHead 
+                          key={col.key} 
+                          style={{ ...stickyStyle, width: col.width, minWidth: col.width }}
+                          className={cn(col.sticky && "bg-muted/50")}
                         >
-                          {project.status}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[120px] truncate" data-testid={`cell-leader-${project.id}`}>
-                      {project.leader || project.responsible || "—"}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums" data-testid={`cell-total-valor-${project.id}`}>
-                      {project.totalValor != null ? (
-                        <span className="font-medium">{project.totalValor}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums" data-testid={`cell-total-esfuerzo-${project.id}`}>
-                      {project.totalEsfuerzo != null ? (
-                        <span className="font-medium">{project.totalEsfuerzo}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums" data-testid={`cell-puntaje-total-${project.id}`}>
-                      {project.puntajeTotal != null ? (
-                        <span className="font-bold text-primary">{project.puntajeTotal}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="max-w-[250px]" data-testid={`cell-status-text-${project.id}`}>
-                      {project.statusText ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="text-xs text-muted-foreground truncate block cursor-help">
-                              {project.statusText.length > 100 
-                                ? `${project.statusText.substring(0, 100)}...` 
-                                : project.statusText}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="left" className="max-w-md">
-                            <p className="text-sm whitespace-pre-wrap">{project.statusText}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground" data-testid={`cell-fase-${project.id}`}>
-                      {fase ? (
-                        <Badge variant="outline" className="font-normal text-xs">
-                          {fase}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedProjectId(project.id);
-                        }}
-                        data-testid={`button-view-project-${project.id}`}
+                          <button
+                            className={cn(
+                              "flex items-center font-medium hover:text-foreground whitespace-nowrap",
+                              col.align === "right" && "justify-end w-full",
+                              col.align === "center" && "justify-center w-full"
+                            )}
+                            onClick={() => handleSort(col.sortField!)}
+                            data-testid={`sort-${col.key}`}
+                          >
+                            {col.header}
+                            <SortIcon field={col.sortField} />
+                          </button>
+                        </TableHead>
+                      );
+                    }
+                    
+                    return (
+                      <TableHead 
+                        key={col.key} 
+                        style={{ ...stickyStyle, width: col.width, minWidth: col.width }}
+                        className={cn(
+                          col.align === "right" && "text-right",
+                          col.align === "center" && "text-center",
+                          col.sticky && "bg-muted/50",
+                          "whitespace-nowrap"
+                        )}
                       >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                        {col.header}
+                      </TableHead>
+                    );
+                  })}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      {COLUMN_ORDER.map((col, j) => (
+                        <TableCell key={`skeleton-${i}-${j}`}>
+                          <Skeleton className="h-4 w-full" />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : paginatedProjects.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={COLUMN_ORDER.length} className="h-32 text-center text-muted-foreground">
+                      No se encontraron proyectos
                     </TableCell>
                   </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
+                ) : (
+                  paginatedProjects.map((project) => {
+                    const trafficLight = calculateTrafficLight(
+                      project.endDateEstimated,
+                      project.endDateEstimatedTbd,
+                      project.status,
+                      project.estatusAlDia
+                    );
+                    
+                    return (
+                      <TableRow
+                        key={project.id}
+                        className={cn(
+                          "hover-elevate cursor-pointer",
+                          selectedProjectId === project.id && "bg-muted/50",
+                          selectedIds.has(project.id) && "bg-primary/5"
+                        )}
+                        onClick={() => setSelectedProjectId(project.id)}
+                        data-testid={`project-row-${project.id}`}
+                      >
+                        {COLUMN_ORDER.map((col) => {
+                          const stickyStyle = col.sticky ? {
+                            position: "sticky" as const,
+                            left: col.stickyLeft,
+                            zIndex: 10,
+                            backgroundColor: selectedIds.has(project.id) 
+                              ? "hsl(var(--primary) / 0.05)" 
+                              : selectedProjectId === project.id 
+                                ? "hsl(var(--muted) / 0.5)" 
+                                : "hsl(var(--background))",
+                          } : {};
+                          
+                          if (col.key === "_checkbox") {
+                            return (
+                              <TableCell key={col.key} style={stickyStyle} className="bg-background">
+                                <Checkbox
+                                  checked={selectedIds.has(project.id)}
+                                  onCheckedChange={(checked) => {
+                                    handleSelectProject(project.id, checked === true);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  aria-label={`Seleccionar ${project.projectName}`}
+                                  data-testid={`checkbox-select-project-${project.id}`}
+                                />
+                              </TableCell>
+                            );
+                          }
+                          
+                          if (col.key === "_trafficLight") {
+                            return (
+                              <TableCell key={col.key} style={stickyStyle} className="bg-background">
+                                <TrafficLight status={trafficLight} size="sm" />
+                              </TableCell>
+                            );
+                          }
+                          
+                          if (col.key === "_actions") {
+                            return (
+                              <TableCell key={col.key}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedProjectId(project.id);
+                                  }}
+                                  data-testid={`button-view-project-${project.id}`}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            );
+                          }
+                          
+                          return (
+                            <TableCell 
+                              key={col.key} 
+                              style={stickyStyle}
+                              className={cn(
+                                col.align === "right" && "text-right",
+                                col.align === "center" && "text-center",
+                                col.sticky && "bg-background"
+                              )}
+                              data-testid={`cell-${col.key}-${project.id}`}
+                            >
+                              {renderCellContent(project, col)}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
@@ -921,7 +1079,6 @@ export function ProjectsGrid() {
         </div>
       )}
 
-      {/* Project Detail Drawer */}
       <ProjectDetailDrawer
         project={projectDetail?.project || null}
         updates={projectDetail?.updates}
@@ -931,7 +1088,6 @@ export function ProjectsGrid() {
         onClose={() => setSelectedProjectId(null)}
       />
 
-      {/* Save Filter Preset Dialog */}
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -985,7 +1141,6 @@ export function ProjectsGrid() {
         </DialogContent>
       </Dialog>
 
-      {/* Floating Action Bar */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-background border border-border rounded-lg shadow-lg p-4 flex items-center gap-4 z-50">
           <span className="text-sm font-medium" data-testid="text-selected-count">
@@ -1055,7 +1210,6 @@ export function ProjectsGrid() {
         </div>
       )}
 
-      {/* Bulk Update Dialog */}
       <Dialog open={bulkUpdateDialogOpen} onOpenChange={setBulkUpdateDialogOpen} data-testid="dialog-bulk-update">
         <DialogContent>
           <DialogHeader>
@@ -1126,7 +1280,6 @@ export function ProjectsGrid() {
         </DialogContent>
       </Dialog>
 
-      {/* Bulk Delete Confirmation Dialog */}
       <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
         <AlertDialogContent data-testid="dialog-bulk-delete-confirm">
           <AlertDialogHeader>
@@ -1144,7 +1297,6 @@ export function ProjectsGrid() {
             <AlertDialogAction
               onClick={handleBulkDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={bulkDeleteMutation.isPending}
             >
               {bulkDeleteMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1157,154 +1309,101 @@ export function ProjectsGrid() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* AI Enrichment Dialog */}
-      <Dialog open={enrichDialogOpen} onOpenChange={(open) => {
-        setEnrichDialogOpen(open);
-        if (!open) setEnrichmentData(null);
-      }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-ai-enrichment">
+      <Dialog open={enrichDialogOpen} onOpenChange={setEnrichDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              Mejorar Proyecto con IA
+              Sugerencias de IA para "{enrichmentData?.projectName}"
             </DialogTitle>
             <DialogDescription>
-              {enrichmentData?.projectName && (
-                <span className="font-medium">{enrichmentData.projectName}</span>
-              )}
+              Revisa las sugerencias generadas por IA para mejorar la información del proyecto.
             </DialogDescription>
           </DialogHeader>
           
           {enrichmentData?.suggestion && (
             <div className="space-y-6 py-4">
-              {/* Problem Statement Comparison */}
-              <div className="space-y-3">
-                <h4 className="font-semibold text-sm flex items-center gap-2">
-                  Problem Statement
-                </h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium">Antes</p>
-                    <div className="p-3 rounded-md bg-muted/50 text-sm min-h-[100px]">
-                      {enrichmentData.original.problemStatement || (
-                        <span className="text-muted-foreground italic">Sin definir</span>
-                      )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-medium mb-2 text-muted-foreground">Original</h4>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2 text-primary">Sugerencia IA</h4>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium">Problema / Oportunidad</Label>
+                  <div className="grid grid-cols-2 gap-4 mt-2">
+                    <div className="p-3 bg-muted/50 rounded-md text-sm">
+                      {enrichmentData.original.problemStatement || <em className="text-muted-foreground">Sin datos</em>}
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs text-primary font-medium flex items-center gap-1">
-                      <ArrowRight className="h-3 w-3" />
-                      Después (Sugerencia IA)
-                    </p>
-                    <div className="p-3 rounded-md bg-primary/10 border border-primary/20 text-sm min-h-[100px]">
+                    <div className="p-3 bg-primary/5 rounded-md text-sm border border-primary/20">
                       {enrichmentData.suggestion.problemStatement}
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Objective Comparison */}
-              <div className="space-y-3">
-                <h4 className="font-semibold text-sm flex items-center gap-2">
-                  Objetivo
-                </h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium">Antes</p>
-                    <div className="p-3 rounded-md bg-muted/50 text-sm min-h-[80px]">
-                      {enrichmentData.original.objective || (
-                        <span className="text-muted-foreground italic">Sin definir</span>
-                      )}
+                
+                <div>
+                  <Label className="text-sm font-medium">Qué SÍ incluye (Alcance)</Label>
+                  <div className="grid grid-cols-2 gap-4 mt-2">
+                    <div className="p-3 bg-muted/50 rounded-md text-sm">
+                      {enrichmentData.original.scopeIn || <em className="text-muted-foreground">Sin datos</em>}
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs text-primary font-medium flex items-center gap-1">
-                      <ArrowRight className="h-3 w-3" />
-                      Después (Sugerencia IA)
-                    </p>
-                    <div className="p-3 rounded-md bg-primary/10 border border-primary/20 text-sm min-h-[80px]">
-                      {enrichmentData.suggestion.objective}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Scope In Comparison */}
-              <div className="space-y-3">
-                <h4 className="font-semibold text-sm flex items-center gap-2">
-                  Alcance Incluido
-                </h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium">Antes</p>
-                    <div className="p-3 rounded-md bg-muted/50 text-sm min-h-[80px] whitespace-pre-wrap">
-                      {enrichmentData.original.scopeIn || (
-                        <span className="text-muted-foreground italic">Sin definir</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs text-primary font-medium flex items-center gap-1">
-                      <ArrowRight className="h-3 w-3" />
-                      Después (Sugerencia IA)
-                    </p>
-                    <div className="p-3 rounded-md bg-primary/10 border border-primary/20 text-sm min-h-[80px] whitespace-pre-wrap">
+                    <div className="p-3 bg-primary/5 rounded-md text-sm border border-primary/20">
                       {enrichmentData.suggestion.scopeIn}
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Scope Out Comparison */}
-              <div className="space-y-3">
-                <h4 className="font-semibold text-sm flex items-center gap-2">
-                  Fuera de Alcance
-                </h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium">Antes</p>
-                    <div className="p-3 rounded-md bg-muted/50 text-sm min-h-[60px] whitespace-pre-wrap">
-                      {enrichmentData.original.scopeOut || (
-                        <span className="text-muted-foreground italic">Sin definir</span>
-                      )}
+                
+                <div>
+                  <Label className="text-sm font-medium">Qué NO incluye</Label>
+                  <div className="grid grid-cols-2 gap-4 mt-2">
+                    <div className="p-3 bg-muted/50 rounded-md text-sm">
+                      {enrichmentData.original.scopeOut || <em className="text-muted-foreground">Sin datos</em>}
+                    </div>
+                    <div className="p-3 bg-primary/5 rounded-md text-sm border border-primary/20">
+                      {enrichmentData.suggestion.scopeOut}
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-xs text-primary font-medium flex items-center gap-1">
-                      <ArrowRight className="h-3 w-3" />
-                      Después (Sugerencia IA)
-                    </p>
-                    <div className="p-3 rounded-md bg-primary/10 border border-primary/20 text-sm min-h-[60px] whitespace-pre-wrap">
-                      {enrichmentData.suggestion.scopeOut}
+                </div>
+                
+                <div>
+                  <Label className="text-sm font-medium">Objetivo</Label>
+                  <div className="grid grid-cols-2 gap-4 mt-2">
+                    <div className="p-3 bg-muted/50 rounded-md text-sm">
+                      {enrichmentData.original.objective || <em className="text-muted-foreground">Sin datos</em>}
+                    </div>
+                    <div className="p-3 bg-primary/5 rounded-md text-sm border border-primary/20">
+                      {enrichmentData.suggestion.objective}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           )}
-
-          <DialogFooter className="gap-2">
+          
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
                 setEnrichDialogOpen(false);
                 setEnrichmentData(null);
               }}
-              data-testid="button-cancel-enrichment"
             >
               Cancelar
             </Button>
             <Button
               onClick={handleApplyEnrichment}
               disabled={applyEnrichmentMutation.isPending}
-              data-testid="button-apply-enrichment"
             >
               {applyEnrichmentMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-                <Check className="h-4 w-4 mr-2" />
+                <ArrowRight className="h-4 w-4 mr-2" />
               )}
-              Aplicar Cambios
+              Aplicar Sugerencias
             </Button>
           </DialogFooter>
         </DialogContent>
