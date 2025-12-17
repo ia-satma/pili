@@ -1055,6 +1055,42 @@ export async function registerRoutes(
             capexTier: project.capexTier || null,
             financialImpact: project.financialImpact || null,
             strategicFit: project.strategicFit || null,
+            // EXCEL ADDITIONAL FIELDS
+            previo: project.previo || null,
+            cardIdDevops: project.cardIdDevops || null,
+            valorDiferenciador: project.valorDiferenciador || null,
+            tiempoCicloDias: project.tiempoCicloDias || null,
+            ingresadaEnPbot: project.ingresadaEnPbot || null,
+            grupoTecnicoAsignado: project.grupoTecnicoAsignado || null,
+            // DEPENDENCIES
+            dependenciasItLocal: project.dependenciasItLocal || false,
+            dependenciasTDigital: project.dependenciasTDigital || false,
+            dependenciasDigitalizacionSsc: project.dependenciasDigitalizacionSsc || false,
+            dependenciasExterno: project.dependenciasExterno || false,
+            // TEAM ROLES
+            citizenDeveloper: project.citizenDeveloper || null,
+            dtcLead: project.dtcLead || null,
+            blackBeltLead: project.blackBeltLead || null,
+            // BUSINESS CONTEXT
+            direccionNegocioUsuario: project.direccionNegocioUsuario || null,
+            impactaGasesEnvasados: project.impactaGasesEnvasados || null,
+            areaProductividad: project.areaProductividad || null,
+            // SCORING MATRIX EXTENDED
+            scoringNivelDemanda: project.scoringNivelDemanda || null,
+            scoringTieneSponsor: project.scoringTieneSponsor || null,
+            scoringPersonasAfecta: project.scoringPersonasAfecta || null,
+            scoringEsReplicable: project.scoringEsReplicable || null,
+            scoringEsEstrategico: project.scoringEsEstrategico || null,
+            scoringTiempoDesarrollo: project.scoringTiempoDesarrollo || null,
+            scoringCalidadInformacion: project.scoringCalidadInformacion || null,
+            scoringTiempoConseguirInfo: project.scoringTiempoConseguirInfo || null,
+            scoringComplejidadTecnica: project.scoringComplejidadTecnica || null,
+            scoringComplejidadCambio: project.scoringComplejidadCambio || null,
+            // BUSINESS IMPACT
+            accionesAcelerar: project.accionesAcelerar || null,
+            businessImpactGrowth: project.businessImpactGrowth || null,
+            businessImpactCostos: project.businessImpactCostos || null,
+            businessImpactOther: project.businessImpactOther || null,
           };
 
           await storage.createProject(projectData as any);
