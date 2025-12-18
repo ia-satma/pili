@@ -70,8 +70,12 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
             sponsor: row["Sponsor"] ? String(row["Sponsor"]) : null,
             benefits: row["Beneficios Estimados"] ? String(row["Beneficios Estimados"]) : null,
             financialImpact: row["Beneficios Estimados"] ? String(row["Beneficios Estimados"]) : null,
-            totalEsfuerzo: row["Total Esfuerzo"] ? Number(row["Total Esfuerzo"]) : null,
-            totalValor: row["Total Valor"] ? Number(row["Total Valor"]) : null,
+            totalEsfuerzo: (row["Total Esfuerzo"] && !isNaN(Number(row["Total Esfuerzo"])))
+                ? Math.min(25, Math.max(1, Number(row["Total Esfuerzo"])))
+                : null,
+            totalValor: (row["Total Valor"] && !isNaN(Number(row["Total Valor"])))
+                ? Math.min(25, Math.max(1, Number(row["Total Valor"])))
+                : null,
             sourceVersionId: versionId,
             isActive: true,
             extraFields: row,

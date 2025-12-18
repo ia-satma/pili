@@ -705,6 +705,7 @@ export async function registerRoutes(
         dataQualityGaps: {
           missingEndDateCount: allProjects.filter(p => !p.endDateEstimated).length,
           missingPowerSteeringIdCount: allProjects.filter(p => !p.legacyId).length,
+          missingFinancialBenefitCount: allProjects.filter(p => !p.benefits).length,
         }
       });
     } catch (error) {

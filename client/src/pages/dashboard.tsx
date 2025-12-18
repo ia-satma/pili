@@ -129,6 +129,7 @@ interface DashboardData {
   dataQualityGaps: {
     missingEndDateCount: number;
     missingPowerSteeringIdCount: number;
+    missingFinancialBenefitCount: number;
   };
 }
 
@@ -413,7 +414,7 @@ export default function Dashboard() {
                       <p className="text-xs text-muted-foreground">Impacts timeline forecasts</p>
                     </div>
                   </div>
-                  <Badge variant="outline" className="text-lg font-bold bg-white text-red-600 border-red-200">
+                  <Badge variant={"outline" as any} className="text-lg font-bold bg-white text-red-600 border-red-200">
                     {data?.dataQualityGaps?.missingEndDateCount || 0}
                   </Badge>
                 </div>
@@ -428,8 +429,23 @@ export default function Dashboard() {
                       <p className="text-xs text-muted-foreground">Gaps in global tracking</p>
                     </div>
                   </div>
-                  <Badge variant="outline" className="text-lg font-bold bg-white text-orange-600 border-orange-200">
+                  <Badge variant={"outline" as any} className="text-lg font-bold bg-white text-orange-600 border-orange-200">
                     {data?.dataQualityGaps?.missingPowerSteeringIdCount || 0}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-lg bg-background border border-blue-100 hover-elevate">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-emerald-100">
+                      <Gem className="h-5 w-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Missing Financial Benefit</p>
+                      <p className="text-xs text-muted-foreground">Value is unquantified</p>
+                    </div>
+                  </div>
+                  <Badge variant={"outline" as any} className="text-lg font-bold bg-white text-emerald-600 border-emerald-200">
+                    {data?.dataQualityGaps?.missingFinancialBenefitCount || 0}
                   </Badge>
                 </div>
               </div>
@@ -497,7 +513,7 @@ export default function Dashboard() {
                     <ReferenceLine x={13} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
                     <ReferenceLine y={13} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
                     <Tooltip
-                      content={({ active, payload }) => {
+                      content={({ active, payload }: any) => {
                         if (active && payload && payload.length > 0) {
                           const project = payload[0].payload as ScoringProject;
                           return (
@@ -517,6 +533,7 @@ export default function Dashboard() {
                     <Scatter
                       name="Proyectos"
                       data={scoringData.projects}
+                      cursor="pointer"
                     >
                       {scoringData.projects.map((entry, index) => {
                         const highValue = entry.totalValor >= 13;
@@ -525,7 +542,13 @@ export default function Dashboard() {
                         if (highValue && lowEffort) fill = "hsl(142, 76%, 36%)"; // Green
                         else if (highValue && !lowEffort) fill = "hsl(217, 91%, 48%)"; // Blue
                         else if (!highValue && lowEffort) fill = "hsl(45, 93%, 47%)"; // Yellow
-                        return <Cell key={`cell-${index}`} fill={fill} />;
+                        return (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={fill}
+                            onClick={() => window.location.href = `/projects/${entry.id}`}
+                          />
+                        );
                       })}
                     </Scatter>
                   </ScatterChart>
