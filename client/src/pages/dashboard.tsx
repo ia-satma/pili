@@ -185,69 +185,7 @@ const QUADRANT_COLORS = {
   moneyPit: "hsl(0, 84%, 60%)",      // Red
 };
 
-const DMAIC_COLORS = {
-  define: "hsl(217, 91%, 48%)",     // Blue
-  measure: "hsl(262, 52%, 52%)",    // Purple
-  analyze: "hsl(32, 95%, 48%)",     // Orange
-  improve: "hsl(142, 71%, 35%)",    // Green
-  control: "hsl(340, 82%, 45%)",    // Pink
-};
-
-function mapStatusesToDMAIC(statusData: { name: string; count: number }[]): { phase: string; count: number; color: string }[] {
-  const excludedStatuses = new Set(["cancelado", "cancelled", "canceled"]);
-  
-  const dmaicMap: Record<string, { phase: string; color: string }> = {
-    "nuevo": { phase: "Define", color: DMAIC_COLORS.define },
-    "proyecto nuevo": { phase: "Define", color: DMAIC_COLORS.define },
-    "new": { phase: "Define", color: DMAIC_COLORS.define },
-    "abierto": { phase: "Define", color: DMAIC_COLORS.define },
-    "sin estado": { phase: "Define", color: DMAIC_COLORS.define },
-    
-    "análisis": { phase: "Measure", color: DMAIC_COLORS.measure },
-    "analisis": { phase: "Measure", color: DMAIC_COLORS.measure },
-    "medición": { phase: "Measure", color: DMAIC_COLORS.measure },
-    
-    "pruebas": { phase: "Analyze", color: DMAIC_COLORS.analyze },
-    "testing": { phase: "Analyze", color: DMAIC_COLORS.analyze },
-    "evaluación": { phase: "Analyze", color: DMAIC_COLORS.analyze },
-    
-    "desarrollo": { phase: "Improve", color: DMAIC_COLORS.improve },
-    "implementación": { phase: "Improve", color: DMAIC_COLORS.improve },
-    "implementacion": { phase: "Improve", color: DMAIC_COLORS.improve },
-    "on going": { phase: "Improve", color: DMAIC_COLORS.improve },
-    "en progreso": { phase: "Improve", color: DMAIC_COLORS.improve },
-    
-    "terminado": { phase: "Control", color: DMAIC_COLORS.control },
-    "cerrado": { phase: "Control", color: DMAIC_COLORS.control },
-    "completado": { phase: "Control", color: DMAIC_COLORS.control },
-    "closed": { phase: "Control", color: DMAIC_COLORS.control },
-  };
-  
-  const phaseCounts: Record<string, { count: number; color: string }> = {
-    "Define": { count: 0, color: DMAIC_COLORS.define },
-    "Measure": { count: 0, color: DMAIC_COLORS.measure },
-    "Analyze": { count: 0, color: DMAIC_COLORS.analyze },
-    "Improve": { count: 0, color: DMAIC_COLORS.improve },
-    "Control": { count: 0, color: DMAIC_COLORS.control },
-  };
-  
-  statusData.forEach((item) => {
-    const normalized = item.name.toLowerCase().trim();
-    if (excludedStatuses.has(normalized)) {
-      return;
-    }
-    const mapping = dmaicMap[normalized];
-    if (mapping) {
-      phaseCounts[mapping.phase].count += item.count;
-    }
-  });
-  
-  return Object.entries(phaseCounts).map(([phase, data]) => ({
-    phase,
-    count: data.count,
-    color: data.color,
-  }));
-}
+// Status to DMAIC mapping removed to ensure data fidelity with source Excel
 
 export default function Dashboard() {
   useDocumentTitle("Dashboard");
@@ -255,7 +193,7 @@ export default function Dashboard() {
   const queryString = buildQueryString();
   const { toast } = useToast();
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
-  
+
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["/api/dashboard", queryString],
     queryFn: () => fetch(`/api/dashboard${queryString ? `?${queryString}` : ""}`).then(r => r.json()),
@@ -362,9 +300,9 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => auditMutation.mutate()}
               disabled={auditMutation.isPending}
               data-testid="button-run-pmo-audit"
@@ -382,33 +320,33 @@ export default function Dashboard() {
                   BORRAR TODO (RESET)
                 </Button>
               </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>BORRAR TODOS LOS PROYECTOS</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta acción eliminará TODOS los proyectos de la base de datos.
-                  Esta operación NO se puede deshacer.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel data-testid="button-cancel-reset">Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => resetMutation.mutate()}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  disabled={resetMutation.isPending}
-                  data-testid="button-confirm-reset"
-                >
-                  {resetMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Borrando...
-                    </>
-                  ) : (
-                    "Sí, BORRAR TODO"
-                  )}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>BORRAR TODOS LOS PROYECTOS</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta acción eliminará TODOS los proyectos de la base de datos.
+                    Esta operación NO se puede deshacer.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-testid="button-cancel-reset">Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => resetMutation.mutate()}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={resetMutation.isPending}
+                    data-testid="button-confirm-reset"
+                  >
+                    {resetMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Borrando...
+                      </>
+                    ) : (
+                      "Sí, BORRAR TODO"
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
             </AlertDialog>
           </div>
         </div>
@@ -456,132 +394,139 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Strategy Insights Widget */}
-      <Card className="overflow-visible" data-testid="strategy-insights-widget">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                Insights Estratégicos
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">Análisis automático del portafolio basado en la matriz Valor/Esfuerzo</p>
-            </div>
-            {insightsData && (
-              <Badge variant="outline" className="text-xs" data-testid="badge-portfolio-health">
-                Salud del Portafolio: {insightsData.summary.portfolioHealthScore}%
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {insightsLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-24 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Quick Wins */}
-              <Link href="/projects?insight=quick-wins">
-                <motion.div 
-                  whileHover={{ scale: 1.02 }}
-                  className="group cursor-pointer rounded-lg border border-green-500/30 bg-green-500/10 p-4 hover-elevate"
-                  data-testid="insight-quick-wins"
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-full bg-green-500/20">
-                      <Gem className="h-5 w-5 text-green-600 dark:text-green-400" />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="text-quick-wins-count">
-                        {insightsData?.summary.quickWinsCount || 0}
+      {/* Strategy Insights Widget - Visibility tied to financial data fidelity */}
+      {(!insightsLoading && insightsData && (
+        insightsData.summary.quickWinsCount > 0 ||
+        insightsData.summary.zombiesCount > 0 ||
+        insightsData.summary.misalignedCount > 0 ||
+        insightsData.summary.valueBetsCount > 0
+      )) && (
+          <Card className="overflow-visible" data-testid="strategy-insights-widget">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    Insights Estratégicos
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">Análisis automático del portafolio basado en la matriz Valor/Esfuerzo</p>
+                </div>
+                {insightsData && (
+                  <Badge variant="outline" className="text-xs" data-testid="badge-portfolio-health">
+                    Salud del Portafolio: {insightsData.summary.portfolioHealthScore}%
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {insightsLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-24 w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Quick Wins */}
+                  <Link href="/projects?insight=quick-wins">
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      className="group cursor-pointer rounded-lg border border-green-500/30 bg-green-500/10 p-4 hover-elevate"
+                      data-testid="insight-quick-wins"
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 rounded-full bg-green-500/20">
+                          <Gem className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="text-quick-wins-count">
+                            {insightsData?.summary.quickWinsCount || 0}
+                          </div>
+                          <div className="text-xs font-medium">Quick Wins</div>
+                        </div>
                       </div>
-                      <div className="text-xs font-medium">Quick Wins</div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Bajo costo, alto beneficio. Candidatos para fast-track.
-                  </p>
-                </motion.div>
-              </Link>
+                      <p className="text-xs text-muted-foreground">
+                        Bajo costo, alto beneficio. Candidatos para fast-track.
+                      </p>
+                    </motion.div>
+                  </Link>
 
-              {/* Value Bets */}
-              <Link href="/projects?insight=value-bets">
-                <motion.div 
-                  whileHover={{ scale: 1.02 }}
-                  className="group cursor-pointer rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 hover-elevate"
-                  data-testid="insight-value-bets"
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-full bg-blue-500/20">
-                      <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-value-bets-count">
-                        {insightsData?.summary.valueBetsCount || 0}
+                  {/* Value Bets */}
+                  <Link href="/projects?insight=value-bets">
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      className="group cursor-pointer rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 hover-elevate"
+                      data-testid="insight-value-bets"
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 rounded-full bg-blue-500/20">
+                          <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-value-bets-count">
+                            {insightsData?.summary.valueBetsCount || 0}
+                          </div>
+                          <div className="text-xs font-medium">Big Bets</div>
+                        </div>
                       </div>
-                      <div className="text-xs font-medium">Big Bets</div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Alto costo + alto retorno + alineación estratégica.
-                  </p>
-                </motion.div>
-              </Link>
+                      <p className="text-xs text-muted-foreground">
+                        Alto costo + alto retorno + alineación estratégica.
+                      </p>
+                    </motion.div>
+                  </Link>
 
-              {/* Zombies to Kill */}
-              <Link href="/projects?insight=zombies">
-                <motion.div 
-                  whileHover={{ scale: 1.02 }}
-                  className="group cursor-pointer rounded-lg border border-red-500/30 bg-red-500/10 p-4 hover-elevate"
-                  data-testid="insight-zombies"
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-full bg-red-500/20">
-                      <Skull className="h-5 w-5 text-red-600 dark:text-red-400" />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-red-600 dark:text-red-400" data-testid="text-zombies-count">
-                        {insightsData?.summary.zombiesCount || 0}
+                  {/* Zombies to Kill */}
+                  <Link href="/projects?insight=zombies">
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      className="group cursor-pointer rounded-lg border border-red-500/30 bg-red-500/10 p-4 hover-elevate"
+                      data-testid="insight-zombies"
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 rounded-full bg-red-500/20">
+                          <Skull className="h-5 w-5 text-red-600 dark:text-red-400" />
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-red-600 dark:text-red-400" data-testid="text-zombies-count">
+                            {insightsData?.summary.zombiesCount || 0}
+                          </div>
+                          <div className="text-xs font-medium">Value Destroyers</div>
+                        </div>
                       </div>
-                      <div className="text-xs font-medium">Value Destroyers</div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Alto costo sin beneficio. Candidatos para cancelación.
-                  </p>
-                </motion.div>
-              </Link>
+                      <p className="text-xs text-muted-foreground">
+                        Alto costo sin beneficio. Candidatos para cancelación.
+                      </p>
+                    </motion.div>
+                  </Link>
 
-              {/* Strategic Misalignment */}
-              <Link href="/projects?insight=misaligned">
-                <motion.div 
-                  whileHover={{ scale: 1.02 }}
-                  className="group cursor-pointer rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 hover-elevate"
-                  data-testid="insight-misaligned"
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-full bg-yellow-500/20">
-                      <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400" data-testid="text-misaligned-count">
-                        {insightsData?.summary.misalignedCount || 0}
+                  {/* Strategic Misalignment */}
+                  <Link href="/projects?insight=misaligned">
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      className="group cursor-pointer rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 hover-elevate"
+                      data-testid="insight-misaligned"
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 rounded-full bg-yellow-500/20">
+                          <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400" data-testid="text-misaligned-count">
+                            {insightsData?.summary.misalignedCount || 0}
+                          </div>
+                          <div className="text-xs font-medium">Sin Alineación</div>
+                        </div>
                       </div>
-                      <div className="text-xs font-medium">Sin Alineación</div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Inversión sin alineación estratégica. Requieren caso de negocio.
-                  </p>
-                </motion.div>
-              </Link>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                      <p className="text-xs text-muted-foreground">
+                        Inversión sin alineación estratégica. Requieren caso de negocio.
+                      </p>
+                    </motion.div>
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
       {/* Quality Pulse & Stagnation Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -633,7 +578,7 @@ export default function Dashboard() {
                     </RadialBarChart>
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pt-6">
-                    <span 
+                    <span
                       className="text-4xl font-bold"
                       style={{
                         color: (healthStats?.averageScore || 0) >= 90
@@ -700,8 +645,8 @@ export default function Dashboard() {
                       </p>
                     </div>
                     <Link href={`/project-master?id=${project.id}`}>
-                      <Badge 
-                        variant="outline" 
+                      <Badge
+                        variant="outline"
                         className="cursor-pointer text-xs border-traffic-yellow text-traffic-yellow hover:bg-traffic-yellow/10"
                         data-testid={`button-update-${project.id}`}
                       >
@@ -804,8 +749,8 @@ export default function Dashboard() {
                         borderRadius: "6px",
                       }}
                     />
-                    <Legend 
-                      verticalAlign="bottom" 
+                    <Legend
+                      verticalAlign="bottom"
                       height={36}
                       formatter={(value) => <span className="text-sm">{value}</span>}
                     />
@@ -817,204 +762,149 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* DMAIC Methodology Breakdown */}
-      <Card className="overflow-visible" data-testid="chart-dmaic-breakdown">
-        <CardHeader>
-          <CardTitle className="text-base">Distribución por Fase DMAIC</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Define, Measure, Analyze, Improve, Control - Metodología Six Sigma
-          </p>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-64 w-full" />
-          ) : (
-            (() => {
-              const dmaicData = mapStatusesToDMAIC(data?.projectsByStatus || []);
-              const total = dmaicData.reduce((sum, d) => sum + d.count, 0);
-              return total === 0 ? (
-                <div className="h-64 flex flex-col items-center justify-center text-muted-foreground">
-                  <p>No hay datos de metodología disponibles</p>
+      {/* DMAIC Methodology Breakdown removed for data fidelity - Row 4 doesn't support these phases natively */}
+
+      {/* Value/Effort Matrix - Scatter Plot */}
+      {(!scoringLoading && scoringData && scoringData.projects.length > 0) && (
+        <Card className="overflow-visible" data-testid="value-effort-matrix">
+          <CardHeader>
+            <CardTitle className="text-base">Matriz Valor/Esfuerzo</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Priorización de proyectos: Quick Wins, Big Bets, Fill-Ins, Money Pit
+            </p>
+          </CardHeader>
+          <CardContent>
+            {scoringLoading ? (
+              <Skeleton className="h-80 w-full" />
+            ) : !scoringData || !scoringData.projects || scoringData.projects.length === 0 ? (
+              <div className="h-80 flex flex-col items-center justify-center text-muted-foreground">
+                <p>No hay datos de scoring disponibles</p>
+                <p className="text-xs mt-1">Cargue un archivo Excel con columnas de Total Valor y Total Esfuerzo</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.quickWins }} />
+                    <span>Quick Wins ({scoringData.quadrants.quickWins})</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.bigBets }} />
+                    <span>Big Bets ({scoringData.quadrants.bigBets})</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.fillIns }} />
+                    <span>Fill-Ins ({scoringData.quadrants.fillIns})</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.moneyPit }} />
+                    <span>Money Pit ({scoringData.quadrants.moneyPit})</span>
+                  </div>
                 </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart
-                    data={dmaicData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis 
-                      dataKey="phase" 
-                      tick={{ fontSize: 12 }}
+                <ResponsiveContainer width="100%" height={320}>
+                  <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      type="number"
+                      dataKey="totalEsfuerzo"
+                      name="Esfuerzo"
+                      domain={['dataMin - 10', 'dataMax + 10']}
+                      label={{ value: 'Esfuerzo (mayor = menos esfuerzo real)', position: 'bottom', offset: 20, style: { fontSize: 12 } }}
+                      tick={{ fontSize: 11 }}
                     />
-                    <YAxis 
-                      allowDecimals={false}
-                      tick={{ fontSize: 12 }}
+                    <YAxis
+                      type="number"
+                      dataKey="totalValor"
+                      name="Valor"
+                      domain={['dataMin - 10', 'dataMax + 10']}
+                      label={{ value: 'Valor Estratégico', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <ZAxis range={[60, 60]} />
+                    <ReferenceLine
+                      x={scoringData.medianEsfuerzo}
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeDasharray="5 5"
+                      strokeWidth={1}
+                    />
+                    <ReferenceLine
+                      y={scoringData.medianValor}
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeDasharray="5 5"
+                      strokeWidth={1}
                     />
                     <Tooltip
+                      cursor={{ strokeDasharray: '3 3' }}
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
                         border: "1px solid hsl(var(--border))",
                         borderRadius: "6px",
+                        padding: "8px 12px",
                       }}
-                      formatter={(value: number) => [value, "Proyectos"]}
-                    />
-                    <Bar
-                      dataKey="count"
-                      radius={[4, 4, 0, 0]}
-                      name="Proyectos"
-                    >
-                      {dmaicData.map((entry, index) => (
-                        <Cell key={`dmaic-cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              );
-            })()
-          )}
-        </CardContent>
-      </Card>
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length > 0) {
+                          const project = payload[0].payload as ScoringProject;
+                          const highValue = project.totalValor >= scoringData.medianValor;
+                          const lowEffort = project.totalEsfuerzo >= scoringData.medianEsfuerzo;
+                          let quadrant = "";
+                          let color = "";
+                          if (highValue && lowEffort) { quadrant = "Quick Win"; color = QUADRANT_COLORS.quickWins; }
+                          else if (highValue && !lowEffort) { quadrant = "Big Bet"; color = QUADRANT_COLORS.bigBets; }
+                          else if (!highValue && lowEffort) { quadrant = "Fill-In"; color = QUADRANT_COLORS.fillIns; }
+                          else { quadrant = "Money Pit"; color = QUADRANT_COLORS.moneyPit; }
 
-      {/* Value/Effort Matrix - Scatter Plot */}
-      <Card className="overflow-visible" data-testid="value-effort-matrix">
-        <CardHeader>
-          <CardTitle className="text-base">Matriz Valor/Esfuerzo</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Priorización de proyectos: Quick Wins, Big Bets, Fill-Ins, Money Pit
-          </p>
-        </CardHeader>
-        <CardContent>
-          {scoringLoading ? (
-            <Skeleton className="h-80 w-full" />
-          ) : !scoringData || !scoringData.projects || scoringData.projects.length === 0 ? (
-            <div className="h-80 flex flex-col items-center justify-center text-muted-foreground">
-              <p>No hay datos de scoring disponibles</p>
-              <p className="text-xs mt-1">Cargue un archivo Excel con columnas de Total Valor y Total Esfuerzo</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.quickWins }} />
-                  <span>Quick Wins ({scoringData.quadrants.quickWins})</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.bigBets }} />
-                  <span>Big Bets ({scoringData.quadrants.bigBets})</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.fillIns }} />
-                  <span>Fill-Ins ({scoringData.quadrants.fillIns})</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.moneyPit }} />
-                  <span>Money Pit ({scoringData.quadrants.moneyPit})</span>
-                </div>
+                          return (
+                            <div className="bg-card border rounded-md p-3 shadow-lg">
+                              <p className="font-medium text-sm mb-1">{project.projectName}</p>
+                              <p className="text-xs text-muted-foreground">{project.departmentName || "Sin departamento"}</p>
+                              <div className="mt-2 space-y-1 text-xs">
+                                <p>Valor: <span className="font-medium">{project.totalValor}</span></p>
+                                <p>Esfuerzo: <span className="font-medium">{project.totalEsfuerzo}</span></p>
+                                {project.ranking && <p>Ranking: <span className="font-medium">#{project.ranking}</span></p>}
+                              </div>
+                              <div className="mt-2 flex items-center gap-1">
+                                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                                <span className="text-xs font-medium" style={{ color }}>{quadrant}</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Scatter
+                      name="Proyectos"
+                      data={scoringData.projects.map(p => {
+                        const highValue = p.totalValor >= scoringData.medianValor;
+                        const lowEffort = p.totalEsfuerzo >= scoringData.medianEsfuerzo;
+                        let fill = QUADRANT_COLORS.moneyPit;
+                        if (highValue && lowEffort) fill = QUADRANT_COLORS.quickWins;
+                        else if (highValue && !lowEffort) fill = QUADRANT_COLORS.bigBets;
+                        else if (!highValue && lowEffort) fill = QUADRANT_COLORS.fillIns;
+                        return { ...p, fill };
+                      })}
+                      fill="#8884d8"
+                    >
+                      {scoringData.projects.map((entry, index) => {
+                        const highValue = entry.totalValor >= scoringData.medianValor;
+                        const lowEffort = entry.totalEsfuerzo >= scoringData.medianEsfuerzo;
+                        let fill = QUADRANT_COLORS.moneyPit;
+                        if (highValue && lowEffort) fill = QUADRANT_COLORS.quickWins;
+                        else if (highValue && !lowEffort) fill = QUADRANT_COLORS.bigBets;
+                        else if (!highValue && lowEffort) fill = QUADRANT_COLORS.fillIns;
+                        return <Cell key={`cell-${index}`} fill={fill} />;
+                      })}
+                    </Scatter>
+                  </ScatterChart>
+                </ResponsiveContainer>
+                <p className="text-xs text-center text-muted-foreground">
+                  Cuadrantes definidos por mediana de Valor ({scoringData.medianValor}) y Esfuerzo ({scoringData.medianEsfuerzo})
+                </p>
               </div>
-              <ResponsiveContainer width="100%" height={320}>
-                <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 40 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    type="number" 
-                    dataKey="totalEsfuerzo" 
-                    name="Esfuerzo" 
-                    domain={['dataMin - 10', 'dataMax + 10']}
-                    label={{ value: 'Esfuerzo (mayor = menos esfuerzo real)', position: 'bottom', offset: 20, style: { fontSize: 12 } }}
-                    tick={{ fontSize: 11 }}
-                  />
-                  <YAxis 
-                    type="number" 
-                    dataKey="totalValor" 
-                    name="Valor" 
-                    domain={['dataMin - 10', 'dataMax + 10']}
-                    label={{ value: 'Valor Estratégico', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
-                    tick={{ fontSize: 11 }}
-                  />
-                  <ZAxis range={[60, 60]} />
-                  <ReferenceLine 
-                    x={scoringData.medianEsfuerzo} 
-                    stroke="hsl(var(--muted-foreground))" 
-                    strokeDasharray="5 5"
-                    strokeWidth={1}
-                  />
-                  <ReferenceLine 
-                    y={scoringData.medianValor} 
-                    stroke="hsl(var(--muted-foreground))" 
-                    strokeDasharray="5 5"
-                    strokeWidth={1}
-                  />
-                  <Tooltip
-                    cursor={{ strokeDasharray: '3 3' }}
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "6px",
-                      padding: "8px 12px",
-                    }}
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length > 0) {
-                        const project = payload[0].payload as ScoringProject;
-                        const highValue = project.totalValor >= scoringData.medianValor;
-                        const lowEffort = project.totalEsfuerzo >= scoringData.medianEsfuerzo;
-                        let quadrant = "";
-                        let color = "";
-                        if (highValue && lowEffort) { quadrant = "Quick Win"; color = QUADRANT_COLORS.quickWins; }
-                        else if (highValue && !lowEffort) { quadrant = "Big Bet"; color = QUADRANT_COLORS.bigBets; }
-                        else if (!highValue && lowEffort) { quadrant = "Fill-In"; color = QUADRANT_COLORS.fillIns; }
-                        else { quadrant = "Money Pit"; color = QUADRANT_COLORS.moneyPit; }
-                        
-                        return (
-                          <div className="bg-card border rounded-md p-3 shadow-lg">
-                            <p className="font-medium text-sm mb-1">{project.projectName}</p>
-                            <p className="text-xs text-muted-foreground">{project.departmentName || "Sin departamento"}</p>
-                            <div className="mt-2 space-y-1 text-xs">
-                              <p>Valor: <span className="font-medium">{project.totalValor}</span></p>
-                              <p>Esfuerzo: <span className="font-medium">{project.totalEsfuerzo}</span></p>
-                              {project.ranking && <p>Ranking: <span className="font-medium">#{project.ranking}</span></p>}
-                            </div>
-                            <div className="mt-2 flex items-center gap-1">
-                              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                              <span className="text-xs font-medium" style={{ color }}>{quadrant}</span>
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Scatter 
-                    name="Proyectos" 
-                    data={scoringData.projects.map(p => {
-                      const highValue = p.totalValor >= scoringData.medianValor;
-                      const lowEffort = p.totalEsfuerzo >= scoringData.medianEsfuerzo;
-                      let fill = QUADRANT_COLORS.moneyPit;
-                      if (highValue && lowEffort) fill = QUADRANT_COLORS.quickWins;
-                      else if (highValue && !lowEffort) fill = QUADRANT_COLORS.bigBets;
-                      else if (!highValue && lowEffort) fill = QUADRANT_COLORS.fillIns;
-                      return { ...p, fill };
-                    })}
-                    fill="#8884d8"
-                  >
-                    {scoringData.projects.map((entry, index) => {
-                      const highValue = entry.totalValor >= scoringData.medianValor;
-                      const lowEffort = entry.totalEsfuerzo >= scoringData.medianEsfuerzo;
-                      let fill = QUADRANT_COLORS.moneyPit;
-                      if (highValue && lowEffort) fill = QUADRANT_COLORS.quickWins;
-                      else if (highValue && !lowEffort) fill = QUADRANT_COLORS.bigBets;
-                      else if (!highValue && lowEffort) fill = QUADRANT_COLORS.fillIns;
-                      return <Cell key={`cell-${index}`} fill={fill} />;
-                    })}
-                  </Scatter>
-                </ScatterChart>
-              </ResponsiveContainer>
-              <p className="text-xs text-center text-muted-foreground">
-                Cuadrantes definidos por mediana de Valor ({scoringData.medianValor}) y Esfuerzo ({scoringData.medianEsfuerzo})
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent Updates - Full Width */}
       <div className="grid grid-cols-1 gap-6">
@@ -1043,7 +933,7 @@ export default function Dashboard() {
                     project.status,
                     project.estatusAlDia
                   );
-                  
+
                   return (
                     <div
                       key={project.id}
@@ -1123,7 +1013,7 @@ export default function Dashboard() {
                   )}
                 </TabsTrigger>
               </TabsList>
-              
+
               {/* Overdue Projects Tab */}
               <TabsContent value="overdue" data-testid="alert-list-overdue" className="mt-4">
                 {(data?.overdueProjectsList?.length || 0) === 0 ? (
@@ -1162,7 +1052,7 @@ export default function Dashboard() {
                   </div>
                 )}
               </TabsContent>
-              
+
               {/* Approaching Deadline Tab */}
               <TabsContent value="approaching" data-testid="alert-list-approaching" className="mt-4">
                 {(data?.approachingDeadlineList?.length || 0) === 0 ? (
@@ -1201,7 +1091,7 @@ export default function Dashboard() {
                   </div>
                 )}
               </TabsContent>
-              
+
               {/* Stale Projects Tab */}
               <TabsContent value="stale" data-testid="alert-list-stale" className="mt-4">
                 {(data?.staleProjectsList?.length || 0) === 0 ? (

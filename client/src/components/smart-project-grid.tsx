@@ -812,11 +812,21 @@ export function SmartProjectGrid() {
     () => [
       columnHelper.accessor("legacyId", {
         header: "ID",
-        cell: (info) => (
-          <span className="text-xs text-muted-foreground font-mono" data-testid={`cell-project-id-${info.row.original.id}`}>
-            {info.getValue() || "-"}
-          </span>
-        ),
+        cell: (info) => {
+          const value = info.getValue();
+          if (!value) {
+            return (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground/60 border-muted-foreground/20 font-normal px-1 h-4">
+                N/A
+              </Badge>
+            );
+          }
+          return (
+            <span className="text-xs text-muted-foreground font-mono" data-testid={`cell-project-id-${info.row.original.id}`}>
+              {value}
+            </span>
+          );
+        },
         size: 100,
         filterFn: "includesString",
         meta: { filterType: "text" },
@@ -1049,7 +1059,7 @@ export function SmartProjectGrid() {
         cell: ({ row }) => {
           const extraFields = row.original.extraFields as Record<string, unknown> | null;
           const budgetValue = extraFields?.["Presupuesto"] ?? extraFields?.["Budget"] ?? extraFields?.["budget"] ?? null;
-          
+
           if (budgetValue === null || budgetValue === undefined || budgetValue === "") {
             return (
               <span className="text-muted-foreground" data-testid={`cell-budget-${row.original.id}`}>
@@ -1057,13 +1067,13 @@ export function SmartProjectGrid() {
               </span>
             );
           }
-          
-          const numValue = typeof budgetValue === "number" 
-            ? budgetValue 
-            : typeof budgetValue === "string" 
+
+          const numValue = typeof budgetValue === "number"
+            ? budgetValue
+            : typeof budgetValue === "string"
               ? parseFloat(budgetValue.replace(/[^0-9.-]/g, ""))
               : null;
-          
+
           if (numValue === null || isNaN(numValue)) {
             return (
               <span className="text-muted-foreground" data-testid={`cell-budget-${row.original.id}`}>
@@ -1071,7 +1081,7 @@ export function SmartProjectGrid() {
               </span>
             );
           }
-          
+
           return (
             <span className="font-mono text-sm" data-testid={`cell-budget-${row.original.id}`}>
               {formatCurrency(numValue)}

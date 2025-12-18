@@ -431,6 +431,7 @@ def parse_excel(file_path: str, sheet_name: Optional[str] = None, debug: bool = 
         
         # Map columns using merged headers and EXACT mappings only
         column_map = {}
+        mapped_fields = {} # Track fields already mapped to their column names
         unmapped_columns = []
         debug_unmatched = []
         

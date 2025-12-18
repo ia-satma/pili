@@ -10,7 +10,7 @@ import * as path from "path";
 import { storage } from "./storage";
 import { db } from "./db";
 import { desc, eq } from "drizzle-orm";
-import { parseExcelBuffer, type ParsedProject } from "./excel-parser";
+import { parseExcelBuffer, type ParsedProject } from "./utils/excel_parser";
 import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./openai";
 import type { InsertChangeLog, InsertKpiValue, Project, InsertProject, InsertValidationIssue } from "@shared/schema";
 import { exportBatches, jobs, jobRuns } from "@shared/schema";

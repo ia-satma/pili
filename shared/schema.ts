@@ -65,7 +65,7 @@ export const departments = pgTable("departments", {
 // Main Projects table - aligned with "Formulario de Captura de Iniciativas"
 export const projects = pgTable("projects", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  
+
   // === IDENTIFICATION ===
   legacyId: text("legacy_id"), // Visual Project Code
   projectName: text("project_name").notNull(), // "Nombre de la iniciativa"
@@ -73,19 +73,19 @@ export const projects = pgTable("projects", {
   departmentName: text("department_name"), // "Negocio/Área" (business_unit)
   region: text("region"), // "Región"
   status: text("status").default("Draft"), // Status
-  
+
   // === DEFINITION (Core) ===
   problemStatement: text("problem_statement"), // "Problema u oportunidad" (Facts only)
   objective: text("objective"), // "Intención / Urgencia"
   scopeIn: text("scope_in"), // "Qué SÍ incluye"
   scopeOut: text("scope_out"), // "Qué NO incluye"
   description: text("description"), // Legacy - maps to problemStatement
-  
+
   // === IMPACT & RESOURCES ===
   impactType: jsonb("impact_type").$type<string[]>().default([]), // ['Eficiencia', 'Costos', 'Ingresos', 'Riesgo', 'Otro']
   kpis: text("kpis"), // "Indicadores"
   budget: integer("budget").default(0), // "Requiere presupuesto" in cents/pesos
-  
+
   // === GOVERNANCE ===
   sponsor: text("sponsor"),
   leader: text("leader"), // Project leader (was responsible)
@@ -93,7 +93,7 @@ export const projects = pgTable("projects", {
   startDate: date("start_date"),
   endDate: date("end_date"), // Renamed from endDateEstimated
   endDateEstimated: date("end_date_estimated"), // Legacy compatibility
-  
+
   // === LEGACY FIELDS (preserved for backwards compatibility) ===
   departmentId: integer("department_id").references(() => departments.id),
   estatusAlDia: text("estatus_al_dia"),
@@ -128,7 +128,7 @@ export const projects = pgTable("projects", {
   dataHealthScore: integer("data_health_score").default(0),
   validationErrors: jsonb("validation_errors").$type<Record<string, string>>().default({}),
   isClean: boolean("is_clean").default(false),
-  
+
   // === SCORING MATRIX FIELDS ===
   capexTier: text("capex_tier"), // HIGH_COST, MEDIUM_COST, LOW_COST, ZERO_COST
   financialImpact: text("financial_impact"), // HIGH_REVENUE, MEDIUM_REVENUE, LOW_REVENUE, NONE
@@ -242,7 +242,7 @@ export const chatMessages = pgTable("chat_messages", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   role: text("role").notNull(), // user, assistant
   content: text("content").notNull(),
-  citations: jsonb("citations").$type<Array<{sheet?: string; row?: number; column?: string; value?: string}>>().default([]),
+  citations: jsonb("citations").$type<Array<{ sheet?: string; row?: number; column?: string; value?: string }>>().default([]),
   versionContext: integer("version_context").references(() => excelVersions.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -407,15 +407,15 @@ export const initiatives = pgTable("initiatives", {
   // Identity resolution fields - at least one should be present
   devopsCardId: text("devops_card_id").unique(), // Azure DevOps card ID
   powerSteeringId: text("power_steering_id").unique(), // PowerSteering ID
-  
+
   // Core identity (immutable once set)
   title: text("title").notNull(),
   owner: text("owner"),
-  
+
   // Current state tracking
   currentStatus: text("current_status"), // Latest known status
   isActive: boolean("is_active").default(true),
-  
+
   // Audit
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -457,7 +457,7 @@ export const initiativeSnapshots = pgTable("initiative_snapshots", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   initiativeId: integer("initiative_id").references(() => initiatives.id).notNull(),
   batchId: integer("batch_id").references(() => ingestionBatches.id).notNull(),
-  
+
   // Snapshot data (copied from Excel row at time of batch)
   title: text("title").notNull(),
   description: text("description"),
@@ -469,27 +469,27 @@ export const initiativeSnapshots = pgTable("initiative_snapshots", {
   priority: text("priority"),
   category: text("category"),
   projectType: text("project_type"),
-  
+
   // Dates
   startDate: date("start_date"),
   endDateEstimated: date("end_date_estimated"),
   endDateActual: date("end_date_actual"),
   percentComplete: integer("percent_complete"),
-  
+
   // Scoring (calculated by system)
   totalValor: integer("total_valor"),
   totalEsfuerzo: integer("total_esfuerzo"),
   puntajeTotal: integer("puntaje_total"),
   ranking: integer("ranking"),
-  
+
   // Excel raw values (for comparison)
   excelTotalValor: integer("excel_total_valor"),
   excelTotalEsfuerzo: integer("excel_total_esfuerzo"),
   excelPuntajeTotal: integer("excel_puntaje_total"),
-  
+
   // Raw data
   rawExcelRow: jsonb("raw_excel_row").$type<Record<string, unknown>>(),
-  
+
   // Audit (immutable - never updated)
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
