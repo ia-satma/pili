@@ -702,6 +702,10 @@ export async function registerRoutes(
         overdueProjectsList: sortedOverdueList,
         approachingDeadlineList: sortedApproachingList,
         staleProjectsList: sortedStaleList,
+        dataQualityGaps: {
+          missingEndDateCount: allProjects.filter(p => !p.endDateEstimated).length,
+          missingPowerSteeringIdCount: allProjects.filter(p => !p.legacyId).length,
+        }
       });
     } catch (error) {
       console.error("Dashboard error:", error);
@@ -1748,7 +1752,7 @@ export async function registerRoutes(
             monthCounts[monthKey] = { count: 0, closed: 0 };
           }
           monthCounts[monthKey].count++;
-          
+
           const statusLower = (p.status || "").toLowerCase();
           if (statusLower === "cerrado" || statusLower === "closed") {
             monthCounts[monthKey].closed++;

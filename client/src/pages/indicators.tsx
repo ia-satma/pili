@@ -57,7 +57,7 @@ const CHART_COLORS = [
 
 export default function Indicators() {
   useDocumentTitle("Indicadores");
-  
+
   const { data, isLoading, error } = useQuery<IndicatorsData>({
     queryKey: ["/api/indicators"],
   });
@@ -80,10 +80,6 @@ export default function Indicators() {
             KPIs y métricas de rendimiento del PMO
           </p>
         </div>
-        <Button variant="outline" data-testid="button-export-indicators">
-          <Download className="h-4 w-4 mr-2" />
-          Exportar
-        </Button>
       </div>
 
       {/* Empty State Message */}

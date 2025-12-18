@@ -114,7 +114,6 @@ interface ScoringMatrixData {
   };
   total: number;
 }
-
 interface DashboardData {
   totalProjects: number;
   openProjects: number;
@@ -127,6 +126,10 @@ interface DashboardData {
   overdueProjectsList: OverdueProject[];
   approachingDeadlineList: ApproachingProject[];
   staleProjectsList: StaleProject[];
+  dataQualityGaps: {
+    missingEndDateCount: number;
+    missingPowerSteeringIdCount: number;
+  };
 }
 
 interface HealthStats {
@@ -202,16 +205,6 @@ export default function Dashboard() {
   const { data: scoringData, isLoading: scoringLoading } = useQuery<ScoringMatrixData>({
     queryKey: ["/api/scoring/matrix", queryString],
     queryFn: () => fetch(`/api/scoring/matrix${queryString ? `?${queryString}` : ""}`).then(r => r.json()),
-  });
-
-  const { data: healthStats, isLoading: healthLoading } = useQuery<HealthStats>({
-    queryKey: ["/api/health/stats"],
-    refetchInterval: 30000,
-  });
-
-  const { data: insightsData, isLoading: insightsLoading } = useQuery<PortfolioInsightsData>({
-    queryKey: ["/api/pmo/insights"],
-    refetchInterval: 60000,
   });
 
   const resetMutation = useMutation({
@@ -394,274 +387,149 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Strategy Insights Widget - Visibility tied to financial data fidelity */}
-      {(!insightsLoading && insightsData && (
-        insightsData.summary.quickWinsCount > 0 ||
-        insightsData.summary.zombiesCount > 0 ||
-        insightsData.summary.misalignedCount > 0 ||
-        insightsData.summary.valueBetsCount > 0
-      )) && (
-          <Card className="overflow-visible" data-testid="strategy-insights-widget">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                    Insights Estratégicos
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground">Análisis automático del portafolio basado en la matriz Valor/Esfuerzo</p>
-                </div>
-                {insightsData && (
-                  <Badge variant="outline" className="text-xs" data-testid="badge-portfolio-health">
-                    Salud del Portafolio: {insightsData.summary.portfolioHealthScore}%
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {insightsLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-24 w-full rounded-lg" />
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* Quick Wins */}
-                  <Link href="/projects?insight=quick-wins">
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      className="group cursor-pointer rounded-lg border border-green-500/30 bg-green-500/10 p-4 hover-elevate"
-                      data-testid="insight-quick-wins"
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 rounded-full bg-green-500/20">
-                          <Gem className="h-5 w-5 text-green-600 dark:text-green-400" />
-                        </div>
-                        <div>
-                          <div className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="text-quick-wins-count">
-                            {insightsData?.summary.quickWinsCount || 0}
-                          </div>
-                          <div className="text-xs font-medium">Quick Wins</div>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Bajo costo, alto beneficio. Candidatos para fast-track.
-                      </p>
-                    </motion.div>
-                  </Link>
-
-                  {/* Value Bets */}
-                  <Link href="/projects?insight=value-bets">
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      className="group cursor-pointer rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 hover-elevate"
-                      data-testid="insight-value-bets"
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 rounded-full bg-blue-500/20">
-                          <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <div>
-                          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-value-bets-count">
-                            {insightsData?.summary.valueBetsCount || 0}
-                          </div>
-                          <div className="text-xs font-medium">Big Bets</div>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Alto costo + alto retorno + alineación estratégica.
-                      </p>
-                    </motion.div>
-                  </Link>
-
-                  {/* Zombies to Kill */}
-                  <Link href="/projects?insight=zombies">
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      className="group cursor-pointer rounded-lg border border-red-500/30 bg-red-500/10 p-4 hover-elevate"
-                      data-testid="insight-zombies"
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 rounded-full bg-red-500/20">
-                          <Skull className="h-5 w-5 text-red-600 dark:text-red-400" />
-                        </div>
-                        <div>
-                          <div className="text-2xl font-bold text-red-600 dark:text-red-400" data-testid="text-zombies-count">
-                            {insightsData?.summary.zombiesCount || 0}
-                          </div>
-                          <div className="text-xs font-medium">Value Destroyers</div>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Alto costo sin beneficio. Candidatos para cancelación.
-                      </p>
-                    </motion.div>
-                  </Link>
-
-                  {/* Strategic Misalignment */}
-                  <Link href="/projects?insight=misaligned">
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      className="group cursor-pointer rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 hover-elevate"
-                      data-testid="insight-misaligned"
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 rounded-full bg-yellow-500/20">
-                          <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-                        </div>
-                        <div>
-                          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400" data-testid="text-misaligned-count">
-                            {insightsData?.summary.misalignedCount || 0}
-                          </div>
-                          <div className="text-xs font-medium">Sin Alineación</div>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Inversión sin alineación estratégica. Requieren caso de negocio.
-                      </p>
-                    </motion.div>
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-      {/* Quality Pulse & Stagnation Row */}
+      {/* Data Hygiene & Prioritization Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Quality Pulse Gauge */}
-        <Card className="overflow-visible" data-testid="quality-pulse-widget">
+        {/* Data Quality Gaps Card */}
+        <Card className="overflow-visible border-blue-500/30 bg-blue-500/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              Pulso de Calidad
+              <ShieldCheck className="h-5 w-5 text-blue-600" />
+              Data Hygiene (Critical)
             </CardTitle>
-            <p className="text-xs text-muted-foreground">Salud promedio de datos del portafolio</p>
+            <p className="text-xs text-muted-foreground">Internal data gaps to fix in Excel</p>
           </CardHeader>
           <CardContent>
-            {healthLoading ? (
+            {isLoading ? (
               <Skeleton className="h-48 w-full" />
             ) : (
-              <div className="flex flex-col items-center" data-testid="gauge-quality-pulse">
-                <div className="relative w-48 h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadialBarChart
-                      cx="50%"
-                      cy="50%"
-                      innerRadius="60%"
-                      outerRadius="100%"
-                      barSize={16}
-                      data={[{
-                        name: "Salud",
-                        value: healthStats?.averageScore || 0,
-                        fill: (healthStats?.averageScore || 0) >= 90
-                          ? TRAFFIC_COLORS.green
-                          : (healthStats?.averageScore || 0) >= 70
-                            ? TRAFFIC_COLORS.yellow
-                            : TRAFFIC_COLORS.red
-                      }]}
-                      startAngle={180}
-                      endAngle={0}
-                    >
-                      <PolarAngleAxis
-                        type="number"
-                        domain={[0, 100]}
-                        angleAxisId={0}
-                        tick={false}
-                      />
-                      <RadialBar
-                        background={{ fill: "hsl(var(--muted))" }}
-                        dataKey="value"
-                        cornerRadius={8}
-                      />
-                    </RadialBarChart>
-                  </ResponsiveContainer>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pt-6">
-                    <span
-                      className="text-4xl font-bold"
-                      style={{
-                        color: (healthStats?.averageScore || 0) >= 90
-                          ? TRAFFIC_COLORS.green
-                          : (healthStats?.averageScore || 0) >= 70
-                            ? TRAFFIC_COLORS.yellow
-                            : TRAFFIC_COLORS.red
-                      }}
-                      data-testid="text-health-score"
-                    >
-                      {healthStats?.averageScore || 0}%
-                    </span>
-                    <span className="text-xs text-muted-foreground">Salud Promedio</span>
+              <div className="space-y-6 pt-2">
+                <div className="flex items-center justify-between p-4 rounded-lg bg-background border border-blue-100 hover-elevate">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-red-100">
+                      <CalendarX2 className="h-5 w-5 text-red-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Missing End Date</p>
+                      <p className="text-xs text-muted-foreground">Impacts timeline forecasts</p>
+                    </div>
                   </div>
+                  <Badge variant="outline" className="text-lg font-bold bg-white text-red-600 border-red-200">
+                    {data?.dataQualityGaps?.missingEndDateCount || 0}
+                  </Badge>
                 </div>
-                <div className="grid grid-cols-3 gap-4 w-full mt-4 text-center">
-                  <div>
-                    <div className="text-lg font-semibold" data-testid="text-total-projects">{healthStats?.totalProjects || 0}</div>
-                    <div className="text-xs text-muted-foreground">Total</div>
+
+                <div className="flex items-center justify-between p-4 rounded-lg bg-background border border-blue-100 hover-elevate">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-orange-100">
+                      <Target className="h-5 w-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Missing Power Steering ID</p>
+                      <p className="text-xs text-muted-foreground">Gaps in global tracking</p>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-lg font-semibold text-traffic-green" data-testid="text-clean-projects">{healthStats?.cleanProjects || 0}</div>
-                    <div className="text-xs text-muted-foreground">Limpios</div>
-                  </div>
-                  <div>
-                    <div className="text-lg font-semibold text-traffic-yellow" data-testid="text-dirty-projects">{healthStats?.dirtyProjects || 0}</div>
-                    <div className="text-xs text-muted-foreground">Incompletos</div>
-                  </div>
+                  <Badge variant="outline" className="text-lg font-bold bg-white text-orange-600 border-orange-200">
+                    {data?.dataQualityGaps?.missingPowerSteeringIdCount || 0}
+                  </Badge>
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Placeholder for Stagnation Radar - Task dash-2 */}
-        <Card className="lg:col-span-2 overflow-visible" data-testid="stagnation-radar-widget">
+        {/* Value/Effort Matrix - Scatter Plot */}
+        <Card className="lg:col-span-2 overflow-visible">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <CalendarX2 className="h-5 w-5 text-traffic-yellow" />
-              Radar de Estancamiento
+              <Sparkles className="h-5 w-5 text-primary" />
+              Strict Prioritization Matrix
             </CardTitle>
-            <p className="text-xs text-muted-foreground">Proyectos sin actualizar por más de 14 días</p>
+            <p className="text-xs text-muted-foreground">Based on raw Total Valor vs Total Esfuerzo (Excel Data Only)</p>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-48 w-full" />
-            ) : (data?.staleProjectsList || []).length === 0 ? (
-              <div className="h-48 flex flex-col items-center justify-center text-muted-foreground">
-                <CheckCircle2 className="h-12 w-12 mb-2 text-traffic-green" />
-                <p className="text-sm">Todos los proyectos están actualizados</p>
+            {scoringLoading ? (
+              <Skeleton className="h-80 w-full" />
+            ) : !scoringData || !scoringData.projects || scoringData.projects.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-muted-foreground bg-muted/20 rounded-lg">
+                <p className="font-medium">No hay datos de scoring disponibles</p>
+                <p className="text-xs mt-1">Cargue un archivo Excel con columnas de "Total Valor" y "Total Esfuerzo"</p>
               </div>
             ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {(data?.staleProjectsList || []).slice(0, 5).map((project) => (
-                  <div
-                    key={project.id}
-                    className="flex items-center justify-between p-3 rounded-md bg-muted/50 hover-elevate"
-                    data-testid={`stale-project-${project.id}`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm truncate">{project.projectName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {project.departmentName || "Sin departamento"} · {project.daysSinceUpdate} días sin actualizar
-                      </p>
-                    </div>
-                    <Link href={`/project-master?id=${project.id}`}>
-                      <Badge
-                        variant="outline"
-                        className="cursor-pointer text-xs border-traffic-yellow text-traffic-yellow hover:bg-traffic-yellow/10"
-                        data-testid={`button-update-${project.id}`}
-                      >
-                        Actualizar
-                      </Badge>
-                    </Link>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-green-50 text-green-700">
+                    <div className="h-2 w-2 rounded-full bg-green-600" />
+                    Quick Wins ({scoringData.quadrants.quickWins})
                   </div>
-                ))}
-                {(data?.staleProjectsList || []).length > 5 && (
-                  <Link href="/project-master?filter=stale">
-                    <p className="text-xs text-center text-primary hover:underline cursor-pointer mt-2">
-                      Ver {(data?.staleProjectsList || []).length - 5} proyectos más...
-                    </p>
-                  </Link>
-                )}
+                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-blue-50 text-blue-700">
+                    <div className="h-2 w-2 rounded-full bg-blue-600" />
+                    Strategic Projects ({scoringData.quadrants.bigBets})
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-yellow-50 text-yellow-700">
+                    <div className="h-2 w-2 rounded-full bg-yellow-600" />
+                    Utility Projects ({scoringData.quadrants.fillIns})
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-red-50 text-red-700">
+                    <div className="h-2 w-2 rounded-full bg-red-600" />
+                    Time Wasters ({scoringData.quadrants.moneyPit})
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      type="number"
+                      dataKey="totalEsfuerzo"
+                      name="Esfuerzo"
+                      domain={[0, 25]}
+                      label={{ value: 'Esfuerzo (1-25)', position: 'bottom', offset: 20, style: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } }}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <YAxis
+                      type="number"
+                      dataKey="totalValor"
+                      name="Valor"
+                      domain={[0, 25]}
+                      label={{ value: 'Valor (1-25)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } }}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <ZAxis range={[50, 50]} />
+                    <ReferenceLine x={13} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+                    <ReferenceLine y={13} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length > 0) {
+                          const project = payload[0].payload as ScoringProject;
+                          return (
+                            <div className="bg-card border rounded-md p-3 shadow-xl max-w-xs ring-1 ring-black/5">
+                              <p className="font-bold text-sm leading-tight mb-2">{project.projectName}</p>
+                              <div className="space-y-1 text-[11px] font-medium opacity-80">
+                                <p className="flex justify-between"><span>Valor:</span> <span className="text-primary">{project.totalValor}</span></p>
+                                <p className="flex justify-between"><span>Esfuerzo:</span> <span className="text-primary">{project.totalEsfuerzo}</span></p>
+                                <p className="flex justify-between"><span>Owner:</span> <span>{project.status || "N/A"}</span></p>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Scatter
+                      name="Proyectos"
+                      data={scoringData.projects}
+                    >
+                      {scoringData.projects.map((entry, index) => {
+                        const highValue = entry.totalValor >= 13;
+                        const lowEffort = entry.totalEsfuerzo < 13;
+                        let fill = "hsl(0, 84%, 60%)"; // Red
+                        if (highValue && lowEffort) fill = "hsl(142, 76%, 36%)"; // Green
+                        else if (highValue && !lowEffort) fill = "hsl(217, 91%, 48%)"; // Blue
+                        else if (!highValue && lowEffort) fill = "hsl(45, 93%, 47%)"; // Yellow
+                        return <Cell key={`cell-${index}`} fill={fill} />;
+                      })}
+                    </Scatter>
+                  </ScatterChart>
+                </ResponsiveContainer>
               </div>
             )}
           </CardContent>
@@ -764,147 +632,6 @@ export default function Dashboard() {
 
       {/* DMAIC Methodology Breakdown removed for data fidelity - Row 4 doesn't support these phases natively */}
 
-      {/* Value/Effort Matrix - Scatter Plot */}
-      {(!scoringLoading && scoringData && scoringData.projects.length > 0) && (
-        <Card className="overflow-visible" data-testid="value-effort-matrix">
-          <CardHeader>
-            <CardTitle className="text-base">Matriz Valor/Esfuerzo</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Priorización de proyectos: Quick Wins, Big Bets, Fill-Ins, Money Pit
-            </p>
-          </CardHeader>
-          <CardContent>
-            {scoringLoading ? (
-              <Skeleton className="h-80 w-full" />
-            ) : !scoringData || !scoringData.projects || scoringData.projects.length === 0 ? (
-              <div className="h-80 flex flex-col items-center justify-center text-muted-foreground">
-                <p>No hay datos de scoring disponibles</p>
-                <p className="text-xs mt-1">Cargue un archivo Excel con columnas de Total Valor y Total Esfuerzo</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.quickWins }} />
-                    <span>Quick Wins ({scoringData.quadrants.quickWins})</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.bigBets }} />
-                    <span>Big Bets ({scoringData.quadrants.bigBets})</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.fillIns }} />
-                    <span>Fill-Ins ({scoringData.quadrants.fillIns})</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: QUADRANT_COLORS.moneyPit }} />
-                    <span>Money Pit ({scoringData.quadrants.moneyPit})</span>
-                  </div>
-                </div>
-                <ResponsiveContainer width="100%" height={320}>
-                  <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 40 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      type="number"
-                      dataKey="totalEsfuerzo"
-                      name="Esfuerzo"
-                      domain={['dataMin - 10', 'dataMax + 10']}
-                      label={{ value: 'Esfuerzo (mayor = menos esfuerzo real)', position: 'bottom', offset: 20, style: { fontSize: 12 } }}
-                      tick={{ fontSize: 11 }}
-                    />
-                    <YAxis
-                      type="number"
-                      dataKey="totalValor"
-                      name="Valor"
-                      domain={['dataMin - 10', 'dataMax + 10']}
-                      label={{ value: 'Valor Estratégico', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
-                      tick={{ fontSize: 11 }}
-                    />
-                    <ZAxis range={[60, 60]} />
-                    <ReferenceLine
-                      x={scoringData.medianEsfuerzo}
-                      stroke="hsl(var(--muted-foreground))"
-                      strokeDasharray="5 5"
-                      strokeWidth={1}
-                    />
-                    <ReferenceLine
-                      y={scoringData.medianValor}
-                      stroke="hsl(var(--muted-foreground))"
-                      strokeDasharray="5 5"
-                      strokeWidth={1}
-                    />
-                    <Tooltip
-                      cursor={{ strokeDasharray: '3 3' }}
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "6px",
-                        padding: "8px 12px",
-                      }}
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length > 0) {
-                          const project = payload[0].payload as ScoringProject;
-                          const highValue = project.totalValor >= scoringData.medianValor;
-                          const lowEffort = project.totalEsfuerzo >= scoringData.medianEsfuerzo;
-                          let quadrant = "";
-                          let color = "";
-                          if (highValue && lowEffort) { quadrant = "Quick Win"; color = QUADRANT_COLORS.quickWins; }
-                          else if (highValue && !lowEffort) { quadrant = "Big Bet"; color = QUADRANT_COLORS.bigBets; }
-                          else if (!highValue && lowEffort) { quadrant = "Fill-In"; color = QUADRANT_COLORS.fillIns; }
-                          else { quadrant = "Money Pit"; color = QUADRANT_COLORS.moneyPit; }
-
-                          return (
-                            <div className="bg-card border rounded-md p-3 shadow-lg">
-                              <p className="font-medium text-sm mb-1">{project.projectName}</p>
-                              <p className="text-xs text-muted-foreground">{project.departmentName || "Sin departamento"}</p>
-                              <div className="mt-2 space-y-1 text-xs">
-                                <p>Valor: <span className="font-medium">{project.totalValor}</span></p>
-                                <p>Esfuerzo: <span className="font-medium">{project.totalEsfuerzo}</span></p>
-                                {project.ranking && <p>Ranking: <span className="font-medium">#{project.ranking}</span></p>}
-                              </div>
-                              <div className="mt-2 flex items-center gap-1">
-                                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                                <span className="text-xs font-medium" style={{ color }}>{quadrant}</span>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Scatter
-                      name="Proyectos"
-                      data={scoringData.projects.map(p => {
-                        const highValue = p.totalValor >= scoringData.medianValor;
-                        const lowEffort = p.totalEsfuerzo >= scoringData.medianEsfuerzo;
-                        let fill = QUADRANT_COLORS.moneyPit;
-                        if (highValue && lowEffort) fill = QUADRANT_COLORS.quickWins;
-                        else if (highValue && !lowEffort) fill = QUADRANT_COLORS.bigBets;
-                        else if (!highValue && lowEffort) fill = QUADRANT_COLORS.fillIns;
-                        return { ...p, fill };
-                      })}
-                      fill="#8884d8"
-                    >
-                      {scoringData.projects.map((entry, index) => {
-                        const highValue = entry.totalValor >= scoringData.medianValor;
-                        const lowEffort = entry.totalEsfuerzo >= scoringData.medianEsfuerzo;
-                        let fill = QUADRANT_COLORS.moneyPit;
-                        if (highValue && lowEffort) fill = QUADRANT_COLORS.quickWins;
-                        else if (highValue && !lowEffort) fill = QUADRANT_COLORS.bigBets;
-                        else if (!highValue && lowEffort) fill = QUADRANT_COLORS.fillIns;
-                        return <Cell key={`cell-${index}`} fill={fill} />;
-                      })}
-                    </Scatter>
-                  </ScatterChart>
-                </ResponsiveContainer>
-                <p className="text-xs text-center text-muted-foreground">
-                  Cuadrantes definidos por mediana de Valor ({scoringData.medianValor}) y Esfuerzo ({scoringData.medianEsfuerzo})
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* Recent Updates - Full Width */}
       <div className="grid grid-cols-1 gap-6">
