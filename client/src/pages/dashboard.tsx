@@ -15,7 +15,10 @@ import {
   Gem,
   Skull,
   Target,
+  Search,
   Sparkles,
+  Zap,
+  AlertCircle,
 } from "lucide-react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
@@ -190,7 +193,68 @@ const QUADRANT_COLORS = {
   moneyPit: "hsl(0, 84%, 60%)",      // Red
 };
 
+function calculateMedian(values: number[]): number {
+  if (!values || values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+  return sorted[middle];
+}
+
 // Status to DMAIC mapping removed to ensure data fidelity with source Excel
+
+function QuadrantCard({ title, subtitle, projects, borderColor, headerBg, icon }: any) {
+  return (
+    <div className={`flex flex-col h-[350px] rounded-lg border-2 ${borderColor} overflow-hidden bg-card shadow-sm`}>
+      <div className={`px-4 py-3 ${headerBg} border-b flex items-center justify-between`}>
+        <div>
+          <h4 className="text-sm font-bold flex items-center gap-2">
+            {icon}
+            {title}
+          </h4>
+          <p className="text-[10px] text-muted-foreground font-medium">{subtitle}</p>
+        </div>
+        <Badge variant="outline" className="bg-white/50 text-[10px] py-0 h-5">
+          {projects.length}
+        </Badge>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2">
+        {projects.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-muted-foreground text-[11px] italic">
+            No projects in this category
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {projects.map((project: any) => (
+              <div
+                key={project.id}
+                onClick={() => window.location.href = `/projects/${project.id}`}
+                className="group p-2 rounded hover:bg-muted/50 cursor-pointer border border-transparent hover:border-border transition-all"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-semibold leading-tight group-hover:text-primary transition-colors line-clamp-2">
+                    {project.projectName}
+                  </p>
+                  <span className="text-[10px] font-bold text-primary shrink-0">
+                    V:{project.totalValor}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mt-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                  <p className="text-[10px] truncate max-w-[120px]">
+                    {project.status || "Sin Dueño"}
+                  </p>
+                  <p className="text-[10px]">E:{project.totalEsfuerzo}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   useDocumentTitle("Dashboard");
@@ -471,112 +535,63 @@ export default function Dashboard() {
                 <p className="font-medium">No hay datos de scoring disponibles</p>
                 <p className="text-xs mt-1">Cargue un archivo Excel con columnas de "Total Valor" y "Total Esfuerzo"</p>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <ResponsiveContainer width="100%" height={300}>
-                  <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 40 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      type="number"
-                      dataKey="totalEsfuerzo"
-                      name="Esfuerzo"
-                      domain={[0, 25]}
-                      label={{ value: 'Esfuerzo (1-25)', position: 'bottom', offset: 20, style: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } }}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <YAxis
-                      type="number"
-                      dataKey="totalValor"
-                      name="Valor"
-                      domain={[0, 25]}
-                      label={{ value: 'Valor (1-25)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } }}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <ZAxis range={[50, 50]} />
-                    <ReferenceLine x={12.5} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
-                    <ReferenceLine y={12.5} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+            ) : (() => {
+              const projects = scoringData.projects || [];
+              const medianValue = calculateMedian(projects.map((p: any) => p.totalValor));
+              const medianEffort = calculateMedian(projects.map((p: any) => p.totalEsfuerzo));
 
-                    {/* Quadrant Backgrounds */}
-                    <ReferenceArea x1={0} x2={12.5} y1={12.5} y2={25} fill="#22c55e" fillOpacity={0.05} />
-                    <ReferenceArea x1={12.5} x2={25} y1={12.5} y2={25} fill="#eab308" fillOpacity={0.05} />
-                    <ReferenceArea x1={12.5} x2={25} y1={0} y2={12.5} fill="#ef4444" fillOpacity={0.05} />
-                    <ReferenceArea x1={0} x2={12.5} y1={0} y2={12.5} fill="#9ca3af" fillOpacity={0.05} />
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* TOP-LEFT: QUICK WINS */}
+                  <QuadrantCard
+                    title="💎 QUICK WINS"
+                    subtitle={`Valor ≥ ${medianValue.toFixed(1)}, Esfuerzo < ${medianEffort.toFixed(1)}`}
+                    icon={<Sparkles className="h-4 w-4 text-green-500" />}
+                    borderColor="border-green-200"
+                    headerBg="bg-green-50"
+                    projects={projects
+                      .filter((p: any) => p.totalValor >= medianValue && p.totalEsfuerzo < medianEffort)
+                      .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                  />
 
-                    {/* Quadrant Labels */}
-                    <ReferenceArea x1={0} x2={12.5} y1={23} y2={25} stroke="none" fill="none" label={{ position: 'insideTopLeft', value: 'QUICK WINS', fill: '#166534', fontSize: 10, fontWeight: 'bold', offset: 10 }} />
-                    <ReferenceArea x1={12.5} x2={25} y1={23} y2={25} stroke="none" fill="none" label={{ position: 'insideTopRight', value: 'ESTRATÉGICOS', fill: '#854d0e', fontSize: 10, fontWeight: 'bold', offset: 10 }} />
-                    <ReferenceArea x1={12.5} x2={25} y1={0} y2={2} stroke="none" fill="none" label={{ position: 'insideBottomRight', value: 'DESPERDICIO', fill: '#991b1b', fontSize: 10, fontWeight: 'bold', offset: 10 }} />
-                    <ReferenceArea x1={0} x2={12.5} y1={0} y2={2} stroke="none" fill="none" label={{ position: 'insideBottomLeft', value: 'BAJA PRIORIDAD', fill: '#374151', fontSize: 10, fontWeight: 'bold', offset: 10 }} />
+                  {/* TOP-RIGHT: ESTRATÉGICOS */}
+                  <QuadrantCard
+                    title="🚀 ESTRATÉGICOS"
+                    subtitle={`Valor ≥ ${medianValue.toFixed(1)}, Esfuerzo ≥ ${medianEffort.toFixed(1)}`}
+                    icon={<Zap className="h-4 w-4 text-yellow-500" />}
+                    borderColor="border-yellow-200"
+                    headerBg="bg-yellow-50"
+                    projects={projects
+                      .filter((p: any) => p.totalValor >= medianValue && p.totalEsfuerzo >= medianEffort)
+                      .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                  />
 
-                    <Tooltip
-                      content={({ active, payload }: any) => {
-                        if (active && payload && payload.length > 0) {
-                          const project = payload[0].payload as ScoringProject;
-                          return (
-                            <div className="bg-card border rounded-md p-3 shadow-xl max-w-xs ring-1 ring-black/5">
-                              <p className="font-bold text-sm leading-tight mb-2 text-primary">{project.projectName}</p>
-                              <div className="space-y-1.5 text-[11px] font-medium opacity-90">
-                                <p className="flex justify-between gap-4">
-                                  <span className="text-muted-foreground uppercase tracking-tight">Project:</span>
-                                  <span className="truncate max-w-[140px] text-right">{project.projectName}</span>
-                                </p>
-                                <p className="flex justify-between gap-4">
-                                  <span className="text-muted-foreground uppercase tracking-tight">Owner:</span>
-                                  <span>{project.status || "N/A"}</span>
-                                </p>
-                                <p className="flex justify-between gap-4 border-t pt-1 mt-1 border-border/50">
-                                  <span className="text-muted-foreground uppercase tracking-tight">Score:</span>
-                                  <span className="font-bold">V:{project.totalValor} / E:{project.totalEsfuerzo}</span>
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Scatter
-                      name="Proyectos"
-                      data={scoringData.projects}
-                      cursor="pointer"
-                    >
-                      {scoringData.projects.map((entry: any, index: number) => {
-                        let color = "#9ca3af"; // Default Gray (Baja Prioridad)
-                        if (entry.totalValor >= 12.5 && entry.totalEsfuerzo < 12.5) color = "#22c55e"; // Green (Quick Wins)
-                        else if (entry.totalValor >= 12.5 && entry.totalEsfuerzo >= 12.5) color = "#eab308"; // Yellow (Estratégicos)
-                        else if (entry.totalValor < 12.5 && entry.totalEsfuerzo >= 12.5) color = "#ef4444"; // Red (Desperdicio)
+                  {/* BOTTOM-LEFT: BAJA PRIORIDAD */}
+                  <QuadrantCard
+                    title="💤 BAJA PRIORIDAD"
+                    subtitle={`Valor < ${medianValue.toFixed(1)}, Esfuerzo < ${medianEffort.toFixed(1)}`}
+                    icon={<Clock className="h-4 w-4 text-gray-400" />}
+                    borderColor="border-gray-200"
+                    headerBg="bg-gray-50"
+                    projects={projects
+                      .filter((p: any) => p.totalValor < medianValue && p.totalEsfuerzo < medianEffort)
+                      .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                  />
 
-                        return (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={color}
-                            onClick={() => window.location.href = `/projects/${entry.id}`}
-                          />
-                        );
-                      })}
-                    </Scatter>
-                  </ScatterChart>
-                </ResponsiveContainer>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-4 pt-4 border-t">
-                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-green-50 text-green-700">
-                    <div className="h-2 w-2 rounded-full bg-[#22c55e]" />
-                    Quick Wins (Valor ≥ 12.5, Esfuerzo &lt; 12.5)
-                  </div>
-                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-yellow-50 text-yellow-700">
-                    <div className="h-2 w-2 rounded-full bg-[#eab308]" />
-                    Estratégicos (Valor ≥ 12.5, Esfuerzo ≥ 12.5)
-                  </div>
-                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-red-50 text-red-700">
-                    <div className="h-2 w-2 rounded-full bg-[#ef4444]" />
-                    Desperdicio (Valor &lt; 12.5, Esfuerzo ≥ 12.5)
-                  </div>
-                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-gray-50 text-gray-700">
-                    <div className="h-2 w-2 rounded-full bg-[#9ca3af]" />
-                    Baja Prioridad (Valor &lt; 12.5, Esfuerzo &lt; 12.5)
-                  </div>
+                  {/* BOTTOM-RIGHT: DESPERDICIO */}
+                  <QuadrantCard
+                    title="💀 DESPERDICIO / REVISAR"
+                    subtitle={`Valor < ${medianValue.toFixed(1)}, Esfuerzo ≥ ${medianEffort.toFixed(1)}`}
+                    icon={<AlertCircle className="h-4 w-4 text-red-500" />}
+                    borderColor="border-red-200"
+                    headerBg="bg-red-50"
+                    projects={projects
+                      .filter((p: any) => p.totalValor < medianValue && p.totalEsfuerzo >= medianEffort)
+                      .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                  />
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
@@ -906,6 +921,6 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </div >
   );
 }
