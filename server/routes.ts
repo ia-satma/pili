@@ -13,7 +13,11 @@ import { desc, eq } from "drizzle-orm";
 import { parseExcelBuffer, type ParsedProject } from "./utils/excel_parser";
 import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./openai";
 import type { InsertChangeLog, InsertKpiValue, Project, InsertProject, InsertValidationIssue } from "@shared/schema";
-import { exportBatches, jobs, jobRuns, projects, excelVersions } from "@shared/schema";
+import {
+  exportBatches, jobs, jobRuns, projects, excelVersions,
+  milestones, projectUpdates, changeLogs, governanceAlerts, deltaEvents,
+  initiativeSnapshots, actionItems, chaserDrafts, chaserNotifications
+} from "@shared/schema";
 import { setupAuth, isAuthenticated, isAdmin, isEditor, isViewer, seedAdminUsers } from "./replitAuth";
 import { enqueueJob } from "./services/workerLoop";
 import { agentRateLimit, exportRateLimit, uploadRateLimit, systemDocsRateLimit } from "./middleware/rateLimiter";
@@ -931,8 +935,13 @@ export async function registerRoutes(
       const importResults = { created: 0, errors: [] as string[] };
 
       // HARD RESET: Clear existing projects to eliminate alignment "hallucinations"
+      // We must clear child tables first due to foreign key constraints
+      await db.delete(milestones);
+      await db.delete(projectUpdates);
+      await db.delete(changeLogs);
+      await db.delete(chaserNotifications);
       await db.delete(projects);
-      console.log("[Import] Database projects cleared for Hard Reset.");
+      console.log("[Import] Database projects and child tables (milestones, updates, logs, notifications) cleared for Hard Reset.");
 
       for (const p of parsedData.projects) {
         try {
