@@ -904,8 +904,7 @@ export async function registerRoutes(
     }
   });
 
-  // ===== EXCEL IMPORT WITH ANCHOR ROW DETECTION (Python Parser) =====
-  // TODO: Re-enable auth for production: isAuthenticated, isEditor
+  // ===== EXCEL IMPORT WITH PYTHON PARSER + BATCH INSERT =====
   app.post("/api/projects/import", uploadRateLimit, upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
@@ -921,67 +920,160 @@ export async function registerRoutes(
         status: "processing",
       });
 
-      // RUTHLESS: Use the hardened TS parser (Forensic Row 4 Mode)
-      const parsedData = parseExcelBuffer(req.file.buffer, version.id);
+      // Save file temporarily for Python parser
+      const tempFilePath = path.join("/tmp", `import_${Date.now()}.xlsx`);
+      fs.writeFileSync(tempFilePath, req.file.buffer);
 
-      if (parsedData.projects.length === 0) {
+      // Call Python parser for deterministic 60+ column mapping
+      const pythonResult = await new Promise<any>((resolve, reject) => {
+        const pythonProcess = spawn("python3", [
+          path.join(process.cwd(), "server/utils/excel_parser.py"),
+          tempFilePath
+        ]);
+
+        let stdout = "";
+        let stderr = "";
+
+        pythonProcess.stdout.on("data", (data) => { stdout += data.toString(); });
+        pythonProcess.stderr.on("data", (data) => { stderr += data.toString(); });
+
+        pythonProcess.on("close", (code) => {
+          // Clean up temp file
+          try { fs.unlinkSync(tempFilePath); } catch (e) {}
+
+          if (code !== 0) {
+            console.error("[Import] Python parser error:", stderr);
+            reject(new Error(`Parser failed: ${stderr}`));
+            return;
+          }
+
+          try {
+            const result = JSON.parse(stdout);
+            resolve(result);
+          } catch (e) {
+            reject(new Error(`Invalid parser output: ${stdout}`));
+          }
+        });
+
+        pythonProcess.on("error", (err) => {
+          try { fs.unlinkSync(tempFilePath); } catch (e) {}
+          reject(err);
+        });
+      });
+
+      if (!pythonResult.success) {
         return res.status(400).json({
           success: false,
-          message: "No se encontraron proyectos válidos en la Fila 5+ de la hoja 'Proyectos PGP'.",
-          errors: ["Asegúrese de que el encabezado esté en la Fila 4 con la columna 'Iniciativa'."],
+          message: pythonResult.error || "Error al parsear archivo Excel",
+          errors: [pythonResult.error],
         });
       }
 
-      const importResults = { created: 0, errors: [] as string[] };
+      if (!pythonResult.projects || pythonResult.projects.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No se encontraron proyectos válidos.",
+          errors: ["Asegúrese de que el archivo tenga la columna 'Iniciativa'."],
+        });
+      }
 
-      // HARD RESET: Clear existing projects to eliminate alignment "hallucinations"
-      // We must clear child tables first due to foreign key constraints
+      console.log(`[Import] Python parser found ${pythonResult.projects.length} projects`);
+
+      // HARD RESET: Clear child tables first due to FK constraints
       await db.delete(milestones);
       await db.delete(projectUpdates);
       await db.delete(changeLogs);
       await db.delete(chaserNotifications);
       await db.delete(projects);
-      console.log("[Import] Database projects and child tables (milestones, updates, logs, notifications) cleared for Hard Reset.");
+      console.log("[Import] Database cleared for Hard Reset.");
 
-      for (const p of parsedData.projects) {
+      // Map Python parser output to DB schema
+      const projectsToInsert = pythonResult.projects.map((p: any) => ({
+        projectName: p.projectName || "Sin nombre",
+        legacyId: p.legacyId || null,
+        problemStatement: p.problemStatement || null,
+        valorDiferenciador: p.valorDiferenciador || null,
+        registrationDate: p.registrationDate || null,
+        startDate: p.startDate || null,
+        endDateEstimated: p.endDateEstimated || null,
+        tiempoCicloDias: typeof p.tiempoCicloDias === 'number' ? p.tiempoCicloDias : null,
+        estatusAlDia: p.estatusAlDia || null,
+        departmentName: p.departmentName || null,
+        ingresadaEnPbot: p.ingresadaEnPbot || null,
+        grupoTecnicoAsignado: p.grupoTecnicoAsignado || null,
+        status: p.status || "Draft",
+        citizenDeveloper: p.citizenDeveloper || null,
+        sponsor: p.sponsor || null,
+        leader: p.leader || null,
+        dtcLead: p.dtcLead || null,
+        blackBeltLead: p.blackBeltLead || null,
+        direccionNegocioUsuario: p.direccionNegocioUsuario || null,
+        impactaGasesEnvasados: p.impactaGasesEnvasados || null,
+        bpAnalyst: p.bpAnalyst || null,
+        areaProductividad: p.areaProductividad || null,
+        cardIdDevops: p.cardIdDevops || null,
+        dependenciasItLocal: p.dependenciasItLocal === true,
+        dependenciasTDigital: p.dependenciasTDigital === true,
+        dependenciasDigitalizacionSsc: p.dependenciasDigitalizacionSsc === true,
+        dependenciasExterno: p.dependenciasExterno === true,
+        scoringNivelDemanda: p.scoringNivelDemanda || null,
+        scoringTieneSponsor: p.scoringTieneSponsor || null,
+        scoringPersonasAfecta: p.scoringPersonasAfecta || null,
+        strategicFit: p.strategicFit || null,
+        financialImpact: p.financialImpact || null,
+        scoringEsReplicable: p.scoringEsReplicable || null,
+        scoringEsEstrategico: p.scoringEsEstrategico || null,
+        capexTier: p.capexTier || null,
+        scoringTiempoDesarrollo: p.scoringTiempoDesarrollo || null,
+        scoringCalidadInformacion: p.scoringCalidadInformacion || null,
+        scoringTiempoConseguirInfo: p.scoringTiempoConseguirInfo || null,
+        scoringComplejidadTecnica: p.scoringComplejidadTecnica || null,
+        scoringComplejidadCambio: p.scoringComplejidadCambio || null,
+        totalValor: typeof p.totalValor === 'number' ? p.totalValor : null,
+        totalEsfuerzo: typeof p.totalEsfuerzo === 'number' ? p.totalEsfuerzo : null,
+        puntajeTotal: typeof p.puntajeTotal === 'number' ? p.puntajeTotal : null,
+        ranking: typeof p.ranking === 'number' ? p.ranking : null,
+        statusText: p.statusText || null,
+        fase: p.fase || null,
+        accionesAcelerar: p.accionesAcelerar || null,
+        businessImpactGrowth: p.businessImpactGrowth || null,
+        businessImpactCostos: p.businessImpactCostos || null,
+        businessImpactOther: p.businessImpactOther || null,
+        previo: p.previo || null,
+        sourceVersionId: version.id,
+        isActive: true,
+        priority: "Media",
+        percentComplete: 0,
+      }));
+
+      // BATCH INSERT in chunks of 50 to avoid timeout
+      const CHUNK_SIZE = 50;
+      let totalInserted = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < projectsToInsert.length; i += CHUNK_SIZE) {
+        const chunk = projectsToInsert.slice(i, i + CHUNK_SIZE);
         try {
-          await storage.createProject({
-            projectName: p.projectName,
-            description: p.description,
-            powerSteeringId: p.powerSteeringId,
-            legacyId: p.legacyId,
-            status: p.status || "Draft",
-            totalValor: p.totalValor,
-            totalEsfuerzo: p.totalEsfuerzo,
-            sourceVersionId: version.id,
-            isActive: true,
-            priority: "Media",
-            percentComplete: 0,
-            extraFields: p.extraFields || {},
-          } as any);
-          importResults.created++;
+          await db.insert(projects).values(chunk);
+          totalInserted += chunk.length;
+          console.log(`[Import] Inserted batch ${Math.floor(i / CHUNK_SIZE) + 1}: ${chunk.length} projects`);
         } catch (err) {
-          console.error(`[Import] Error creating project: ${err}`);
-          importResults.errors.push(`Error en proyecto ${p.projectName}: ${err}`);
+          console.error(`[Import] Batch insert error at chunk ${i}:`, err);
+          errors.push(`Error en lote ${Math.floor(i / CHUNK_SIZE) + 1}: ${err}`);
         }
       }
 
       // Update version status
       await db.update(excelVersions)
-        .set({ status: "completed", totalRows: parsedData.projects.length })
+        .set({ status: "completed", totalRows: totalInserted })
         .where(eq(excelVersions.id, version.id));
 
       res.json({
         success: true,
-        message: `Importación completada: ${importResults.created} proyectos creados (Hard Reset exitoso).`,
-        created: importResults.created,
-        errors: importResults.errors,
-        metadata: {
-          header_row: 3, // Fixed Row 4
-          total_rows: parsedData.projects.length,
-          columns_mapped: { "Iniciativa": "projectName", "ID Power Steering": "powerSteeringId", "Total Valor": "totalValor", "Total Esfuerzo": "totalEsfuerzo" },
-          columns_unmapped: [],
-        }
+        message: `Importación completada: ${totalInserted} proyectos creados.`,
+        created: totalInserted,
+        errors,
+        metadata: pythonResult.metadata || {},
       });
     } catch (error) {
       console.error("Excel import error:", error);

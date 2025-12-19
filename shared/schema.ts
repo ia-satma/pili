@@ -164,11 +164,15 @@ export const projects = pgTable("projects", {
   scoringPersonasAfecta: text("scoring_personas_afecta"), // "¿A cuántas personas afecta?"
   scoringEsReplicable: text("scoring_es_replicable"), // "¿Es replicable?"
   scoringEsEstrategico: text("scoring_es_estrategico"), // "¿Es proyecto estratégico?"
+  scoringSimplificaProcesos: text("scoring_simplifica_procesos"), // "¿Simplifica procesos o mejora el control?"
+  scoringRecursosExternos: text("scoring_recursos_externos"), // "¿Requiere recursos externos para el desarrollo?"
   scoringTiempoDesarrollo: text("scoring_tiempo_desarrollo"), // "¿Cuál es el tiempo de desarrollo?"
+  scoringTiempoImplementar: text("scoring_tiempo_implementar"), // "¿Cuál es el tiempo para implementar?"
   scoringCalidadInformacion: text("scoring_calidad_informacion"), // "¿Cuál es la Calidad de la información?"
   scoringTiempoConseguirInfo: text("scoring_tiempo_conseguir_info"), // "¿Cuál es el Tiempo para conseguir la información?"
   scoringComplejidadTecnica: text("scoring_complejidad_tecnica"), // "¿Qué tan compleja es la implementación técnica?"
   scoringComplejidadCambio: text("scoring_complejidad_cambio"), // "Complejidad del cambio a personas"
+  fase: text("fase"), // "Fase"
   
   // === BUSINESS IMPACT ===
   accionesAcelerar: text("acciones_acelerar"), // "Acciones a ejecutar para Acelerar"
