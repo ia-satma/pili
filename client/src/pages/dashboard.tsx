@@ -20,7 +20,7 @@ import {
   Zap,
   AlertCircle,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -213,7 +213,7 @@ function calculateMedian(values: number[]): number {
 
 // Status to DMAIC mapping removed to ensure data fidelity with source Excel
 
-function QuadrantCard({ title, subtitle, projects, borderColor, headerBg, icon }: any) {
+function QuadrantCard({ title, subtitle, projects, borderColor, headerBg, icon, setLocation }: any) {
   return (
     <div className={`flex flex-col h-[350px] rounded-lg border-2 ${borderColor} overflow-hidden bg-card shadow-sm`}>
       <div className={`px-4 py-3 ${headerBg} border-b flex items-center justify-between`}>
@@ -238,7 +238,7 @@ function QuadrantCard({ title, subtitle, projects, borderColor, headerBg, icon }
             {projects.map((project: any) => (
               <div
                 key={project.id}
-                onClick={() => window.location.href = `/initiatives/${project.id}`}
+                onClick={() => project.id && setLocation(`/project/${project.id}`)}
                 className="group p-2 rounded hover:bg-muted/50 cursor-pointer border border-transparent hover:border-border transition-all"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -266,6 +266,7 @@ function QuadrantCard({ title, subtitle, projects, borderColor, headerBg, icon }
 
 export default function Dashboard() {
   useDocumentTitle("Dashboard");
+  const [, setLocation] = useLocation();
   const { buildQueryString, hasActiveFilters } = useFilters();
   const queryString = buildQueryString();
   const { toast } = useToast();
@@ -560,6 +561,7 @@ export default function Dashboard() {
                     projects={projects
                       .filter((p: any) => p.totalValor >= medianValue && p.totalEsfuerzo < medianEffort)
                       .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                    setLocation={setLocation}
                   />
 
                   {/* TOP-RIGHT: ESTRATÉGICOS */}
@@ -572,6 +574,7 @@ export default function Dashboard() {
                     projects={projects
                       .filter((p: any) => p.totalValor >= medianValue && p.totalEsfuerzo >= medianEffort)
                       .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                    setLocation={setLocation}
                   />
 
                   {/* BOTTOM-LEFT: BAJA PRIORIDAD */}
@@ -584,6 +587,7 @@ export default function Dashboard() {
                     projects={projects
                       .filter((p: any) => p.totalValor < medianValue && p.totalEsfuerzo < medianEffort)
                       .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                    setLocation={setLocation}
                   />
 
                   {/* BOTTOM-RIGHT: DESPERDICIO */}
@@ -596,6 +600,7 @@ export default function Dashboard() {
                     projects={projects
                       .filter((p: any) => p.totalValor < medianValue && p.totalEsfuerzo >= medianEffort)
                       .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                    setLocation={setLocation}
                   />
                 </div>
               );

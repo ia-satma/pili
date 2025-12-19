@@ -30,6 +30,7 @@ import Orchestrator from "@/pages/orchestrator";
 import Outputs from "@/pages/outputs";
 import DataCleaning from "@/pages/data-cleaning";
 import ProjectMaster from "@/pages/project-master";
+import ProjectPage from "@/pages/project-page";
 
 function ProtectedRouter() {
   // TEMP: Auth disabled for testing
@@ -54,6 +55,7 @@ function ProtectedRouter() {
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/data-cleaning" component={DataCleaning} />
       <Route path="/project-master" component={ProjectMaster} />
+      <Route path="/project/:id" component={ProjectPage} />
       <Route component={NotFound} />
     </Switch>
   );
