@@ -414,7 +414,7 @@ export default function Dashboard() {
                       <p className="text-xs text-muted-foreground">Impacts timeline forecasts</p>
                     </div>
                   </div>
-                  <Badge variant={"outline" as any} className="text-lg font-bold bg-white text-red-600 border-red-200">
+                  <Badge variant="outline" className="text-lg font-bold bg-white text-red-600 border-red-200">
                     {data?.dataQualityGaps?.missingEndDateCount || 0}
                   </Badge>
                 </div>
@@ -429,7 +429,7 @@ export default function Dashboard() {
                       <p className="text-xs text-muted-foreground">Gaps in global tracking</p>
                     </div>
                   </div>
-                  <Badge variant={"outline" as any} className="text-lg font-bold bg-white text-orange-600 border-orange-200">
+                  <Badge variant="outline" className="text-lg font-bold bg-white text-orange-600 border-orange-200">
                     {data?.dataQualityGaps?.missingPowerSteeringIdCount || 0}
                   </Badge>
                 </div>
@@ -444,7 +444,7 @@ export default function Dashboard() {
                       <p className="text-xs text-muted-foreground">Value is unquantified</p>
                     </div>
                   </div>
-                  <Badge variant={"outline" as any} className="text-lg font-bold bg-white text-emerald-600 border-emerald-200">
+                  <Badge variant="outline" className="text-lg font-bold bg-white text-emerald-600 border-emerald-200">
                     {data?.dataQualityGaps?.missingFinancialBenefitCount || 0}
                   </Badge>
                 </div>
@@ -535,7 +535,7 @@ export default function Dashboard() {
                       data={scoringData.projects}
                       cursor="pointer"
                     >
-                      {scoringData.projects.map((entry, index) => {
+                      {scoringData.projects.map((entry: any, index: number) => {
                         const highValue = entry.totalValor >= 13;
                         const lowEffort = entry.totalEsfuerzo < 13;
                         let fill = "hsl(0, 84%, 60%)"; // Red

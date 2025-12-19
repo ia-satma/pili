@@ -27,115 +27,160 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
         }
     }
 
-    // Fallback to first sheet if "Proyectos PGP" not found (per earlier logic, but log it)
     if (!sheetName) {
         sheetName = workbook.SheetNames[0];
         console.log(`[Excel Parser] Sheet "Proyectos PGP" not found, using "${sheetName}"`);
     }
 
     const sheet = workbook.Sheets[sheetName];
-
-    /**
-     * Use XLSX.utils.sheet_to_json with range: 3
-     * This effectively skips the first 3 rows (Row 1, 2, 3) and uses Row 4 as the keys for the objects.
-     */
-    const rawData = XLSX.utils.sheet_to_json<any>(sheet, {
-        range: 3,
+    const rows = XLSX.utils.sheet_to_json<any[]>(sheet, {
+        header: 1,
         defval: null,
-        raw: false, // Ensure we get strings for names
+        blankrows: false
     });
 
-    console.log(`[Excel Parser] Started parsing sheet "${sheetName}". Total raw rows (from Row 5): ${rawData.length}`);
+    /**
+     * DYNAMIC HEADER DETECTION
+     * Scan first 30 rows to find the one with the most recognizable columns.
+     */
+    let headerRowIndex = -1;
+    let maxMatches = 0;
+    const recognizedHeaders = ["iniciativa", "nombre", "proyecto", "id power steering", "id ps", "status", "estatus", "total valor", "total esfuerzo"];
 
-    for (let i = 0; i < rawData.length; i++) {
-        const row = rawData[i];
-        const excelLine = i + 5; // Header at 4, Data starts at 5
+    for (let i = 0; i < Math.min(30, rows.length); i++) {
+        const row = rows[i];
+        if (!row || !Array.isArray(row)) continue;
 
-        const initiative = row["Iniciativa"];
+        let matches = 0;
+        row.forEach((cell: any) => {
+            if (!cell) return;
+            const normalized = String(cell).toLowerCase().trim();
+            if (recognizedHeaders.some(h => normalized.includes(h))) {
+                matches++;
+            }
+        });
 
-        // MANDATORY: If "Iniciativa" is empty, skip row. Corrects "ghost rows".
-        if (!initiative || String(initiative).trim() === "") {
-            continue;
+        if (matches > maxMatches) {
+            maxMatches = matches;
+            headerRowIndex = i;
+        }
+
+        // If we found a row with at least 3 strong matches, it's likely our header
+        if (matches >= 4) {
+            headerRowIndex = i;
+            break;
+        }
+    }
+
+    if (headerRowIndex === -1) {
+        throw new Error("No se pudo detectar el encabezado del archivo. Asegúrese de que existe una fila con columnas como 'Iniciativa', 'Status' e 'ID Power Steering'.");
+    }
+
+    const headerRow = rows[headerRowIndex];
+    const dataRows = rows.slice(headerRowIndex + 1);
+
+    console.log(`[Excel Parser] Header detected at Row ${headerRowIndex + 1}: ${JSON.stringify(headerRow.slice(0, 10))}`);
+
+    // Mapping logic - DO IT ONCE OUTSIDE THE LOOP
+    const colIndex: Record<string, number> = {};
+    headerRow.forEach((h, idx) => {
+        if (h) {
+            const normalized = String(h).toLowerCase().trim();
+            colIndex[normalized] = idx;
+        }
+    });
+
+    // Helper to find column by multiple possible names
+    const getIdx = (aliases: string[]) => {
+        for (const alias of aliases) {
+            if (colIndex[alias.toLowerCase()] !== undefined) return colIndex[alias.toLowerCase()];
+        }
+        return undefined;
+    };
+
+    const initiativeAliases = ["iniciativa", "nombre", "proyecto", "nombre del proyecto", "project name"];
+    const idAliases = ["id power steering", "id ps", "id", "código", "codigo", "card id devops"];
+    const descAliases = ["descripción", "descripcion", "details", "detalle"];
+    const statusAliases = ["status", "estatus", "fase", "estado"];
+    const valorAliases = ["total valor", "valor", "value", "impacto"];
+    const esfuerzoAliases = ["total esfuerzo", "esfuerzo", "effort"];
+
+    const initiativeIdx = getIdx(initiativeAliases);
+    const idIdx = getIdx(idAliases);
+    const descIdx = getIdx(descAliases);
+    const statusIdx = getIdx(statusAliases);
+    const valorIdx = getIdx(valorAliases);
+    const esfuerzoIdx = getIdx(esfuerzoAliases);
+
+    console.log(`[Excel Parser] Indices detected: initiative=${initiativeIdx}, id=${idIdx}, status=${statusIdx}`);
+
+    if (initiativeIdx === undefined) {
+        throw new Error("No se pudo encontrar la columna de 'Iniciativa' o 'Nombre del Proyecto'.");
+    }
+
+    for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        if (!row || !Array.isArray(row)) continue;
+
+        const initiative = row[initiativeIdx];
+        // Skip empty rows or rows where iniciativa is missing
+        if (!initiative || String(initiative).trim() === "" || String(initiative).toLowerCase().includes("weighting")) continue;
+
+        // Extract ID - ENSURE IT IS FRESH FOR EVERY ROW
+        let extractedId: string | null = null;
+        if (idIdx !== undefined) {
+            extractedId = getString(row[idIdx]);
+        }
+
+        // Trace logging for first few rows or the problematic ID
+        if (i < 5 || extractedId === "AM03473") {
+            console.log(`[Parser] Row ${i + headerRowIndex + 2}: Initiative="${initiative}", ID="${extractedId}" (from Col ${idIdx !== undefined ? String.fromCharCode(65 + idIdx) : 'N/A'})`);
         }
 
         const project: ParsedProject = {
             projectName: String(initiative).trim(),
-            legacyId: row["ID Power Steering"] ? String(row["ID Power Steering"]) : null,
-            powerSteeringId: row["ID Power Steering"] ? String(row["ID Power Steering"]) : null,
-            devopsCardId: row["Card ID DevOps"] ? String(row["Card ID DevOps"]) : null,
-            description: row["Descripción"] ? String(row["Descripción"]) : null,
-            status: row["Status"] ? String(row["Status"]) : "Draft",
-            responsible: row["Dueño del Proyecto"] ? String(row["Dueño del Proyecto"]) : null,
-            leader: row["Dueño del Proyecto"] ? String(row["Dueño del Proyecto"]) : null,
-            sponsor: row["Sponsor"] ? String(row["Sponsor"]) : null,
-            benefits: row["Beneficios Estimados"] ? String(row["Beneficios Estimados"]) : null,
-            financialImpact: row["Beneficios Estimados"] ? String(row["Beneficios Estimados"]) : null,
-            totalEsfuerzo: (row["Total Esfuerzo"] && !isNaN(Number(row["Total Esfuerzo"])))
-                ? Math.min(25, Math.max(1, Number(row["Total Esfuerzo"])))
-                : null,
-            totalValor: (row["Total Valor"] && !isNaN(Number(row["Total Valor"])))
-                ? Math.min(25, Math.max(1, Number(row["Total Valor"])))
-                : null,
+            legacyId: extractedId,
+            powerSteeringId: extractedId,
+            description: descIdx !== undefined ? getString(row[descIdx]) : null,
+            status: statusIdx !== undefined ? getString(row[statusIdx]) || "Draft" : "Draft",
+            totalEsfuerzo: esfuerzoIdx !== undefined ? parseScore(row[esfuerzoIdx]) : null,
+            totalValor: valorIdx !== undefined ? parseScore(row[valorIdx]) : null,
             sourceVersionId: versionId,
             isActive: true,
-            extraFields: row,
+            extraFields: {},
         };
 
-        // Metrics: Progreso / %
-        const progress = row["Progreso"] || row["%"];
-        if (progress !== null && progress !== undefined) {
-            let pValue = 0;
-            if (typeof progress === "number") {
-                pValue = progress <= 1 ? progress * 100 : progress;
-            } else {
-                pValue = parseFloat(String(progress).replace("%", ""));
+        // Fill extra fields for persistence
+        headerRow.forEach((h: any, idx: number) => {
+            if (h) {
+                const val = row[idx];
+                project.extraFields![String(h)] = val !== undefined ? val : null;
             }
-            project.percentComplete = Math.round(Math.min(100, Math.max(0, pValue || 0)));
-        }
-
-        // Date Detection (Row 4+)
-        for (const [key, val] of Object.entries(row)) {
-            if (!val) continue;
-
-            const lowerKey = key.toLowerCase();
-
-            // Found in file: 2025-12-08 (likely "Fecha Creación" or "Inicio Real") -> start_date
-            if (lowerKey.includes("inicio") || lowerKey.includes("creacion") || lowerKey.includes("start")) {
-                const d = parseDate(val);
-                if (d) project.startDate = d;
-            }
-
-            // Found in file: 2026-01-30 (likely "Fecha Fin" or "Deadline") -> end_date
-            if (lowerKey.includes("fin") || lowerKey.includes("deadline") || lowerKey.includes("end")) {
-                const d = parseDate(val);
-                if (d) project.endDateEstimated = d;
-            }
-        }
+        });
 
         projects.push(project);
     }
 
-    console.log(`[Excel Parser] Finished parsing. Created ${projects.length} project objects.`);
-
     return {
         projects,
         advertencias,
-        totalRows: rawData.length,
+        totalRows: dataRows.length,
         proyectosCreados: projects.length,
         proyectosBorradorIncompleto: 0,
-        filasDescartadas: rawData.length - projects.length,
+        filasDescartadas: dataRows.length - projects.length,
     };
 }
 
-function parseDate(val: any): string | null {
-    if (!val) return null;
-    if (val instanceof Date && !isNaN(val.getTime())) {
-        return val.toISOString().split("T")[0];
-    }
-    const str = String(val).trim();
-    if (str.match(/^\d{4}-\d{2}-\d{2}/)) return str.substring(0, 10);
+function getString(val: any): string | null {
+    if (val === null || val === undefined) return null;
+    const s = String(val).trim();
+    return s.length > 0 ? s : null;
+}
 
-    const d = new Date(str);
-    if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
-    return null;
+function parseScore(val: any): number | null {
+    if (val === null || val === undefined) return null;
+    const num = Number(val);
+    if (isNaN(num)) return null;
+    // Clamped 1-25 per PMO standards
+    return Math.min(25, Math.max(1, num));
 }

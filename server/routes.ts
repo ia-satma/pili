@@ -13,7 +13,7 @@ import { desc, eq } from "drizzle-orm";
 import { parseExcelBuffer, type ParsedProject } from "./utils/excel_parser";
 import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./openai";
 import type { InsertChangeLog, InsertKpiValue, Project, InsertProject, InsertValidationIssue } from "@shared/schema";
-import { exportBatches, jobs, jobRuns } from "@shared/schema";
+import { exportBatches, jobs, jobRuns, projects, excelVersions } from "@shared/schema";
 import { setupAuth, isAuthenticated, isAdmin, isEditor, isViewer, seedAdminUsers } from "./replitAuth";
 import { enqueueJob } from "./services/workerLoop";
 import { agentRateLimit, exportRateLimit, uploadRateLimit, systemDocsRateLimit } from "./middleware/rateLimiter";
@@ -908,211 +908,72 @@ export async function registerRoutes(
         return res.status(400).json({ message: "No se proporcionó ningún archivo" });
       }
 
-      const allowedExtensions = ['.xlsx', '.xls'];
-      const fileExt = path.extname(req.file.originalname).toLowerCase();
-      if (!allowedExtensions.includes(fileExt)) {
-        return res.status(400).json({ message: "Formato de archivo no soportado. Use .xlsx o .xls" });
-      }
+      console.log(`[Import] Processing file: ${req.file.originalname}`);
 
-      const tempDir = '/tmp';
-      const tempFileName = `excel_import_${Date.now()}_${crypto.randomBytes(8).toString('hex')}${fileExt}`;
-      const tempFilePath = path.join(tempDir, tempFileName);
-
-      fs.writeFileSync(tempFilePath, req.file.buffer);
-
-      const pythonScript = path.join(process.cwd(), 'server', 'utils', 'excel_parser.py');
-
-      const PARSER_TIMEOUT_MS = 30000;
-      const MAX_OUTPUT_SIZE = 10 * 1024 * 1024;
-
-      const result = await new Promise<{
-        success: boolean;
-        projects: any[];
-        errors: string[];
-        metadata: {
-          header_row: number | null;
-          total_rows: number;
-          columns_mapped: Record<string, string>;
-          columns_unmapped: string[];
-        };
-      }>((resolve, reject) => {
-        const pythonProcess = spawn('python3', [pythonScript, tempFilePath], {
-          timeout: PARSER_TIMEOUT_MS,
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-
-        let stdout = '';
-        let stderr = '';
-        let killed = false;
-
-        const timeout = setTimeout(() => {
-          killed = true;
-          pythonProcess.kill('SIGKILL');
-          fs.unlink(tempFilePath, () => { });
-          reject(new Error('Parser timeout: El archivo tardó demasiado en procesarse'));
-        }, PARSER_TIMEOUT_MS);
-
-        pythonProcess.stdout.on('data', (data) => {
-          stdout += data.toString();
-          if (stdout.length > MAX_OUTPUT_SIZE) {
-            killed = true;
-            pythonProcess.kill('SIGKILL');
-            clearTimeout(timeout);
-            fs.unlink(tempFilePath, () => { });
-            reject(new Error('Output size exceeded: El archivo genera demasiados datos'));
-          }
-        });
-
-        pythonProcess.stderr.on('data', (data) => {
-          stderr += data.toString();
-          if (stderr.length > MAX_OUTPUT_SIZE) {
-            killed = true;
-            pythonProcess.kill('SIGKILL');
-            clearTimeout(timeout);
-            fs.unlink(tempFilePath, () => { });
-            reject(new Error('Error output exceeded limits'));
-          }
-        });
-
-        pythonProcess.on('close', (code) => {
-          clearTimeout(timeout);
-          fs.unlink(tempFilePath, () => { });
-
-          if (killed) return;
-
-          if (code !== 0) {
-            reject(new Error(`Python parser failed: ${stderr || 'Unknown error'}`));
-            return;
-          }
-
-          try {
-            const parsed = JSON.parse(stdout);
-            resolve(parsed);
-          } catch (e) {
-            reject(new Error(`Failed to parse Python output: ${stdout.slice(0, 500)}`));
-          }
-        });
-
-        pythonProcess.on('error', (err) => {
-          clearTimeout(timeout);
-          fs.unlink(tempFilePath, () => { });
-          if (!killed) reject(err);
-        });
+      // Create version record
+      const version = await storage.createExcelVersion({
+        fileName: req.file.originalname,
+        totalRows: 0,
+        status: "processing",
       });
 
-      if (!result.success || result.projects.length === 0) {
+      // RUTHLESS: Use the hardened TS parser (Forensic Row 4 Mode)
+      const parsedData = parseExcelBuffer(req.file.buffer, version.id);
+
+      if (parsedData.projects.length === 0) {
         return res.status(400).json({
           success: false,
-          message: result.projects.length === 0
-            ? "No se encontraron proyectos válidos en el archivo"
-            : "Error procesando el archivo Excel",
-          errors: result.errors,
-          metadata: result.metadata
+          message: "No se encontraron proyectos válidos en la Fila 5+ de la hoja 'Proyectos PGP'.",
+          errors: ["Asegúrese de que el encabezado esté en la Fila 4 con la columna 'Iniciativa'."],
         });
       }
 
       const importResults = { created: 0, errors: [] as string[] };
 
-      for (let i = 0; i < result.projects.length; i++) {
+      // HARD RESET: Clear existing projects to eliminate alignment "hallucinations"
+      await db.delete(projects);
+      console.log("[Import] Database projects cleared for Hard Reset.");
+
+      for (const p of parsedData.projects) {
         try {
-          const project = result.projects[i];
-
-          let budget = 0;
-          if (project.budget !== undefined && project.budget !== null) {
-            budget = typeof project.budget === 'number' ? project.budget : parseFloat(String(project.budget).replace(/[^\d.-]/g, '')) || 0;
-          }
-
-          const projectData = {
-            projectName: project.projectName || `Proyecto Importado ${i + 1}`,
-            bpAnalyst: project.bpAnalyst || null,
-            departmentName: project.departmentName || null,
-            region: project.region || null,
-            status: project.status || "Draft",
-            problemStatement: project.problemStatement || null,
-            objective: project.objective || null,
-            scopeIn: project.scopeIn || null,
-            scopeOut: project.scopeOut || null,
-            impactType: Array.isArray(project.impactType) ? project.impactType : [],
-            kpis: project.kpis || null,
-            budget: budget,
-            sponsor: project.sponsor || null,
-            leader: project.leader || null,
-            responsible: project.responsible || null,
-            startDate: project.startDate || null,
-            endDateEstimated: project.endDateEstimated || null,
-            priority: project.priority || "Media",
-            category: project.category || null,
-            comments: project.comments || null,
-            benefits: project.benefits || null,
-            risks: project.risks || null,
-            percentComplete: project.percentComplete || 0,
-            totalValor: project.totalValor || null,
-            totalEsfuerzo: project.totalEsfuerzo || null,
-            // Additional PMO fields from Excel parsing
-            ranking: project.ranking || null,
-            puntajeTotal: project.puntajeTotal || null,
-            legacyId: project.legacyId || null,
-            estatusAlDia: project.estatusAlDia || null,
-            statusText: project.statusText || null,
-            description: project.description || null,
-            fase: project.fase || null,
-            registrationDate: project.registrationDate || null,
-            capexTier: project.capexTier || null,
-            financialImpact: project.financialImpact || null,
-            strategicFit: project.strategicFit || null,
-            // EXCEL ADDITIONAL FIELDS
-            previo: project.previo || null,
-            cardIdDevops: project.cardIdDevops || null,
-            valorDiferenciador: project.valorDiferenciador || null,
-            tiempoCicloDias: project.tiempoCicloDias || null,
-            ingresadaEnPbot: project.ingresadaEnPbot || null,
-            grupoTecnicoAsignado: project.grupoTecnicoAsignado || null,
-            // DEPENDENCIES
-            dependenciasItLocal: project.dependenciasItLocal || false,
-            dependenciasTDigital: project.dependenciasTDigital || false,
-            dependenciasDigitalizacionSsc: project.dependenciasDigitalizacionSsc || false,
-            dependenciasExterno: project.dependenciasExterno || false,
-            // TEAM ROLES
-            citizenDeveloper: project.citizenDeveloper || null,
-            dtcLead: project.dtcLead || null,
-            blackBeltLead: project.blackBeltLead || null,
-            // BUSINESS CONTEXT
-            direccionNegocioUsuario: project.direccionNegocioUsuario || null,
-            impactaGasesEnvasados: project.impactaGasesEnvasados || null,
-            areaProductividad: project.areaProductividad || null,
-            // SCORING MATRIX EXTENDED
-            scoringNivelDemanda: project.scoringNivelDemanda || null,
-            scoringTieneSponsor: project.scoringTieneSponsor || null,
-            scoringPersonasAfecta: project.scoringPersonasAfecta || null,
-            scoringEsReplicable: project.scoringEsReplicable || null,
-            scoringEsEstrategico: project.scoringEsEstrategico || null,
-            scoringTiempoDesarrollo: project.scoringTiempoDesarrollo || null,
-            scoringCalidadInformacion: project.scoringCalidadInformacion || null,
-            scoringTiempoConseguirInfo: project.scoringTiempoConseguirInfo || null,
-            scoringComplejidadTecnica: project.scoringComplejidadTecnica || null,
-            scoringComplejidadCambio: project.scoringComplejidadCambio || null,
-            // BUSINESS IMPACT
-            accionesAcelerar: project.accionesAcelerar || null,
-            businessImpactGrowth: project.businessImpactGrowth || null,
-            businessImpactCostos: project.businessImpactCostos || null,
-            businessImpactOther: project.businessImpactOther || null,
-          };
-
-          await storage.createProject(projectData as any);
+          await storage.createProject({
+            projectName: p.projectName,
+            description: p.description,
+            powerSteeringId: p.powerSteeringId,
+            legacyId: p.legacyId,
+            status: p.status || "Draft",
+            totalValor: p.totalValor,
+            totalEsfuerzo: p.totalEsfuerzo,
+            sourceVersionId: version.id,
+            isActive: true,
+            priority: "Media",
+            percentComplete: 0,
+            extraFields: p.extraFields || {},
+          } as any);
           importResults.created++;
-        } catch (error) {
-          importResults.errors.push(`Proyecto ${i + 1}: ${String(error)}`);
+        } catch (err) {
+          console.error(`[Import] Error creating project: ${err}`);
+          importResults.errors.push(`Error en proyecto ${p.projectName}: ${err}`);
         }
       }
 
+      // Update version status
+      await db.update(excelVersions)
+        .set({ status: "completed", totalRows: parsedData.projects.length })
+        .where(eq(excelVersions.id, version.id));
+
       res.json({
         success: true,
+        message: `Importación completada: ${importResults.created} proyectos creados (Hard Reset exitoso).`,
         created: importResults.created,
-        errors: [...result.errors, ...importResults.errors],
-        metadata: result.metadata,
-        message: `Se importaron ${importResults.created} de ${result.projects.length} proyectos.${importResults.errors.length > 0 ? ` ${importResults.errors.length} errores.` : ""}`
+        errors: importResults.errors,
+        metadata: {
+          header_row: 3, // Fixed Row 4
+          total_rows: parsedData.projects.length,
+          columns_mapped: { "Iniciativa": "projectName", "ID Power Steering": "powerSteeringId", "Total Valor": "totalValor", "Total Esfuerzo": "totalEsfuerzo" },
+          columns_unmapped: [],
+        }
       });
-
     } catch (error) {
       console.error("Excel import error:", error);
       res.status(500).json({
@@ -1516,13 +1377,20 @@ export async function registerRoutes(
       let addedCount = 0;
       let modifiedCount = 0;
 
-      for (const projectData of parsed.projects) {
+      console.log("[Excel Upload] Starting logic for projects. Count:", parsed.projects.length);
+
+      for (let i = 0; i < parsed.projects.length; i++) {
+        const projectData = parsed.projects[i];
         const legacyId = projectData.legacyId;
         if (legacyId) {
           processedLegacyIds.add(legacyId);
         }
 
         const existing = legacyId ? existingByLegacyId.get(legacyId) : null;
+
+        if (i < 5 || legacyId === "AM03473") {
+          console.log(`[Import] Project ${i}: Name="${projectData.projectName}", ID="${legacyId}", Action="${existing ? 'Update' : 'Create'}"`);
+        }
 
         if (existing) {
           // Update existing project
