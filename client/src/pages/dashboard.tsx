@@ -472,24 +472,6 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
-                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-green-50 text-green-700">
-                    <div className="h-2 w-2 rounded-full bg-green-600" />
-                    Quick Wins ({scoringData.quadrants.quickWins})
-                  </div>
-                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-blue-50 text-blue-700">
-                    <div className="h-2 w-2 rounded-full bg-blue-600" />
-                    Strategic Projects ({scoringData.quadrants.bigBets})
-                  </div>
-                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-yellow-50 text-yellow-700">
-                    <div className="h-2 w-2 rounded-full bg-yellow-600" />
-                    Utility Projects ({scoringData.quadrants.fillIns})
-                  </div>
-                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-red-50 text-red-700">
-                    <div className="h-2 w-2 rounded-full bg-red-600" />
-                    Time Wasters ({scoringData.quadrants.moneyPit})
-                  </div>
-                </div>
                 <ResponsiveContainer width="100%" height={300}>
                   <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 40 }}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -510,8 +492,8 @@ export default function Dashboard() {
                       tick={{ fontSize: 10 }}
                     />
                     <ZAxis range={[50, 50]} />
-                    <ReferenceLine x={13} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
-                    <ReferenceLine y={13} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+                    <ReferenceLine x={12.5} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+                    <ReferenceLine y={12.5} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
                     <Tooltip
                       content={({ active, payload }: any) => {
                         if (active && payload && payload.length > 0) {
@@ -536,16 +518,15 @@ export default function Dashboard() {
                       cursor="pointer"
                     >
                       {scoringData.projects.map((entry: any, index: number) => {
-                        const highValue = entry.totalValor >= 13;
-                        const lowEffort = entry.totalEsfuerzo < 13;
-                        let fill = "hsl(0, 84%, 60%)"; // Red
-                        if (highValue && lowEffort) fill = "hsl(142, 76%, 36%)"; // Green
-                        else if (highValue && !lowEffort) fill = "hsl(217, 91%, 48%)"; // Blue
-                        else if (!highValue && lowEffort) fill = "hsl(45, 93%, 47%)"; // Yellow
+                        let color = "#9ca3af"; // Default Gray (Low Priority)
+                        if (entry.totalValor >= 12.5 && entry.totalEsfuerzo < 12.5) color = "#22c55e"; // Green (Quick Wins)
+                        else if (entry.totalValor >= 12.5 && entry.totalEsfuerzo >= 12.5) color = "#eab308"; // Yellow (Strategic)
+                        else if (entry.totalValor < 12.5 && entry.totalEsfuerzo >= 12.5) color = "#ef4444"; // Red (Time Wasters)
+
                         return (
                           <Cell
                             key={`cell-${index}`}
-                            fill={fill}
+                            fill={color}
                             onClick={() => window.location.href = `/projects/${entry.id}`}
                           />
                         );
@@ -553,6 +534,24 @@ export default function Dashboard() {
                     </Scatter>
                   </ScatterChart>
                 </ResponsiveContainer>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-4 pt-4 border-t">
+                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-green-50 text-green-700">
+                    <div className="h-2 w-2 rounded-full bg-[#22c55e]" />
+                    Quick Wins (Value ≥ 12.5, Effort &lt; 12.5)
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-yellow-50 text-yellow-700">
+                    <div className="h-2 w-2 rounded-full bg-[#eab308]" />
+                    Strategic Projects (Value ≥ 12.5, Effort ≥ 12.5)
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-red-50 text-red-700">
+                    <div className="h-2 w-2 rounded-full bg-[#ef4444]" />
+                    Time Wasters (Value &lt; 12.5, Effort ≥ 12.5)
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-gray-50 text-gray-700">
+                    <div className="h-2 w-2 rounded-full bg-[#9ca3af]" />
+                    Low Priority (Value &lt; 12.5, Effort &lt; 12.5)
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>
