@@ -60,6 +60,7 @@ import {
   Scatter,
   ZAxis,
   ReferenceLine,
+  ReferenceArea,
   RadialBarChart,
   RadialBar,
   PolarAngleAxis,
@@ -494,17 +495,39 @@ export default function Dashboard() {
                     <ZAxis range={[50, 50]} />
                     <ReferenceLine x={12.5} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
                     <ReferenceLine y={12.5} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+
+                    {/* Quadrant Backgrounds */}
+                    <ReferenceArea x1={0} x2={12.5} y1={12.5} y2={25} fill="#22c55e" fillOpacity={0.05} />
+                    <ReferenceArea x1={12.5} x2={25} y1={12.5} y2={25} fill="#eab308" fillOpacity={0.05} />
+                    <ReferenceArea x1={12.5} x2={25} y1={0} y2={12.5} fill="#ef4444" fillOpacity={0.05} />
+                    <ReferenceArea x1={0} x2={12.5} y1={0} y2={12.5} fill="#9ca3af" fillOpacity={0.05} />
+
+                    {/* Quadrant Labels */}
+                    <ReferenceArea x1={0} x2={12.5} y1={23} y2={25} stroke="none" fill="none" label={{ position: 'insideTopLeft', value: 'QUICK WINS', fill: '#166534', fontSize: 10, fontWeight: 'bold', offset: 10 }} />
+                    <ReferenceArea x1={12.5} x2={25} y1={23} y2={25} stroke="none" fill="none" label={{ position: 'insideTopRight', value: 'ESTRATÉGICOS', fill: '#854d0e', fontSize: 10, fontWeight: 'bold', offset: 10 }} />
+                    <ReferenceArea x1={12.5} x2={25} y1={0} y2={2} stroke="none" fill="none" label={{ position: 'insideBottomRight', value: 'DESPERDICIO', fill: '#991b1b', fontSize: 10, fontWeight: 'bold', offset: 10 }} />
+                    <ReferenceArea x1={0} x2={12.5} y1={0} y2={2} stroke="none" fill="none" label={{ position: 'insideBottomLeft', value: 'BAJA PRIORIDAD', fill: '#374151', fontSize: 10, fontWeight: 'bold', offset: 10 }} />
+
                     <Tooltip
                       content={({ active, payload }: any) => {
                         if (active && payload && payload.length > 0) {
                           const project = payload[0].payload as ScoringProject;
                           return (
                             <div className="bg-card border rounded-md p-3 shadow-xl max-w-xs ring-1 ring-black/5">
-                              <p className="font-bold text-sm leading-tight mb-2">{project.projectName}</p>
-                              <div className="space-y-1 text-[11px] font-medium opacity-80">
-                                <p className="flex justify-between"><span>Valor:</span> <span className="text-primary">{project.totalValor}</span></p>
-                                <p className="flex justify-between"><span>Esfuerzo:</span> <span className="text-primary">{project.totalEsfuerzo}</span></p>
-                                <p className="flex justify-between"><span>Owner:</span> <span>{project.status || "N/A"}</span></p>
+                              <p className="font-bold text-sm leading-tight mb-2 text-primary">{project.projectName}</p>
+                              <div className="space-y-1.5 text-[11px] font-medium opacity-90">
+                                <p className="flex justify-between gap-4">
+                                  <span className="text-muted-foreground uppercase tracking-tight">Project:</span>
+                                  <span className="truncate max-w-[140px] text-right">{project.projectName}</span>
+                                </p>
+                                <p className="flex justify-between gap-4">
+                                  <span className="text-muted-foreground uppercase tracking-tight">Owner:</span>
+                                  <span>{project.status || "N/A"}</span>
+                                </p>
+                                <p className="flex justify-between gap-4 border-t pt-1 mt-1 border-border/50">
+                                  <span className="text-muted-foreground uppercase tracking-tight">Score:</span>
+                                  <span className="font-bold">V:{project.totalValor} / E:{project.totalEsfuerzo}</span>
+                                </p>
                               </div>
                             </div>
                           );
@@ -518,10 +541,10 @@ export default function Dashboard() {
                       cursor="pointer"
                     >
                       {scoringData.projects.map((entry: any, index: number) => {
-                        let color = "#9ca3af"; // Default Gray (Low Priority)
+                        let color = "#9ca3af"; // Default Gray (Baja Prioridad)
                         if (entry.totalValor >= 12.5 && entry.totalEsfuerzo < 12.5) color = "#22c55e"; // Green (Quick Wins)
-                        else if (entry.totalValor >= 12.5 && entry.totalEsfuerzo >= 12.5) color = "#eab308"; // Yellow (Strategic)
-                        else if (entry.totalValor < 12.5 && entry.totalEsfuerzo >= 12.5) color = "#ef4444"; // Red (Time Wasters)
+                        else if (entry.totalValor >= 12.5 && entry.totalEsfuerzo >= 12.5) color = "#eab308"; // Yellow (Estratégicos)
+                        else if (entry.totalValor < 12.5 && entry.totalEsfuerzo >= 12.5) color = "#ef4444"; // Red (Desperdicio)
 
                         return (
                           <Cell
@@ -537,19 +560,19 @@ export default function Dashboard() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-4 pt-4 border-t">
                   <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-green-50 text-green-700">
                     <div className="h-2 w-2 rounded-full bg-[#22c55e]" />
-                    Quick Wins (Value ≥ 12.5, Effort &lt; 12.5)
+                    Quick Wins (Valor ≥ 12.5, Esfuerzo &lt; 12.5)
                   </div>
                   <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-yellow-50 text-yellow-700">
                     <div className="h-2 w-2 rounded-full bg-[#eab308]" />
-                    Strategic Projects (Value ≥ 12.5, Effort ≥ 12.5)
+                    Estratégicos (Valor ≥ 12.5, Esfuerzo ≥ 12.5)
                   </div>
                   <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-red-50 text-red-700">
                     <div className="h-2 w-2 rounded-full bg-[#ef4444]" />
-                    Time Wasters (Value &lt; 12.5, Effort ≥ 12.5)
+                    Desperdicio (Valor &lt; 12.5, Esfuerzo ≥ 12.5)
                   </div>
                   <div className="flex items-center gap-2 text-xs font-medium px-2 py-1 rounded bg-gray-50 text-gray-700">
                     <div className="h-2 w-2 rounded-full bg-[#9ca3af]" />
-                    Low Priority (Value &lt; 12.5, Effort &lt; 12.5)
+                    Baja Prioridad (Valor &lt; 12.5, Esfuerzo &lt; 12.5)
                   </div>
                 </div>
               </div>
