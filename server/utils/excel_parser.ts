@@ -39,97 +39,43 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
         blankrows: false
     });
 
-    /**
-     * DYNAMIC HEADER DETECTION
-     * Scan first 30 rows to find the one with the most recognizable columns.
-     */
-    let headerRowIndex = -1;
-    let maxMatches = 0;
-    const recognizedHeaders = ["iniciativa", "nombre", "proyecto", "id power steering", "id ps", "status", "estatus", "total valor", "total esfuerzo"];
-
-    for (let i = 0; i < Math.min(30, rows.length); i++) {
-        const row = rows[i];
-        if (!row || !Array.isArray(row)) continue;
-
-        let matches = 0;
-        row.forEach((cell: any) => {
-            if (!cell) return;
-            const normalized = String(cell).toLowerCase().trim();
-            if (recognizedHeaders.some(h => normalized.includes(h))) {
-                matches++;
-            }
-        });
-
-        if (matches > maxMatches) {
-            maxMatches = matches;
-            headerRowIndex = i;
-        }
-
-        // If we found a row with at least 3 strong matches, it's likely our header
-        if (matches >= 4) {
-            headerRowIndex = i;
-            break;
-        }
-    }
-
-    if (headerRowIndex === -1) {
-        throw new Error("No se pudo detectar el encabezado del archivo. Asegúrese de que existe una fila con columnas como 'Iniciativa', 'Status' e 'ID Power Steering'.");
+    // STRICT: Row 4 (Index 3) is always the header row per Forensic Mandate
+    const headerRowIndex = 3;
+    if (!rows[headerRowIndex]) {
+        throw new Error("El archivo Excel no tiene el formato esperado (Fila 4 vacía).");
     }
 
     const headerRow = rows[headerRowIndex];
     const dataRows = rows.slice(headerRowIndex + 1);
 
-    console.log(`[Excel Parser] Header detected at Row ${headerRowIndex + 1}: ${JSON.stringify(headerRow.slice(0, 10))}`);
+    console.log(`[Excel Parser] STRICT Row 4 Header: ${JSON.stringify(headerRow.slice(0, 10))}`);
 
-    // Mapping logic - DO IT ONCE OUTSIDE THE LOOP
+    // STRICT Mapping logic
     const colIndex: Record<string, number> = {};
     headerRow.forEach((h, idx) => {
         if (h) {
-            // Strong normalization: lowercase, trim, and remove special characters for better matching
-            const normalized = String(h).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+            const normalized = String(h).toLowerCase().trim();
             colIndex[normalized] = idx;
         }
     });
 
-    // Helper to find column by multiple possible names (flexible matching)
     const getIdx = (aliases: string[]) => {
-        const normalizedAliases = aliases.map(a => a.toLowerCase().trim().replace(/[^a-z0-9]/g, ''));
-
-        // 1. Try exact match first
-        for (const alias of normalizedAliases) {
-            if (colIndex[alias] !== undefined) return colIndex[alias];
-        }
-
-        // 2. Try partial match as fallback
-        for (const [colName, idx] of Object.entries(colIndex)) {
-            for (const alias of normalizedAliases) {
-                if (colName.includes(alias) || alias.includes(colName)) {
-                    console.log(`[Excel Parser] Found partial match: "${colName}" for alias "${alias}"`);
-                    return idx;
-                }
-            }
+        for (const alias of aliases) {
+            const normalizedAlias = alias.toLowerCase().trim();
+            if (colIndex[normalizedAlias] !== undefined) return colIndex[normalizedAlias];
         }
         return undefined;
     };
 
-    const initiativeAliases = ["iniciativa", "nombre", "proyecto", "nombre del proyecto", "project name"];
-    const idAliases = ["id power steering", "id ps", "id", "código", "codigo", "card id devops"];
-    const descAliases = ["descripción", "descripcion", "details", "detalle"];
-    const statusAliases = ["status", "estatus", "fase", "estado"];
-    const valorAliases = ["total valor", "valor", "value", "impacto"];
-    const esfuerzoAliases = ["total esfuerzo", "esfuerzo", "effort"];
-
-    const initiativeIdx = getIdx(initiativeAliases);
-    const idIdx = getIdx(idAliases);
-    const descIdx = getIdx(descAliases);
-    const statusIdx = getIdx(statusAliases);
-    const valorIdx = getIdx(valorAliases);
-    const esfuerzoIdx = getIdx(esfuerzoAliases);
-
-    console.log(`[Excel Parser] Indices detected: initiative=${initiativeIdx}, id=${idIdx}, status=${statusIdx}`);
+    const initiativeIdx = getIdx(["iniciativa", "nombre del proyecto", "proyecto"]);
+    const idIdx = getIdx(["id power steering", "id ps", "card id devops"]);
+    const descIdx = getIdx(["descripción", "descripcion", "detalles"]);
+    const statusIdx = getIdx(["status", "estatus", "estado"]);
+    const valorIdx = getIdx(["total valor", "valor"]);
+    const esfuerzoIdx = getIdx(["total esfuerzo", "esfuerzo"]);
 
     if (initiativeIdx === undefined) {
-        throw new Error("No se pudo encontrar la columna de 'Iniciativa' o 'Nombre del Proyecto'.");
+        throw new Error("No se pudo encontrar la columna 'Iniciativa' en la Fila 4.");
     }
 
     for (let i = 0; i < dataRows.length; i++) {
@@ -137,8 +83,7 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
         if (!row || !Array.isArray(row)) continue;
 
         const initiative = row[initiativeIdx];
-        // Skip empty rows or rows where iniciativa is missing
-        if (!initiative || String(initiative).trim() === "" || String(initiative).toLowerCase().includes("weighting")) continue;
+        if (!initiative || String(initiative).trim() === "") continue;
 
         // Extract ID - ENSURE IT IS FRESH FOR EVERY ROW
         let extractedId: string | null = null;

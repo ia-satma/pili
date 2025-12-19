@@ -508,20 +508,6 @@ export default function Dashboard() {
                   </Badge>
                 </div>
 
-                <div className="flex items-center justify-between p-4 rounded-lg bg-background border border-blue-100 hover-elevate">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-emerald-100">
-                      <Gem className="h-5 w-5 text-emerald-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Missing Financial Benefit</p>
-                      <p className="text-xs text-muted-foreground">Value is unquantified</p>
-                    </div>
-                  </div>
-                  <Badge variant="outline" className="text-lg font-bold bg-white text-emerald-600 border-emerald-200">
-                    {data?.dataQualityGaps?.missingFinancialBenefitCount || 0}
-                  </Badge>
-                </div>
               </div>
             )}
           </CardContent>
