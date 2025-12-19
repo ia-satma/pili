@@ -193,6 +193,14 @@ const QUADRANT_COLORS = {
   moneyPit: "hsl(0, 84%, 60%)",      // Red
 };
 
+function parseScore(val: any): number | null {
+  if (val === null || val === undefined) return null;
+  const num = Number(val);
+  if (isNaN(num)) return null;
+  // Removed 1-25 clamping to support user's full scale (0-1000+)
+  return num;
+}
+
 function calculateMedian(values: number[]): number {
   if (!values || values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -230,7 +238,7 @@ function QuadrantCard({ title, subtitle, projects, borderColor, headerBg, icon }
             {projects.map((project: any) => (
               <div
                 key={project.id}
-                onClick={() => window.location.href = `/projects/${project.id}`}
+                onClick={() => window.location.href = `/initiatives/${project.id}`}
                 className="group p-2 rounded hover:bg-muted/50 cursor-pointer border border-transparent hover:border-border transition-all"
               >
                 <div className="flex items-start justify-between gap-2">

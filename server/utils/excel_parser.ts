@@ -195,6 +195,6 @@ function parseScore(val: any): number | null {
     if (val === null || val === undefined) return null;
     const num = Number(val);
     if (isNaN(num)) return null;
-    // Clamped 1-25 per PMO standards
-    return Math.min(25, Math.max(1, num));
+    // Removed 1-25 clamping to support user's full scale (0-1000+)
+    return num;
 }

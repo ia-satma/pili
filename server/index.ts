@@ -94,7 +94,7 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
-      
+
       // Start the H4 job worker loop
       startWorker();
       log("H4 Job Worker started", "worker");
