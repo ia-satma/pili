@@ -85,15 +85,29 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
     const colIndex: Record<string, number> = {};
     headerRow.forEach((h, idx) => {
         if (h) {
-            const normalized = String(h).toLowerCase().trim();
+            // Strong normalization: lowercase, trim, and remove special characters for better matching
+            const normalized = String(h).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
             colIndex[normalized] = idx;
         }
     });
 
-    // Helper to find column by multiple possible names
+    // Helper to find column by multiple possible names (flexible matching)
     const getIdx = (aliases: string[]) => {
-        for (const alias of aliases) {
-            if (colIndex[alias.toLowerCase()] !== undefined) return colIndex[alias.toLowerCase()];
+        const normalizedAliases = aliases.map(a => a.toLowerCase().trim().replace(/[^a-z0-9]/g, ''));
+
+        // 1. Try exact match first
+        for (const alias of normalizedAliases) {
+            if (colIndex[alias] !== undefined) return colIndex[alias];
+        }
+
+        // 2. Try partial match as fallback
+        for (const [colName, idx] of Object.entries(colIndex)) {
+            for (const alias of normalizedAliases) {
+                if (colName.includes(alias) || alias.includes(colName)) {
+                    console.log(`[Excel Parser] Found partial match: "${colName}" for alias "${alias}"`);
+                    return idx;
+                }
+            }
         }
         return undefined;
     };
