@@ -1068,12 +1068,19 @@ export async function registerRoutes(
         .set({ status: "completed", totalRows: totalInserted })
         .where(eq(excelVersions.id, version.id));
 
+      // Map Python metadata to frontend expected format
+      const pyMeta = pythonResult.metadata || {};
       res.json({
         success: true,
         message: `Importación completada: ${totalInserted} proyectos creados.`,
         created: totalInserted,
         errors,
-        metadata: pythonResult.metadata || {},
+        metadata: {
+          header_row: pyMeta.anchor_row || 0,
+          total_rows: pyMeta.total_rows || totalInserted,
+          columns_mapped: pyMeta.mapped_columns || [],
+          columns_unmapped: pyMeta.unmapped_columns || [],
+        },
       });
     } catch (error) {
       console.error("Excel import error:", error);
