@@ -103,7 +103,6 @@ export const projects = pgTable("projects", {
 
   // === IMPACT ===
   impactDescription: text("impact_description"), // "Beneficios Estimados"
-  impactType: jsonb("impact_type").$type<string[]>().default([]), // ['Eficiencia', 'Costos', 'Ingresos', 'Riesgo', 'Otro']
   estatusAlDia: text("estatus_al_dia"),
   priority: text("priority"),
   category: text("category"),
@@ -746,10 +745,6 @@ export const departmentsRelations = relations(departments, ({ many }) => ({
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
-  department: one(departments, {
-    fields: [projects.departmentId],
-    references: [departments.id],
-  }),
   sourceVersion: one(excelVersions, {
     fields: [projects.sourceVersionId],
     references: [excelVersions.id],
