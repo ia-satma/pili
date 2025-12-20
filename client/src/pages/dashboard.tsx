@@ -819,7 +819,7 @@ export default function Dashboard() {
                         transition={{ delay: index * 0.05 }}
                       >
                         <Link
-                          href={`/projects?id=${project.id}`}
+                          href={`/project/${project.id}`}
                           className="flex items-center justify-between gap-4 p-4 hover-elevate cursor-pointer"
                           data-testid={`alert-overdue-${project.id}`}
                         >
@@ -858,7 +858,7 @@ export default function Dashboard() {
                         transition={{ delay: index * 0.05 }}
                       >
                         <Link
-                          href={`/projects?id=${project.id}`}
+                          href={`/project/${project.id}`}
                           className="flex items-center justify-between gap-4 p-4 hover-elevate cursor-pointer"
                           data-testid={`alert-approaching-${project.id}`}
                         >

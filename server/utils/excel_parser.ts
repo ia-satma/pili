@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { type ParsedProject, type ParsedExcelData, type RowWarning } from "../excel-parser";
+// import { type ParsedExcelData, type RowWarning } from "../excel-parser"; // Removed conflicting/circular import
 
 export interface ParsedProject {
     projectName: string;
