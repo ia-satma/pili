@@ -238,7 +238,10 @@ function QuadrantCard({ title, subtitle, projects, borderColor, headerBg, icon, 
             {projects.map((project: any) => (
               <div
                 key={project.id}
-                onClick={() => project.id && setLocation(`/project/${project.id}`)}
+                onClick={() => {
+                  console.log("Navigating to project:", project.id);
+                  setLocation(`/project/${project.id}`);
+                }}
                 className="group p-2 rounded hover:bg-muted/50 cursor-pointer border border-transparent hover:border-border transition-all"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -894,7 +897,7 @@ export default function Dashboard() {
                         transition={{ delay: index * 0.05 }}
                       >
                         <Link
-                          href={`/projects?id=${project.id}`}
+                          href={`/project/${project.id}`}
                           className="flex items-center justify-between gap-4 p-4 hover-elevate cursor-pointer"
                           data-testid={`alert-stale-${project.id}`}
                         >
