@@ -191,11 +191,16 @@ export const projects = pgTable("projects", {
   // === PMO AUDIT FIELDS ===
   healthScore: integer("health_score").default(100), // 0-100 PMO health score
   auditFlags: jsonb("audit_flags").$type<string[]>().default([]), // List of audit flags/warnings
+  // === METADATA CATCH-ALL ===
+  metadata: jsonb("metadata").$type<Record<string, any>>().default({}), // Stores all extra fields
+  dependencies: text("dependencies"), // "Dependencias"
+
+  // === SYSTEM ===
   sourceVersionId: integer("source_version_id").references(() => excelVersions.id),
   isActive: boolean("is_active").default(true),
-  sourceOrigin: text("source_origin").notNull().default("SYSTEM"), // 'EXCEL_VALIDATED' or 'SYSTEM'
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  sourceOrigin: text("source_origin").default('SYSTEM').notNull(), // 'EXCEL_VALIDATED' or 'SYSTEM'
 });
 
 // Project milestones/hitos

@@ -1095,15 +1095,23 @@ export async function registerRoutes(
         ranking: typeof p.ranking === 'number' ? p.ranking : null,
         statusText: p.statusText || null,
         fase: p.fase || null,
-        accionesAcelerar: p.accionesAcelerar || null,
-        businessImpactGrowth: p.businessImpactGrowth || null,
-        businessImpactCostos: p.businessImpactCostos || null,
-        businessImpactOther: p.businessImpactOther || null,
-        previo: p.previo || null,
+        // NEW FIELDS & METADATA
+        owner: p.owner,
+        sponsor: p.sponsor,
+        leader: p.leader,
+        businessUnit: p.businessUnit,
+        progress: p.progress,
+        impactDescription: p.impactDescription,
+        startDate: p.startDate ? new Date(p.startDate) : null,
+        endDate: p.endDate ? new Date(p.endDate) : null,
+        dependencies: p.dependencies,
+        metadata: p.metadata || {},
+
         sourceVersionId: version.id,
         isActive: true,
         priority: "Media",
-        percentComplete: 0,
+        percentComplete: p.progress || 0,
+        sourceOrigin: 'EXCEL_VALIDATED'
       }));
 
       // BATCH INSERT in chunks of 50 to avoid timeout

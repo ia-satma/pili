@@ -197,43 +197,70 @@ export default function ProjectPage() {
                         </CardContent>
                     </Card>
 
-                    {/* NEW: Timeline Card */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2 font-bold uppercase tracking-tight">
-                                <CalendarX2 className="h-5 w-5 text-primary" />
-                                Cronograma
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex justify-between items-center bg-muted/20 p-3 rounded-lg">
-                                <div>
-                                    <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Inicio</p>
-                                    <p className="font-mono font-medium">{project.startDate || "N/A"}</p>
+                    <div className="space-y-6">
+                        {/* NEW: Timeline Card */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-lg flex items-center gap-2 font-bold uppercase tracking-tight">
+                                    <TrendingUp className="h-5 w-5 text-primary" />
+                                    Cronograma & Progreso
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-3 bg-muted/30 rounded-lg border">
+                                        <p className="text-xs font-bold text-muted-foreground uppercase opacity-70 mb-1">Inicio</p>
+                                        <p className="font-mono font-medium text-sm">
+                                            {project.startDate ? new Date(project.startDate).toLocaleDateString() : 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="p-3 bg-muted/30 rounded-lg border">
+                                        <p className="text-xs font-bold text-muted-foreground uppercase opacity-70 mb-1">Fin</p>
+                                        <p className="font-mono font-medium text-sm">
+                                            {project.endDate ? new Date(project.endDate).toLocaleDateString() : 'N/A'}
+                                        </p>
+                                    </div>
                                 </div>
-                                <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
-                                <div className="text-right">
-                                    <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Fin Estimado</p>
-                                    <p className="font-mono font-medium">{project.endDate || "N/A"}</p>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="font-bold text-muted-foreground uppercase text-xs">Progreso General</span>
+                                        <span className="font-bold">{project.progress || 0}%</span>
+                                    </div>
+                                    <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-primary transition-all duration-500"
+                                            style={{ width: `${project.progress || 0}%` }}
+                                        />
+                                    </div>
                                 </div>
-                            </div>
+                            </CardContent>
+                        </Card>
 
-                            <div className="space-y-1">
-                                <div className="flex justify-between text-xs">
-                                    <span className="font-bold text-muted-foreground uppercase opacity-70">Progreso Reportado</span>
-                                    <span className="font-bold">{project.progress || 0}%</span>
-                                </div>
-                                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-primary transition-all duration-500"
-                                        style={{ width: `${project.progress || 0}%` }}
-                                    />
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                        {/* NEW: Metadata / Catch-All Card */}
+                        {Object.keys(project.metadata || {}).length > 0 && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-lg flex items-center gap-2 font-bold uppercase tracking-tight">
+                                        <Info className="h-5 w-5 text-primary" />
+                                        Detalles Adicionales
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="grid grid-cols-1 gap-2 text-sm">
+                                        {Object.entries(project.metadata || {}).map(([key, value]) => (
+                                            <div key={key} className="flex justify-between items-center py-2 border-b last:border-0 border-dashed">
+                                                <span className="font-medium text-muted-foreground capitalize">{key}:</span>
+                                                <span className="font-mono text-right max-w-[60%] truncate" title={String(value)}>
+                                                    {String(value)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
-    );
+            );
 }
