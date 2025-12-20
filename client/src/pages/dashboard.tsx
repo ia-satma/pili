@@ -910,6 +910,7 @@ export default function Dashboard() {
                               </p>
                             </div>
                           </div>
+                          {/* @ts-ignore: Variant typing issue with cva */}
                           <Badge variant="secondary" className="bg-traffic-gray/10 text-traffic-gray border-traffic-gray/30 flex-shrink-0">
                             {project.daysSinceUpdate} {project.daysSinceUpdate === 1 ? "día" : "días"} sin actualizar
                           </Badge>
