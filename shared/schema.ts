@@ -86,16 +86,24 @@ export const projects = pgTable("projects", {
   kpis: text("kpis"), // "Indicadores"
   budget: integer("budget").default(0), // "Requiere presupuesto" in cents/pesos
 
-  // === GOVERNANCE ===
-  sponsor: text("sponsor"),
-  leader: text("leader"), // Project leader (was responsible)
+  // === GOVERNANCE & TEAM ===
+  owner: text("owner"), // "Dueño del Proyecto"
+  sponsor: text("sponsor"), // "Sponsor"
+  leader: text("leader"), // "Líder"
+  businessUnit: text("business_unit"), // "Dirección de Negocio"
+
+  // === TIMELINE & STATUS ===
+  progress: integer("progress"), // "Progreso" or "%"
+  startDate: date("start_date"), // "Fecha Inicio"
+  endDate: date("end_date"), // "Fecha Fin"
+
+  // === LEGACY & COMPATIBILITY ===
   responsible: text("responsible"), // Legacy - maps to leader
-  startDate: date("start_date"),
-  endDate: date("end_date"), // Renamed from endDateEstimated
   endDateEstimated: date("end_date_estimated"), // Legacy compatibility
 
-  // === LEGACY FIELDS (preserved for backwards compatibility) ===
-  departmentId: integer("department_id").references(() => departments.id),
+  // === IMPACT ===
+  impactDescription: text("impact_description"), // "Beneficios Estimados"
+  impactType: jsonb("impact_type").$type<string[]>().default([]), // ['Eficiencia', 'Costos', 'Ingresos', 'Riesgo', 'Otro']
   estatusAlDia: text("estatus_al_dia"),
   priority: text("priority"),
   category: text("category"),

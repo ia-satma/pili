@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useDocumentTitle } from "@/hooks/use-document-title";
-import { ArrowLeft, User, Database, Info, TrendingUp, Zap } from "lucide-react";
+import { ArrowLeft, User, Database, Info, TrendingUp, Zap, CalendarX2 } from "lucide-react";
 import type { Project } from "@shared/schema";
 
 interface ProjectResponse {
@@ -123,6 +123,41 @@ export default function ProjectPage() {
                                     {project.description || "Sin descripción disponible."}
                                 </div>
                             </div>
+
+                            <div className="pt-4 border-t">
+                                <p className="text-xs font-bold text-muted-foreground uppercase opacity-70 mb-2">Beneficios e Impacto</p>
+                                <div className="prose prose-sm max-w-none text-foreground/80 bg-blue-50/50 p-4 rounded-lg border border-blue-100 leading-relaxed">
+                                    {project.impactDescription || "No se han detallado los beneficios estimados."}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* NEW: Governance & Team Card */}
+                    <Card className="border-2 shadow-sm">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-lg flex items-center gap-2 font-bold uppercase tracking-tight">
+                                <User className="h-5 w-5 text-primary" />
+                                Governance & Equipo
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-1">
+                                <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Dueño del Proyecto</p>
+                                <p className="font-medium">{project.owner || "Sin asignar"}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Sponsor</p>
+                                <p className="font-medium">{project.sponsor || "Sin asignar"}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Líder de Iniciativa</p>
+                                <p className="font-medium">{project.leader || "Sin asignar"}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Unidad de Negocio</p>
+                                <Badge variant="outline">{project.businessUnit || project.departmentName || "General"}</Badge>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
@@ -157,6 +192,42 @@ export default function ProjectPage() {
                                     <div className="bg-orange-100 p-3 rounded-full">
                                         <Zap className="h-6 w-6 text-orange-600" />
                                     </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* NEW: Timeline Card */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2 font-bold uppercase tracking-tight">
+                                <CalendarX2 className="h-5 w-5 text-primary" />
+                                Cronograma
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex justify-between items-center bg-muted/20 p-3 rounded-lg">
+                                <div>
+                                    <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Inicio</p>
+                                    <p className="font-mono font-medium">{project.startDate || "N/A"}</p>
+                                </div>
+                                <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
+                                <div className="text-right">
+                                    <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Fin Estimado</p>
+                                    <p className="font-mono font-medium">{project.endDate || "N/A"}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <div className="flex justify-between text-xs">
+                                    <span className="font-bold text-muted-foreground uppercase opacity-70">Progreso Reportado</span>
+                                    <span className="font-bold">{project.progress || 0}%</span>
+                                </div>
+                                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-primary transition-all duration-500"
+                                        style={{ width: `${project.progress || 0}%` }}
+                                    />
                                 </div>
                             </div>
                         </CardContent>
