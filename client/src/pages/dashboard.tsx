@@ -519,11 +519,18 @@ export default function Dashboard() {
         {/* Value/Effort Matrix - Scatter Plot */}
         <Card className="lg:col-span-2 overflow-visible">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              Matriz de Decisiones
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">Basado en Valor Total vs Esfuerzo Total (Solo Datos Excel)</p>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  Matriz de Decisiones
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">Basado en Valor Total vs Esfuerzo Total (Solo Datos Excel)</p>
+              </div>
+              <Badge variant="outline" className="text-xs font-mono">
+                Total Proyectos: {scoringData?.projects?.length || 0}
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
             {scoringLoading ? (
@@ -535,62 +542,106 @@ export default function Dashboard() {
               </div>
             ) : (() => {
               const projects = scoringData.projects || [];
-              const medianValue = calculateMedian(projects.map((p: any) => p.totalValor));
-              const medianEffort = calculateMedian(projects.map((p: any) => p.totalEsfuerzo));
+
+              // 1. Separate valid projects (with scores) from "Limbo" projects
+              const validProjects = projects.filter((p: any) =>
+                p.totalValor !== null && p.totalValor !== undefined &&
+                p.totalEsfuerzo !== null && p.totalEsfuerzo !== undefined
+              );
+
+              const limboProjects = projects.filter((p: any) =>
+                p.totalValor === null || p.totalValor === undefined ||
+                p.totalEsfuerzo === null || p.totalEsfuerzo === undefined
+              );
+
+              // 2. Calculate Median from VALID projects only
+              const medianValue = calculateMedian(validProjects.map((p: any) => p.totalValor));
+              const medianEffort = calculateMedian(validProjects.map((p: any) => p.totalEsfuerzo));
 
               return (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* TOP-LEFT: QUICK WINS */}
-                  <QuadrantCard
-                    title="💎 Ganancias Rápidas (Alto Valor / Bajo Esfuerzo)"
-                    subtitle={`Valor ≥ ${medianValue.toFixed(1)}, Esfuerzo < ${medianEffort.toFixed(1)}`}
-                    icon={<Sparkles className="h-4 w-4 text-green-500" />}
-                    borderColor="border-green-200"
-                    headerBg="bg-green-50"
-                    projects={projects
-                      .filter((p: any) => p.totalValor >= medianValue && p.totalEsfuerzo < medianEffort)
-                      .sort((a: any, b: any) => b.totalValor - a.totalValor)}
-                    setLocation={setLocation}
-                  />
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* TOP-LEFT: QUICK WINS (High Value, Low Effort) */}
+                    <QuadrantCard
+                      title="💎 Ganancias Rápidas (Alto Valor / Bajo Esfuerzo)"
+                      subtitle={`Valor ≥ ${medianValue.toFixed(1)}, Esfuerzo < ${medianEffort.toFixed(1)}`}
+                      icon={<Sparkles className="h-4 w-4 text-green-500" />}
+                      borderColor="border-green-200"
+                      headerBg="bg-green-50"
+                      projects={validProjects
+                        .filter((p: any) => p.totalValor >= medianValue && p.totalEsfuerzo < medianEffort)
+                        .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                      setLocation={setLocation}
+                    />
 
-                  {/* TOP-RIGHT: ESTRATÉGICOS */}
-                  <QuadrantCard
-                    title="🚀 Proyectos Estratégicos (Alto Valor / Alto Esfuerzo)"
-                    subtitle={`Valor ≥ ${medianValue.toFixed(1)}, Esfuerzo ≥ ${medianEffort.toFixed(1)}`}
-                    icon={<Zap className="h-4 w-4 text-yellow-500" />}
-                    borderColor="border-yellow-200"
-                    headerBg="bg-yellow-50"
-                    projects={projects
-                      .filter((p: any) => p.totalValor >= medianValue && p.totalEsfuerzo >= medianEffort)
-                      .sort((a: any, b: any) => b.totalValor - a.totalValor)}
-                    setLocation={setLocation}
-                  />
+                    {/* TOP-RIGHT: ESTRATÉGICOS (High Value, High Effort) */}
+                    <QuadrantCard
+                      title="🚀 Proyectos Estratégicos (Alto Valor / Alto Esfuerzo)"
+                      subtitle={`Valor ≥ ${medianValue.toFixed(1)}, Esfuerzo ≥ ${medianEffort.toFixed(1)}`}
+                      icon={<Zap className="h-4 w-4 text-yellow-500" />}
+                      borderColor="border-yellow-200"
+                      headerBg="bg-yellow-50"
+                      projects={validProjects
+                        .filter((p: any) => p.totalValor >= medianValue && p.totalEsfuerzo >= medianEffort)
+                        .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                      setLocation={setLocation}
+                    />
 
-                  {/* BOTTOM-LEFT: BAJA PRIORIDAD */}
-                  <QuadrantCard
-                    title="💤 Baja Prioridad (Bajo Valor / Bajo Esfuerzo)"
-                    subtitle={`Valor < ${medianValue.toFixed(1)}, Esfuerzo < ${medianEffort.toFixed(1)}`}
-                    icon={<Clock className="h-4 w-4 text-gray-400" />}
-                    borderColor="border-gray-200"
-                    headerBg="bg-gray-50"
-                    projects={projects
-                      .filter((p: any) => p.totalValor < medianValue && p.totalEsfuerzo < medianEffort)
-                      .sort((a: any, b: any) => b.totalValor - a.totalValor)}
-                    setLocation={setLocation}
-                  />
+                    {/* BOTTOM-LEFT: BAJA PRIORIDAD (Low Value, Low Effort) */}
+                    <QuadrantCard
+                      title="💤 Baja Prioridad (Bajo Valor / Bajo Esfuerzo)"
+                      subtitle={`Valor < ${medianValue.toFixed(1)}, Esfuerzo < ${medianEffort.toFixed(1)}`}
+                      icon={<Clock className="h-4 w-4 text-gray-400" />}
+                      borderColor="border-gray-200"
+                      headerBg="bg-gray-50"
+                      projects={validProjects
+                        .filter((p: any) => p.totalValor < medianValue && p.totalEsfuerzo < medianEffort)
+                        .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                      setLocation={setLocation}
+                    />
 
-                  {/* BOTTOM-RIGHT: DESPERDICIO */}
-                  <QuadrantCard
-                    title="💀 Descarte / Revisión (Bajo Valor / Alto Esfuerzo)"
-                    subtitle={`Valor < ${medianValue.toFixed(1)}, Esfuerzo ≥ ${medianEffort.toFixed(1)}`}
-                    icon={<AlertCircle className="h-4 w-4 text-red-500" />}
-                    borderColor="border-red-200"
-                    headerBg="bg-red-50"
-                    projects={projects
-                      .filter((p: any) => p.totalValor < medianValue && p.totalEsfuerzo >= medianEffort)
-                      .sort((a: any, b: any) => b.totalValor - a.totalValor)}
-                    setLocation={setLocation}
-                  />
+                    {/* BOTTOM-RIGHT: DESPERDICIO (Low Value, High Effort) */}
+                    <QuadrantCard
+                      title="💀 Descarte / Revisión (Bajo Valor / Alto Esfuerzo)"
+                      subtitle={`Valor < ${medianValue.toFixed(1)}, Esfuerzo ≥ ${medianEffort.toFixed(1)}`}
+                      icon={<AlertCircle className="h-4 w-4 text-red-500" />}
+                      borderColor="border-red-200"
+                      headerBg="bg-red-50"
+                      projects={validProjects
+                        .filter((p: any) => p.totalValor < medianValue && p.totalEsfuerzo >= medianEffort)
+                        .sort((a: any, b: any) => b.totalValor - a.totalValor)}
+                      setLocation={setLocation}
+                    />
+                  </div>
+
+                  {/* SAFETY NET: Limbo Projects */}
+                  {limboProjects.length > 0 && (
+                    <div className="rounded-lg border-2 border-red-100 bg-red-50/50 p-4 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="h-5 w-5 text-red-600" />
+                        <h4 className="text-sm font-bold text-red-900 leading-none">
+                          ⚠️ Sin Clasificar / Datos Faltantes ({limboProjects.length})
+                        </h4>
+                      </div>
+                      <p className="text-xs text-red-700 mb-3 opacity-90">
+                        Estos proyectos no tienen puntaje de "Valor" o "Esfuerzo" y no aparecen en la matriz.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-2">
+                        {limboProjects.map((project: any) => (
+                          <div
+                            key={project.id}
+                            className="flex items-center justify-between p-2.5 bg-white/80 rounded-md text-xs hover:bg-white cursor-pointer border border-red-100 transition-colors shadow-sm"
+                            onClick={() => setLocation(`/project/${project.id}`)}
+                          >
+                            <span className="font-medium truncate mr-2 text-foreground/80">{project.projectName}</span>
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap font-mono bg-red-50 px-1.5 py-0.5 rounded">
+                              V: {project.totalValor ?? '-'} | E: {project.totalEsfuerzo ?? '-'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()}
