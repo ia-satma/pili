@@ -43,13 +43,13 @@ import { apiRequest } from "@/lib/queryClient";
 
 const mainNavItems = [
   {
-    title: "Dashboard",
+    title: "Tablero de Control",
     url: "/",
     icon: LayoutDashboard,
     description: "Vista general",
   },
   {
-    title: "Smart Grid",
+    title: "Lista Maestra de Proyectos",
     url: "/project-master",
     icon: Grid3X3,
     description: "Editor de proyectos",
@@ -186,7 +186,7 @@ export function AppSidebar() {
     ? new Date(systemHealth.startupTime).toLocaleString('en-US', {
       day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
     })
-    : "Connecting...";
+    : "Conectando...";
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -228,7 +228,7 @@ export function AppSidebar() {
             <BarChart3 className="h-5 w-5" />
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold tracking-tight">PMO Dashboard</span>
+            <span className="text-sm font-semibold tracking-tight">Tablero PMO</span>
             <span className="text-xs text-muted-foreground">Mejora Continua</span>
           </div>
         </div>
@@ -390,11 +390,11 @@ export function AppSidebar() {
           <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-700 border-green-200 hover:bg-green-500/20 flex flex-col gap-1 py-1 h-auto">
             <div className="flex items-center">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />
-              <span>System Active</span>
+              <span>Sistema Activo</span>
             </div>
             <div className="flex flex-col gap-0.5 opacity-80 scale-90">
-              <span>Last: {formattedTime}</span>
-              <span className="font-semibold">By: {systemHealth?.model ? "Antigravity + Gemini" : "Antigravity"}</span>
+              <span>Último: {formattedTime}</span>
+              <span className="font-semibold">Por: {systemHealth?.model ? "Antigravity + Gemini" : "Antigravity"}</span>
             </div>
           </Badge>
         </div>

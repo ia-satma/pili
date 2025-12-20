@@ -81,7 +81,7 @@ export default function ProjectPage() {
                                 ID: {project.id}
                             </Badge>
                             <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px] uppercase font-bold">
-                                {project.status || "Draft"}
+                                {project.status || "Borrador"}
                             </Badge>
                         </div>
                         <h1 className="text-3xl font-extrabold tracking-tight">{project.projectName}</h1>
@@ -102,7 +102,7 @@ export default function ProjectPage() {
                         <CardContent className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-1">
-                                    <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Dueño / Responsable</p>
+                                    <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Dueño / Líder</p>
                                     <div className="flex items-center gap-2">
                                         <User className="h-4 w-4 text-primary" />
                                         <p className="font-semibold text-lg">{project.owner || "Sin asignar"}</p>
@@ -118,7 +118,7 @@ export default function ProjectPage() {
                             </div>
 
                             <div className="pt-4 border-t">
-                                <p className="text-xs font-bold text-muted-foreground uppercase opacity-70 mb-2">Descripción</p>
+                                <p className="text-xs font-bold text-muted-foreground uppercase opacity-70 mb-2">Descripción del Proyecto</p>
                                 <div className="prose prose-sm max-w-none text-foreground/80 bg-muted/30 p-4 rounded-lg border leading-relaxed">
                                     {project.description || "Sin descripción disponible."}
                                 </div>
@@ -138,12 +138,12 @@ export default function ProjectPage() {
                         <CardHeader className="pb-2">
                             <CardTitle className="text-lg flex items-center gap-2 font-bold uppercase tracking-tight">
                                 <User className="h-5 w-5 text-primary" />
-                                Governance & Equipo
+                                Gobernanza y Equipo
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-1">
-                                <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Dueño del Proyecto</p>
+                                <p className="text-xs font-bold text-muted-foreground uppercase opacity-70">Dueño / Líder</p>
                                 <p className="font-medium">{project.owner || "Sin asignar"}</p>
                             </div>
                             <div className="space-y-1">
@@ -169,14 +169,14 @@ export default function ProjectPage() {
                         <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2 font-black uppercase">
                                 <TrendingUp className="h-5 w-5" />
-                                Metas y Score
+                                Metas y Puntaje
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-6">
                                 <div className="flex items-center justify-between p-4 bg-white rounded-xl border-2 border-green-500/20 shadow-sm transition-all hover:scale-[1.02]">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase text-green-600 tracking-widest">Valor (Y)</p>
+                                        <p className="text-[10px] font-black uppercase text-green-600 tracking-widest">Puntaje de Valor</p>
                                         <p className="text-4xl font-black">{project.totalValor ?? "N/A"}</p>
                                     </div>
                                     <div className="bg-green-100 p-3 rounded-full">
@@ -186,7 +186,7 @@ export default function ProjectPage() {
 
                                 <div className="flex items-center justify-between p-4 bg-white rounded-xl border-2 border-orange-500/20 shadow-sm transition-all hover:scale-[1.02]">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase text-orange-600 tracking-widest">Esfuerzo (X)</p>
+                                        <p className="text-[10px] font-black uppercase text-orange-600 tracking-widest">Puntaje de Esfuerzo</p>
                                         <p className="text-4xl font-black">{project.totalEsfuerzo ?? "N/A"}</p>
                                     </div>
                                     <div className="bg-orange-100 p-3 rounded-full">
@@ -203,7 +203,7 @@ export default function ProjectPage() {
                             <CardHeader>
                                 <CardTitle className="text-lg flex items-center gap-2 font-bold uppercase tracking-tight">
                                     <TrendingUp className="h-5 w-5 text-primary" />
-                                    Cronograma & Progreso
+                                    Cronograma y Progreso
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-6">

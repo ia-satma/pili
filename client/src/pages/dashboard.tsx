@@ -231,7 +231,7 @@ function QuadrantCard({ title, subtitle, projects, borderColor, headerBg, icon, 
       <div className="flex-1 overflow-y-auto p-2">
         {projects.length === 0 ? (
           <div className="h-full flex items-center justify-center text-muted-foreground text-[11px] italic">
-            No projects in this category
+            No hay proyectos en esta categoría
           </div>
         ) : (
           <div className="space-y-1">
@@ -365,7 +365,7 @@ export default function Dashboard() {
       <div className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Tablero de Control</h1>
             <p className="text-muted-foreground">
               Vista general de proyectos de mejora continua
             </p>
@@ -472,9 +472,9 @@ export default function Dashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-blue-600" />
-              Data Hygiene (Critical)
+              Higiene de Datos (Crítico)
             </CardTitle>
-            <p className="text-xs text-muted-foreground">Internal data gaps to fix in Excel</p>
+            <p className="text-xs text-muted-foreground">Brechas de datos internos para corregir en Excel</p>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -487,8 +487,8 @@ export default function Dashboard() {
                       <CalendarX2 className="h-5 w-5 text-red-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Missing End Date</p>
-                      <p className="text-xs text-muted-foreground">Impacts timeline forecasts</p>
+                      <p className="text-sm font-medium">Falta Fecha Fin</p>
+                      <p className="text-xs text-muted-foreground">Impacta pronósticos de tiempo</p>
                     </div>
                   </div>
                   <Badge variant="outline" className="text-lg font-bold bg-white text-red-600 border-red-200">
@@ -502,8 +502,8 @@ export default function Dashboard() {
                       <Target className="h-5 w-5 text-orange-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Missing Power Steering ID</p>
-                      <p className="text-xs text-muted-foreground">Gaps in global tracking</p>
+                      <p className="text-sm font-medium">Falta ID Power Steering</p>
+                      <p className="text-xs text-muted-foreground">Brechas en rastreo global</p>
                     </div>
                   </div>
                   <Badge variant="outline" className="text-lg font-bold bg-white text-orange-600 border-orange-200">
@@ -521,9 +521,9 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              Strict Prioritization Matrix
+              Matriz de Decisiones
             </CardTitle>
-            <p className="text-xs text-muted-foreground">Based on raw Total Valor vs Total Esfuerzo (Excel Data Only)</p>
+            <p className="text-xs text-muted-foreground">Basado en Valor Total vs Esfuerzo Total (Solo Datos Excel)</p>
           </CardHeader>
           <CardContent>
             {scoringLoading ? (
@@ -542,7 +542,7 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* TOP-LEFT: QUICK WINS */}
                   <QuadrantCard
-                    title="💎 QUICK WINS"
+                    title="💎 Ganancias Rápidas (Alto Valor / Bajo Esfuerzo)"
                     subtitle={`Valor ≥ ${medianValue.toFixed(1)}, Esfuerzo < ${medianEffort.toFixed(1)}`}
                     icon={<Sparkles className="h-4 w-4 text-green-500" />}
                     borderColor="border-green-200"
@@ -555,7 +555,7 @@ export default function Dashboard() {
 
                   {/* TOP-RIGHT: ESTRATÉGICOS */}
                   <QuadrantCard
-                    title="🚀 ESTRATÉGICOS"
+                    title="🚀 Proyectos Estratégicos (Alto Valor / Alto Esfuerzo)"
                     subtitle={`Valor ≥ ${medianValue.toFixed(1)}, Esfuerzo ≥ ${medianEffort.toFixed(1)}`}
                     icon={<Zap className="h-4 w-4 text-yellow-500" />}
                     borderColor="border-yellow-200"
@@ -568,7 +568,7 @@ export default function Dashboard() {
 
                   {/* BOTTOM-LEFT: BAJA PRIORIDAD */}
                   <QuadrantCard
-                    title="💤 BAJA PRIORIDAD"
+                    title="💤 Baja Prioridad (Bajo Valor / Bajo Esfuerzo)"
                     subtitle={`Valor < ${medianValue.toFixed(1)}, Esfuerzo < ${medianEffort.toFixed(1)}`}
                     icon={<Clock className="h-4 w-4 text-gray-400" />}
                     borderColor="border-gray-200"
@@ -581,7 +581,7 @@ export default function Dashboard() {
 
                   {/* BOTTOM-RIGHT: DESPERDICIO */}
                   <QuadrantCard
-                    title="💀 DESPERDICIO / REVISAR"
+                    title="💀 Descarte / Revisión (Bajo Valor / Alto Esfuerzo)"
                     subtitle={`Valor < ${medianValue.toFixed(1)}, Esfuerzo ≥ ${medianEffort.toFixed(1)}`}
                     icon={<AlertCircle className="h-4 w-4 text-red-500" />}
                     borderColor="border-red-200"
