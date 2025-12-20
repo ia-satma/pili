@@ -106,6 +106,7 @@ export function parseExcelBuffer(buffer: Buffer, versionId: number): ParsedExcel
             totalValor: valorIdx !== undefined ? parseScore(row[valorIdx]) : null,
             sourceVersionId: versionId,
             isActive: true,
+            sourceOrigin: 'EXCEL_VALIDATED',
             extraFields: {},
         };
 

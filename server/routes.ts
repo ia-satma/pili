@@ -9,7 +9,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { storage } from "./storage";
 import { db } from "./db";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql, and } from "drizzle-orm";
 import { parseExcelBuffer, type ParsedProject } from "./utils/excel_parser";
 import { generatePMOBotResponse, type ChatContext, isOpenAIConfigured } from "./openai";
 import type { InsertChangeLog, InsertKpiValue, Project, InsertProject, InsertValidationIssue } from "@shared/schema";
@@ -421,6 +421,53 @@ export async function registerRoutes(
     }
   });
 
+  // ===== AUDITOR COMMAND CENTER & SELF-HEALING =====
+
+  // Self-healing migration: Ensure source_origin column exists
+  app.post("/api/admin/repair-schema", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      console.log("🛠️ AUDITOR: Checking schema integrity...");
+      // Raw SQL to check if column exists and add it if not
+      await db.execute(sql`
+        DO $$ 
+        BEGIN 
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+            WHERE table_name='projects' AND column_name='source_origin') THEN
+            ALTER TABLE projects ADD COLUMN source_origin text DEFAULT 'SYSTEM' NOT NULL;
+            RAISE NOTICE 'Column source_origin added to projects table';
+          END IF;
+        END $$;
+      `);
+      res.json({ success: true, message: "Schema repaired or already correct" });
+    } catch (error) {
+      console.error("Schema repair error:", error);
+      res.status(500).json({ message: "Failed to repair schema", error: String(error) });
+    }
+  });
+
+  app.get("/api/admin/audit-lockdown", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const stats = await db.execute(sql`
+        SELECT source_origin, count(*) as count 
+        FROM projects 
+        GROUP BY source_origin
+      `);
+
+      const total = await db.execute(sql`SELECT count(*) FROM projects`);
+
+      res.json({
+        status: "AUDIT_REPORT",
+        total: total.rows[0].count,
+        distribution: stats.rows,
+        lockdown_seal: "ACTIVE",
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Audit error:", error);
+      res.status(500).json({ message: "Audit failed", error: String(error) });
+    }
+  });
+
   // ===== ADMIN PURGE (HARD RESET) =====
   app.delete("/api/admin/purge-all", isAuthenticated, isAdmin, async (req, res) => {
     try {
@@ -512,6 +559,19 @@ export async function registerRoutes(
       await db.delete(changeLogs);
       await db.delete(projectUpdates);
       await db.delete(milestones);
+
+      // SELF-HEALING: Ensure schema is correct before we try to use it again
+      console.log("🛠️ NUKE: Running pre-nuke schema repair...");
+      await db.execute(sql`
+        DO $$ 
+        BEGIN 
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+            WHERE table_name='projects' AND column_name='source_origin') THEN
+            ALTER TABLE projects ADD COLUMN source_origin text DEFAULT 'SYSTEM' NOT NULL;
+            RAISE NOTICE 'Column source_origin added to projects table';
+          END IF;
+        END $$;
+      `);
 
       // Delete all projects
       const result = await db.delete(projects);
@@ -939,7 +999,7 @@ export async function registerRoutes(
 
         pythonProcess.on("close", (code) => {
           // Clean up temp file
-          try { fs.unlinkSync(tempFilePath); } catch (e) {}
+          try { fs.unlinkSync(tempFilePath); } catch (e) { }
 
           if (code !== 0) {
             console.error("[Import] Python parser error:", stderr);
@@ -956,7 +1016,7 @@ export async function registerRoutes(
         });
 
         pythonProcess.on("error", (err) => {
-          try { fs.unlinkSync(tempFilePath); } catch (e) {}
+          try { fs.unlinkSync(tempFilePath); } catch (e) { }
           reject(err);
         });
       });

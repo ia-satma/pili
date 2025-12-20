@@ -1,6 +1,6 @@
 // Using javascript_database blueprint - PostgreSQL database integration
-import { 
-  excelVersions, projects, departments, milestones, projectUpdates, 
+import {
+  excelVersions, projects, departments, milestones, projectUpdates,
   changeLogs, kpiValues, chatMessages, filterPresets, users,
   ingestionBatches, rawArtifacts, validationIssues, templateVersions,
   exportBatches, exportArtifacts, jobs, jobRuns, committeePackets, chaserDrafts,
@@ -55,19 +55,19 @@ export interface IStorage {
   getUserCount(): Promise<number>;
   updateUserRole(id: string, role: string): Promise<User>;
   getAllUsers(): Promise<User[]>;
-  
+
   // Excel Versions
   createExcelVersion(version: InsertExcelVersion): Promise<ExcelVersion>;
   getExcelVersions(): Promise<ExcelVersion[]>;
   getExcelVersion(id: number): Promise<ExcelVersion | undefined>;
   updateExcelVersionStatus(id: number, status: string, processedRows: number, errors: string[]): Promise<void>;
   getLatestExcelVersion(): Promise<ExcelVersion | undefined>;
-  
+
   // Departments
   createDepartment(dept: InsertDepartment): Promise<Department>;
   getDepartments(): Promise<Department[]>;
   getDepartmentByName(name: string): Promise<Department | undefined>;
-  
+
   // Projects
   createProject(project: InsertProject): Promise<Project>;
   createProjects(projects: InsertProject[]): Promise<Project[]>;
@@ -76,29 +76,29 @@ export interface IStorage {
   getProjectByLegacyId(legacyId: string): Promise<Project | undefined>;
   updateProject(id: number, project: Partial<InsertProject>): Promise<Project>;
   deactivateProjectsNotInVersion(versionId: number, activeIds: number[]): Promise<number>;
-  
+
   // Milestones
   createMilestone(milestone: InsertMilestone): Promise<Milestone>;
   getMilestonesByProjectId(projectId: number): Promise<Milestone[]>;
-  
+
   // Project Updates
   createProjectUpdate(update: InsertProjectUpdate): Promise<ProjectUpdate>;
   getProjectUpdatesByProjectId(projectId: number): Promise<ProjectUpdate[]>;
   getLatestUpdateDatesByProjectIds(projectIds: number[]): Promise<Map<number, Date>>;
-  
+
   // Change Logs
   createChangeLog(log: InsertChangeLog): Promise<ChangeLog>;
   createChangeLogs(logs: InsertChangeLog[]): Promise<ChangeLog[]>;
   getChangeLogsByVersionId(versionId: number): Promise<ChangeLog[]>;
   getChangeLogsByProjectId(projectId: number): Promise<ChangeLog[]>;
   getChangeLogsBetweenVersions(fromVersionId: number, toVersionId: number): Promise<ChangeLog[]>;
-  
+
   // KPI Values
   createKpiValue(kpi: InsertKpiValue): Promise<KpiValue>;
   createKpiValues(kpis: InsertKpiValue[]): Promise<KpiValue[]>;
   getKpiValuesByVersionId(versionId: number): Promise<KpiValue[]>;
   getLatestKpiValues(): Promise<KpiValue[]>;
-  
+
   // Chat Messages
   createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
   getChatMessages(): Promise<ChatMessage[]>;
@@ -119,12 +119,12 @@ export interface IStorage {
   getIngestionBatch(id: number): Promise<IngestionBatch | undefined>;
   getIngestionBatchByHash(hash: string): Promise<IngestionBatch | undefined>;
   updateIngestionBatchStatus(id: number, status: string, hardErrors: number, softErrors: number, processedRows: number): Promise<void>;
-  
+
   // H1 Data Foundation - Raw Artifacts
   createRawArtifact(artifact: InsertRawArtifact): Promise<RawArtifact>;
   getRawArtifact(id: number): Promise<RawArtifact | undefined>;
   getRawArtifactsByBatchId(batchId: number): Promise<RawArtifact[]>;
-  
+
   // H1 Data Foundation - Validation Issues
   createValidationIssue(issue: InsertValidationIssue): Promise<ValidationIssue>;
   createValidationIssues(issues: InsertValidationIssue[]): Promise<ValidationIssue[]>;
@@ -282,8 +282,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUserWithPassword(
-    email: string, 
-    passwordHash: string, 
+    email: string,
+    passwordHash: string,
     role: string = "viewer",
     firstName?: string,
     lastName?: string
@@ -390,7 +390,12 @@ export class DatabaseStorage implements IStorage {
   async getProjects(): Promise<Project[]> {
     return db.select()
       .from(projects)
-      .where(eq(projects.isActive, true))
+      .where(
+        and(
+          eq(projects.isActive, true),
+          eq(projects.sourceOrigin, 'EXCEL_VALIDATED')
+        )
+      )
       .orderBy(desc(projects.updatedAt));
   }
 
@@ -424,7 +429,7 @@ export class DatabaseStorage implements IStorage {
         .where(eq(projects.isActive, true));
       return 0;
     }
-    
+
     // Deactivate projects not in the current version's active list
     const result = await db.update(projects)
       .set({ isActive: false, updatedAt: new Date() })
@@ -465,9 +470,9 @@ export class DatabaseStorage implements IStorage {
 
   async getLatestUpdateDatesByProjectIds(projectIds: number[]): Promise<Map<number, Date>> {
     if (projectIds.length === 0) return new Map();
-    
+
     const result = new Map<number, Date>();
-    
+
     const updates = await db.select({
       projectId: projectUpdates.projectId,
       updateDate: projectUpdates.updateDate,
@@ -475,13 +480,13 @@ export class DatabaseStorage implements IStorage {
       .from(projectUpdates)
       .where(inArray(projectUpdates.projectId, projectIds))
       .orderBy(desc(projectUpdates.updateDate));
-    
+
     for (const update of updates) {
       if (!result.has(update.projectId)) {
         result.set(update.projectId, update.updateDate);
       }
     }
-    
+
     return result;
   }
 
@@ -600,10 +605,10 @@ export class DatabaseStorage implements IStorage {
     }
 
     const changeLogsToCreate: InsertChangeLog[] = [];
-    
+
     for (const project of projectsToUpdate) {
       const oldValue = project[field as keyof typeof project];
-      
+
       changeLogsToCreate.push({
         projectId: project.id,
         versionId: project.sourceVersionId || 1,
@@ -690,16 +695,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateIngestionBatchStatus(
-    id: number, 
-    status: string, 
-    hardErrors: number, 
-    softErrors: number, 
+    id: number,
+    status: string,
+    hardErrors: number,
+    softErrors: number,
     processedRows: number
   ): Promise<void> {
     await db.update(ingestionBatches)
-      .set({ 
-        status, 
-        hardErrorCount: hardErrors, 
+      .set({
+        status,
+        hardErrorCount: hardErrors,
         softErrorCount: softErrors,
         processedRows,
         completedAt: status === "committed" || status === "failed" ? new Date() : null,
@@ -1153,7 +1158,7 @@ export class DatabaseStorage implements IStorage {
       .from(governanceAlerts)
       .where(eq(governanceAlerts.status, "OPEN"))
       .groupBy(governanceAlerts.initiativeId);
-    
+
     const alertMap = new Map<number, number>();
     for (const r of results) {
       alertMap.set(r.initiativeId, r.alertCount);
@@ -1311,13 +1316,13 @@ export class DatabaseStorage implements IStorage {
   async getMonthlyAgentCost(): Promise<number> {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    
+
     const result = await db.select({
       totalCost: sql<string>`COALESCE(SUM(CAST(${agentTelemetry.costUsd} AS DECIMAL)), 0)`
     })
-    .from(agentTelemetry)
-    .where(sql`${agentTelemetry.timestamp} >= ${startOfMonth}`);
-    
+      .from(agentTelemetry)
+      .where(sql`${agentTelemetry.timestamp} >= ${startOfMonth}`);
+
     return parseFloat(result[0]?.totalCost || "0");
   }
 
@@ -1326,7 +1331,7 @@ export class DatabaseStorage implements IStorage {
       .from(apiTelemetry)
       .orderBy(desc(apiTelemetry.timestamp))
       .limit(limit);
-    
+
     return results.map(r => r.durationMs);
   }
 
@@ -1335,7 +1340,7 @@ export class DatabaseStorage implements IStorage {
     // Order matters due to foreign key constraints - child tables first
     const operationalTables = [
       'council_reviews',
-      'agent_runs', 
+      'agent_runs',
       'chaser_drafts',
       'committee_packets',
       'job_runs',
